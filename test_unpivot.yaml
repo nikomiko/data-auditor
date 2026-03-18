@@ -1,0 +1,69 @@
+meta:
+  name: "Audit unpivot — Stock par dépôt"
+  version: "2.0"
+
+# ════════════════════════════════════════════════════════════════
+# DÉMONSTRATION DU DÉPIVOTAGE (unpivot)
+#
+# Source référence : format LARGE  — 1 ligne par SKU, 1 colonne par dépôt
+# Source cible     : format LONG   — 1 ligne par (SKU, dépôt)
+#
+# L'unpivot transforme la référence avant la jointure :
+#   qty_A → (depot=depot_A, qty=...)
+#   qty_B → (depot=depot_B, qty=...)
+#   qty_C → (depot=depot_C, qty=...)
+#
+# Anomalies injectées :
+#   DIVERGENT   : (SKU001, depot_A) — qty 100 ≠ 150
+#   ORPHELIN_A  : (SKU002, depot_B) — présent dans référence, absent de cible
+#   ORPHELIN_B  : (SKU003, depot_A) — absent de référence, présent dans cible
+#   OK (×7)     : toutes les autres combinaisons (si show_matching: true)
+# ════════════════════════════════════════════════════════════════
+
+sources:
+
+  reference:
+    label: "Stock référence (format large)"
+    format: csv
+    encoding: utf-8
+    delimiter: ","
+    has_header: true
+    fields:
+      - { name: SKU,   type: string  }
+      - { name: qty_A, type: integer }
+      - { name: qty_B, type: integer }
+      - { name: qty_C, type: integer }
+    unpivot:
+      anchor_fields: [SKU]
+      location_field: depot
+      value_field: qty
+      pivot_fields:
+        - { source: qty_A, location: depot_A }
+        - { source: qty_B, location: depot_B }
+        - { source: qty_C, location: depot_C }
+
+  target:
+    label: "Stock cible (format long)"
+    format: csv
+    encoding: utf-8
+    delimiter: ","
+    has_header: true
+    fields:
+      - { name: SKU,   type: string  }
+      - { name: depot, type: string  }
+      - { name: qty,   type: integer }
+
+join:
+  keys:
+    - { source_field: SKU,   target_field: SKU   }
+    - { source_field: depot, target_field: depot }
+
+rules:
+  - name: "Quantité cohérente"
+    logic: AND
+    fields:
+      - { source_field: qty, target_field: qty, tolerance: 0 }
+
+report:
+  show_matching: true
+  max_diff_preview: 100

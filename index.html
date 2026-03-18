@@ -209,6 +209,49 @@ td{padding:.5rem .85rem;vertical-align:middle}
 /* btn-icon inline */
 .btn-icon{background:none;border:none;color:var(--muted);cursor:pointer;padding:.2rem .3rem;border-radius:3px;transition:all .15s;vertical-align:middle;flex-shrink:0}
 .btn-icon:hover{background:var(--s2);color:var(--acc)}
+
+/* ── Wizard ── */
+.wizard-modal{width:90vw;max-width:1100px;height:85vh;display:flex;flex-direction:column}
+.wizard-stepper{display:flex;gap:.2rem;flex:1;justify-content:center}
+.wstep{background:none;border:1px solid var(--border);color:var(--muted);font-size:.72rem;padding:.25rem .75rem;border-radius:var(--r);cursor:pointer;font-family:var(--sans);transition:all .15s;white-space:nowrap}
+.wstep:disabled{cursor:default;opacity:.4}
+.wstep.active{background:var(--acc-dim);border-color:var(--acc);color:var(--acc);font-weight:600}
+.wstep.done{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok)}
+.wizard-body{flex:1;overflow-y:auto;padding:1.25rem 1.5rem;background:var(--bg)}
+.wizard-step{display:none}.wizard-step.active{display:block}
+.wizard-footer{display:flex;align-items:center;gap:.5rem;padding:.75rem 1.25rem;border-top:1px solid var(--border);background:var(--s1)}
+.wiz-section{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:1rem 1.25rem;margin-bottom:1rem}
+.wiz-section-title{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem}
+.wiz-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.5rem .75rem;margin-bottom:.5rem}
+.wiz-field{display:flex;flex-direction:column;gap:.2rem}
+.wiz-field label{font-size:.65rem;color:var(--muted);font-weight:500}
+.wiz-input{background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:.3rem .5rem;font-size:.75rem;color:var(--text);font-family:var(--mono);width:100%;transition:border-color .15s}
+.wiz-input:focus{outline:none;border-color:var(--acc)}
+.wiz-select{background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:.3rem .5rem;font-size:.75rem;color:var(--text);font-family:var(--sans);width:100%;cursor:pointer}
+.wiz-select:focus{outline:none;border-color:var(--acc)}
+.wiz-toggle-row{display:flex;align-items:center;gap:.5rem;font-size:.75rem;color:var(--dim);padding:.15rem 0}
+.wiz-toggle{appearance:none;width:32px;height:18px;background:var(--border);border-radius:9px;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0}
+.wiz-toggle:checked{background:var(--acc)}
+.wiz-toggle::after{content:'';position:absolute;width:12px;height:12px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform .2s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.wiz-toggle:checked::after{transform:translateX(14px)}
+.col-table{width:100%;border-collapse:collapse;font-size:.75rem;margin-top:.4rem}
+.col-table th{background:var(--s2);padding:.35rem .6rem;text-align:left;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);border-bottom:1px solid var(--border)}
+.col-table td{padding:.25rem .4rem;border-bottom:1px solid var(--border);vertical-align:middle}
+.col-table tr:last-child td{border-bottom:none}
+.col-table .wiz-input,.col-table .wiz-select{padding:.2rem .35rem;font-size:.7rem}
+.wiz-warn{background:#fffbeb;border:1px solid #fcd34d;border-radius:var(--r);padding:.5rem .75rem;font-size:.75rem;color:#92400e;margin-bottom:.75rem}
+.wiz-err{background:var(--oa-bg);border:1px solid var(--oa-bd);border-radius:var(--r);padding:.5rem .75rem;font-size:.75rem;color:var(--oa);margin-bottom:.75rem;display:none}
+.wiz-err.show{display:block}
+.join-result{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:.75rem 1rem;margin-top:.75rem;font-size:.78rem}
+.join-stats{display:flex;gap:1.5rem;margin-bottom:.5rem;flex-wrap:wrap}
+.join-stat{display:flex;align-items:baseline;gap:.3rem}
+.join-stat .n{font-family:var(--mono);font-weight:600;font-size:1rem}
+.join-stat.m .n{color:var(--ok)}.join-stat.a .n{color:var(--oa)}.join-stat.b .n{color:var(--ob)}
+.rule-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);margin-bottom:.6rem;overflow:hidden}
+.rule-card-hdr{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;background:var(--s2);border-bottom:1px solid var(--border)}
+.rule-card-body{padding:.6rem .75rem}
+.btn-wiz-add{background:none;border:1px dashed var(--border);color:var(--muted);font-size:.72rem;padding:.3rem .8rem;border-radius:var(--r);cursor:pointer;width:100%;text-align:center;transition:all .15s;margin-top:.4rem;font-family:var(--sans)}
+.btn-wiz-add:hover{border-color:var(--acc);color:var(--acc)}
 </style>
 </head>
 <body>
@@ -242,7 +285,7 @@ td{padding:.5rem .85rem;vertical-align:middle}
 
     <div class="left-content">
       <div class="col-files">
-        <div class="section-title">Fichiers</div>
+        <div class="section-title" style="display:flex;align-items:center;gap:.4rem">Fichiers <button class="btn-icon" onclick="openWizard()" title="Assistant de configuration"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button></div>
         <div class="dz" id="dz-ref" onclick="document.getElementById('f-ref').click()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
           <span class="dz-name" id="n-ref">Référence…</span>
@@ -267,7 +310,8 @@ td{padding:.5rem .85rem;vertical-align:middle}
         <div class="yaml-hdr">
           <div class="section-title">Configuration YAML</div>
           <button class="btn-xs" onclick="loadExample()">Exemple</button>
-          <button class="btn-xs" onclick="document.getElementById('f-yaml').click()">📂 Charger</button>
+          <button class="btn-xs" onclick="loadYamlFile()">📂 Charger</button>
+          <button class="btn-xs" id="btn-save-yaml" onclick="saveYaml()" style="display:none" title="Sauvegarder le YAML">💾 Sauvegarder</button>
           <button class="btn-xs" onclick="document.getElementById('yaml').value=''">Vider</button>
           <input type="file" id="f-yaml" accept=".yaml,.yml" style="display:none">
         </div>
@@ -374,6 +418,9 @@ let lastConfig     = {};
 let currentToken   = null;
 let activeFilters  = new Set(['ORPHELIN_A','ORPHELIN_B','DIVERGENT']);
 let activeRuleFilters = null;
+let yamlFilename   = 'config.yaml';
+let yamlOriginal   = '';
+let yamlFileHandle = null;  // File System Access API handle (Chrome/Edge)
 
 // ═══════════════════════════════════════════════════════════
 //  FILES
@@ -407,15 +454,87 @@ document.getElementById('f-tgt').addEventListener('change', e => {
   }
 });
 
-// Chargement fichier YAML
+// Chargement fichier YAML — File System Access API si dispo, sinon <input> fallback
+async function loadYamlFile() {
+  if ('showOpenFilePicker' in window) {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types: [{ description: 'YAML', accept: { 'text/yaml': ['.yaml', '.yml'] } }],
+        multiple: false
+      });
+      yamlFileHandle = handle;
+      yamlFilename   = handle.name;
+      const file     = await handle.getFile();
+      const content  = await file.text();
+      document.getElementById('yaml').value = content;
+      yamlOriginal = content;
+      updateSaveBtn();
+    } catch(e) {
+      if (e.name !== 'AbortError') console.error(e);
+    }
+  } else {
+    document.getElementById('f-yaml').click();
+  }
+}
+
+// Fallback <input> pour Firefox
 document.getElementById('f-yaml').addEventListener('change', e => {
   const f = e.target.files[0];
   if (!f) return;
-  const reader = new FileReader();
-  reader.onload = ev => { document.getElementById('yaml').value = ev.target.result; };
+  yamlFileHandle = null;
+  yamlFilename   = f.name;
+  const reader   = new FileReader();
+  reader.onload  = ev => {
+    document.getElementById('yaml').value = ev.target.result;
+    yamlOriginal = ev.target.result;
+    updateSaveBtn();
+  };
   reader.readAsText(f, 'utf-8');
-  e.target.value = ''; // reset pour permettre rechargement du même fichier
+  e.target.value = '';
 });
+
+document.getElementById('yaml').addEventListener('input', updateSaveBtn);
+
+function updateSaveBtn() {
+  const btn   = document.getElementById('btn-save-yaml');
+  const dirty = document.getElementById('yaml').value !== yamlOriginal;
+  btn.style.display     = yamlOriginal ? '' : 'none';
+  btn.style.borderColor = dirty ? 'var(--acc)' : '';
+  btn.style.color       = dirty ? 'var(--acc)' : '';
+  btn.title = yamlFileHandle
+    ? (dirty ? `Sauvegarder dans ${yamlFilename}` : `${yamlFilename} — à jour`)
+    : `Télécharger ${yamlFilename}`;
+}
+
+async function saveYaml() {
+  const content = document.getElementById('yaml').value;
+  if (!content.trim()) return;
+
+  if (yamlFileHandle) {
+    try {
+      const writable = await yamlFileHandle.createWritable();
+      await writable.write(content);
+      await writable.close();
+      yamlOriginal = content;
+      updateSaveBtn();
+      return;
+    } catch(e) {
+      // Permission refusée ou API indisponible → fallback download
+      console.warn('File System Access write failed, falling back to download:', e);
+    }
+  }
+
+  // Fallback : téléchargement
+  const blob = new Blob([content], { type: 'text/yaml;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = yamlFilename;
+  a.click();
+  URL.revokeObjectURL(url);
+  yamlOriginal = content;
+  updateSaveBtn();
+}
 
 // ═══════════════════════════════════════════════════════════
 //  TABS + PANEL
@@ -938,6 +1057,909 @@ report:
   max_diff_preview: 500
 `;
 }
+
+// ═══════════════════════════════════════════════════════════
+//  WIZARD — État central
+// ═══════════════════════════════════════════════════════════
+function wizSrcDefault() {
+  return {
+    label:'', format:'csv', encoding:'utf-8', delimiter:';',
+    has_header:true, skip_rows:0, max_columns:'', record_filter_marker:'',
+    fixed_width:false,
+    fields:[], column_positions:[],
+    unpivot_enabled:false,
+    unpivot:{ anchor_fields:[], location_field:'location_key', value_field:'pivot_value', pivot_fields:[] }
+  };
+}
+const WS = {
+  meta:{ name:'', version:'' },
+  sources:{ reference: wizSrcDefault(), target: wizSrcDefault() },
+  join:{ keys:[] },
+  rules:[],
+  filters:[],
+  report:{ show_matching:false, max_diff_preview:500 },
+  _step:0,
+  _visited: new Set([0]),
+};
+
+function wGetFieldNames(src) {
+  const s = WS.sources[src];
+  const list = s.fixed_width ? s.column_positions : s.fields;
+  return list.map(f => f.name).filter(Boolean);
+}
+
+// ── Lecture YAML → WizardState ─────────────────────────────
+function wizLoadFromYaml(parsed) {
+  if (!parsed || typeof parsed !== 'object') return;
+  // meta
+  const m = parsed.meta || {};
+  WS.meta.name    = m.name    || '';
+  WS.meta.version = m.version || '';
+  // sources
+  ['reference','target'].forEach(k => {
+    const src = (parsed.sources || {})[k];
+    if (!src) return;
+    const s = WS.sources[k];
+    s.label  = src.label    || '';
+    s.format = src.format   || 'csv';
+    s.encoding   = src.encoding  || 'utf-8';
+    s.delimiter  = src.delimiter !== undefined ? src.delimiter : ';';
+    s.has_header = src.has_header !== false;
+    s.skip_rows  = src.skip_rows  || 0;
+    s.max_columns = src.max_columns || '';
+    s.record_filter_marker = (src.record_filter || {}).marker || '';
+    s.fixed_width = !!src.fixed_width;
+    if (src.column_positions && src.column_positions.length) {
+      s.fixed_width = true;
+      s.column_positions = src.column_positions.map(f => ({
+        name: f.name||'', position: f.position||0, width: f.width||0,
+        type: f.type||'string', date_format: f.date_format||''
+      }));
+      s.fields = [];
+    } else if (src.fields && src.fields.length) {
+      s.fields = src.fields.map(f => ({
+        name: f.name||'', type: f.type||'string', date_format: f.date_format||''
+      }));
+      s.column_positions = [];
+    }
+    if (src.unpivot) {
+      s.unpivot_enabled = true;
+      s.unpivot.anchor_fields  = src.unpivot.anchor_fields || [];
+      s.unpivot.location_field = src.unpivot.location_field || 'location_key';
+      s.unpivot.value_field    = src.unpivot.value_field    || 'pivot_value';
+      s.unpivot.pivot_fields   = (src.unpivot.pivot_fields||[]).map(p => ({
+        source: p.source||'', location: p.location||''
+      }));
+    } else {
+      s.unpivot_enabled = false;
+    }
+  });
+  // join
+  WS.join.keys = ((parsed.join||{}).keys||[]).map(k => ({
+    source_field: k.source_field||'', target_field: k.target_field||''
+  }));
+  // rules
+  WS.rules = (parsed.rules||[]).map(r => ({
+    name: r.name||'', logic: r.logic||'AND',
+    fields: (r.fields||[]).map(f => {
+      if (f.source_data) {
+        return { mode:'advanced',
+          src_data_field: (f.source_data||{}).field||'',
+          src_data_norm:  (f.source_data||{}).normalize||'none',
+          tgt_data_field: (f.target_data||{}).field||'',
+          tgt_data_value: (f.target_data||{}).value !== undefined ? String(f.target_data.value) : '',
+          tgt_data_tol:   (f.target_data||{}).tolerance||'' };
+      } else if (f.target_value !== undefined) {
+        return { mode:'fixed', source_field: f.source_field||'', target_value: String(f.target_value) };
+      } else {
+        return { mode:'compare',
+          source_field: f.source_field||'', target_field: f.target_field||f.source_field||'',
+          tolerance: f.tolerance !== undefined ? f.tolerance : '',
+          normalize: f.normalize||'none' };
+      }
+    })
+  }));
+  // filters
+  WS.filters = (parsed.filters||[]).map(f => ({
+    field: f.field||'', source: f.source||'reference',
+    values: (f.values||[]).join(', ')
+  }));
+  // report
+  const rp = parsed.report || {};
+  WS.report.show_matching   = !!rp.show_matching;
+  WS.report.max_diff_preview = rp.max_diff_preview || 500;
+}
+
+// ── WizardState → YAML ─────────────────────────────────────
+function wizBuildYaml() {
+  const obj = {};
+  // meta
+  if (WS.meta.name || WS.meta.version) {
+    obj.meta = {};
+    if (WS.meta.name)    obj.meta.name    = WS.meta.name;
+    if (WS.meta.version) obj.meta.version = WS.meta.version;
+  }
+  // sources
+  obj.sources = {};
+  ['reference','target'].forEach(k => {
+    const s  = WS.sources[k];
+    const sr = { format: s.format };
+    if (s.label)    sr.label    = s.label;
+    if (s.encoding) sr.encoding = s.encoding;
+    const noDelim = ['json','xlsx'].includes(s.format);
+    if (!noDelim && s.delimiter !== undefined) sr.delimiter = s.delimiter;
+    sr.has_header = s.has_header;
+    if (s.skip_rows) sr.skip_rows = Number(s.skip_rows);
+    if (s.max_columns) sr.max_columns = Number(s.max_columns);
+    if (s.record_filter_marker) sr.record_filter = { marker: s.record_filter_marker };
+    if (s.fixed_width) sr.fixed_width = true;
+    // colonnes
+    const noFields = ['json','xlsx'].includes(s.format);
+    if (!noFields) {
+      if (s.fixed_width) {
+        sr.column_positions = s.column_positions.map(f => {
+          const o = { name: f.name, position: Number(f.position), width: Number(f.width) };
+          if (f.type && f.type !== 'string') o.type = f.type;
+          if (f.type === 'date' && f.date_format) o.date_format = f.date_format;
+          return o;
+        });
+      } else {
+        sr.fields = s.fields.map(f => {
+          const o = { name: f.name };
+          if (f.type && f.type !== 'string') o.type = f.type;
+          if (f.type === 'date' && f.date_format) o.date_format = f.date_format;
+          return o;
+        });
+      }
+    }
+    // unpivot
+    if (s.unpivot_enabled) {
+      sr.unpivot = {
+        anchor_fields:  s.unpivot.anchor_fields.filter(Boolean),
+        location_field: s.unpivot.location_field || 'location_key',
+        value_field:    s.unpivot.value_field    || 'pivot_value',
+        pivot_fields:   s.unpivot.pivot_fields.filter(p => p.source && p.location)
+      };
+    }
+    obj.sources[k] = sr;
+  });
+  // join
+  const validKeys = WS.join.keys.filter(k => k.source_field && k.target_field);
+  if (validKeys.length) obj.join = { keys: validKeys };
+  // filters
+  const validFilters = WS.filters.filter(f => f.field);
+  if (validFilters.length) {
+    obj.filters = validFilters.map(f => {
+      const o = { field: f.field, source: f.source };
+      const vals = f.values.split(',').map(v => v.trim()).filter(Boolean);
+      if (vals.length) o.values = vals;
+      return o;
+    });
+  }
+  // rules
+  if (WS.rules.length) {
+    obj.rules = WS.rules.map(r => ({
+      name: r.name,
+      logic: r.logic || 'AND',
+      fields: r.fields.map(f => {
+        if (f.mode === 'advanced') {
+          const o = { source_data: { field: f.src_data_field } };
+          if (f.src_data_norm && f.src_data_norm !== 'none') o.source_data.normalize = f.src_data_norm;
+          o.target_data = {};
+          if (f.tgt_data_field) o.target_data.field = f.tgt_data_field;
+          else if (f.tgt_data_value !== '') o.target_data.value = f.tgt_data_value;
+          if (f.tgt_data_tol !== '') o.target_data.tolerance = Number(f.tgt_data_tol);
+          return o;
+        } else if (f.mode === 'fixed') {
+          return { source_field: f.source_field, target_value: f.target_value };
+        } else {
+          const o = { source_field: f.source_field };
+          if (f.target_field && f.target_field !== f.source_field) o.target_field = f.target_field;
+          if (f.tolerance !== '' && f.tolerance !== undefined) o.tolerance = Number(f.tolerance);
+          if (f.normalize && f.normalize !== 'none') o.normalize = f.normalize;
+          return o;
+        }
+      })
+    }));
+  }
+  // report
+  obj.report = {
+    show_matching:    WS.report.show_matching,
+    max_diff_preview: Number(WS.report.max_diff_preview) || 500,
+  };
+  return jsyaml.dump(obj, { lineWidth: 120, noRefs: true });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  WIZARD — Ouverture / fermeture
+// ═══════════════════════════════════════════════════════════
+function openWizard() {
+  // Réinitialiser
+  WS.sources.reference = wizSrcDefault();
+  WS.sources.target    = wizSrcDefault();
+  WS.join.keys   = [];
+  WS.rules       = [];
+  WS.filters     = [];
+  WS.report      = { show_matching:false, max_diff_preview:500 };
+  WS.meta        = { name:'', version:'' };
+  WS._step       = 0;
+  WS._visited    = new Set([0]);
+
+  // Charger depuis YAML existant si valide
+  const yamlText = document.getElementById('yaml').value.trim();
+  if (yamlText) {
+    try { wizLoadFromYaml(jsyaml.load(yamlText)); } catch(_) {}
+  }
+  wizRenderStep(0);
+  document.getElementById('wizard-modal').classList.add('show');
+}
+
+function closeWizard() {
+  document.getElementById('wizard-modal').classList.remove('show');
+}
+function closeWizardBackdrop(e) {
+  if (e.target === document.getElementById('wizard-modal')) closeWizard();
+}
+
+function applyWizard() {
+  const yaml = wizBuildYaml();
+  document.getElementById('yaml').value = yaml;
+  yamlOriginal = '';  // marquer comme modifié
+  updateSaveBtn();
+  closeWizard();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  WIZARD — Navigation
+// ═══════════════════════════════════════════════════════════
+const WIZ_LABELS = ['① Source A','② Source B','③ Jointure','④ Règles','⑤ Filtres & Rapport'];
+
+function wizShowErr(msg) {
+  const e = document.getElementById('wiz-err');
+  e.textContent = msg; e.classList.add('show');
+  setTimeout(() => e.classList.remove('show'), 3500);
+}
+
+function wizValidateStep(step) {
+  if (step === 0) {
+    const s = WS.sources.reference;
+    if (!s.format) return 'Sélectionnez un format pour la source A.';
+    if (!['json','xlsx'].includes(s.format)) {
+      const list = s.fixed_width ? s.column_positions : s.fields;
+      if (!list.length) return 'Déclarez au moins une colonne pour la source A.';
+    }
+  }
+  if (step === 1) {
+    const s = WS.sources.target;
+    if (!s.format) return 'Sélectionnez un format pour la source B.';
+    if (!['json','xlsx'].includes(s.format)) {
+      const list = s.fixed_width ? s.column_positions : s.fields;
+      if (!list.length) return 'Déclarez au moins une colonne pour la source B.';
+    }
+  }
+  if (step === 2) {
+    const valid = WS.join.keys.filter(k => k.source_field && k.target_field);
+    if (!valid.length) return 'Définissez au moins une clé de jointure.';
+  }
+  if (step === 3) {
+    for (const r of WS.rules) {
+      if (!r.name) return 'Chaque règle doit avoir un nom.';
+      if (!r.fields.length) return `La règle "${r.name}" doit avoir au moins un champ.`;
+    }
+  }
+  return null;
+}
+
+function wizSaveCurrentStep() {
+  const step = WS._step;
+  if (step === 0) wizReadSourceForm('reference');
+  if (step === 1) wizReadSourceForm('target');
+  if (step === 2) wizReadJoinForm();
+  if (step === 3) wizReadRulesForm();
+  if (step === 4) wizReadFiltersForm();
+}
+
+function wizNext() {
+  wizSaveCurrentStep();
+  const err = wizValidateStep(WS._step);
+  if (err) { wizShowErr(err); return; }
+  if (WS._step < 4) {
+    WS._step++;
+    WS._visited.add(WS._step);
+    wizRenderStep(WS._step);
+  }
+}
+
+function wizPrev() {
+  wizSaveCurrentStep();
+  if (WS._step > 0) { WS._step--; wizRenderStep(WS._step); }
+}
+
+function wizardGoStep(n) {
+  if (!WS._visited.has(n) && n > WS._step) return;
+  wizSaveCurrentStep();
+  WS._step = n;
+  WS._visited.add(n);
+  wizRenderStep(n);
+}
+
+function wizRenderStep(step) {
+  // Steps
+  document.querySelectorAll('.wizard-step').forEach((el, i) => {
+    el.classList.toggle('active', i === step);
+  });
+  // Stepper buttons
+  document.querySelectorAll('.wstep').forEach((btn, i) => {
+    const visited = WS._visited.has(i);
+    btn.classList.toggle('active', i === step);
+    btn.classList.toggle('done',   visited && i !== step);
+    btn.disabled = !visited && i > step;
+  });
+  // Footer
+  document.getElementById('wbtn-prev').style.display  = step > 0 ? '' : 'none';
+  document.getElementById('wbtn-next').style.display  = step < 4 ? '' : 'none';
+  document.getElementById('wbtn-apply').style.display = step === 4 ? '' : 'none';
+  // Render content
+  const renders = [wizRenderSource0, wizRenderSource1, wizRenderJoin, wizRenderRules, wizRenderFilters];
+  renders[step]();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  WIZARD — Helpers HTML
+// ═══════════════════════════════════════════════════════════
+function wizField(label, inputHtml, id) {
+  return `<div class="wiz-field"${id?' id="wf-'+id+'"':''}><label>${label}</label>${inputHtml}</div>`;
+}
+function wizInput(id, val, placeholder) {
+  return `<input class="wiz-input" id="${id}" value="${esc(String(val??''))}" placeholder="${placeholder||''}">`;
+}
+function wizSelect(id, options, val) {
+  const opts = options.map(([v,l]) => `<option value="${v}"${v===val?' selected':''}>${l}</option>`).join('');
+  return `<select class="wiz-select" id="${id}">${opts}</select>`;
+}
+function wizToggleRow(id, label, checked) {
+  return `<label class="wiz-toggle-row"><input type="checkbox" class="wiz-toggle" id="${id}"${checked?' checked':''}> ${label}</label>`;
+}
+function wizFieldSelect(idPrefix, names, val) {
+  const opts = `<option value="">—</option>` + names.map(n => `<option value="${n}"${n===val?' selected':''}>${n}</option>`).join('');
+  return `<select class="wiz-select" id="${idPrefix}">${opts}</select>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  WIZARD — Étapes 0 & 1 : Sources
+// ═══════════════════════════════════════════════════════════
+function wizRenderSource(stepEl, srcKey, label) {
+  const s = WS.sources[srcKey];
+  const noDelim = ['json','xlsx'].includes(s.format);
+  const noFields = ['json','xlsx'].includes(s.format);
+
+  const colsHtml = noFields
+    ? `<div class="wiz-warn">Format <strong>${s.format}</strong> : colonnes détectées automatiquement au parsing.</div>`
+    : `<div>
+        ${wizToggleRow('w-fw-'+srcKey, 'Format à largeur fixe (fixed_width)', s.fixed_width)}
+      </div>
+      <table class="col-table" id="ctbl-${srcKey}">
+        <thead><tr>${s.fixed_width
+          ? '<th>Nom</th><th>Position</th><th>Largeur</th><th>Type</th><th>Date fmt</th><th></th>'
+          : '<th>Nom</th><th>Type</th><th>Date fmt</th><th></th>'
+        }</tr></thead>
+        <tbody id="ctbody-${srcKey}">
+          ${wizColRows(srcKey, s)}
+        </tbody>
+      </table>
+      <button class="btn-wiz-add" onclick="wizAddCol('${srcKey}')">+ Colonne</button>`;
+
+  const unpivotFieldsHtml = s.unpivot_enabled ? `
+    <div class="wiz-grid" style="margin-top:.5rem">
+      ${wizField('Anchor fields (virgule)', wizInput('w-ua-'+srcKey, s.unpivot.anchor_fields.join(', '), 'ex: SKU, depot'))}
+      ${wizField('Location field', wizInput('w-ul-'+srcKey, s.unpivot.location_field, 'location_key'))}
+      ${wizField('Value field', wizInput('w-uv-'+srcKey, s.unpivot.value_field, 'pivot_value'))}
+    </div>
+    <table class="col-table">
+      <thead><tr><th>Colonne source</th><th>Location value</th><th></th></tr></thead>
+      <tbody id="ptbody-${srcKey}">${wizPivotRows(srcKey, s)}</tbody>
+    </table>
+    <button class="btn-wiz-add" onclick="wizAddPivot('${srcKey}')">+ Entrée pivot</button>` : '';
+
+  stepEl.innerHTML = `
+    <div class="wiz-section">
+      <div class="wiz-section-title">${label}</div>
+      <div class="wiz-grid">
+        ${wizField('Format', wizSelect('w-fmt-'+srcKey, [['csv','CSV'],['txt','TXT'],['dat','DAT'],['json','JSON'],['xlsx','XLSX']], s.format))}
+        ${wizField('Label', wizInput('w-lbl-'+srcKey, s.label, 'ex: Stock WMS'))}
+        ${wizField('Encodage', wizInput('w-enc-'+srcKey, s.encoding, 'utf-8'))}
+        ${noDelim ? '' : wizField('Délimiteur', wizInput('w-del-'+srcKey, s.delimiter, ';'))}
+        ${wizField('Skip rows', wizInput('w-sk-'+srcKey, s.skip_rows, '0'))}
+        ${wizField('Max colonnes', wizInput('w-mc-'+srcKey, s.max_columns, 'optionnel'))}
+        ${wizField('Filtre lignes (regex)', wizInput('w-rf-'+srcKey, s.record_filter_marker, 'ex: ^1'))}
+      </div>
+      ${wizToggleRow('w-hh-'+srcKey, 'Has header', s.has_header)}
+    </div>
+    <div class="wiz-section">
+      <div class="wiz-section-title">Colonnes</div>
+      ${colsHtml}
+    </div>
+    <div class="wiz-section">
+      <div class="wiz-section-title">Dépivotage (unpivot)</div>
+      ${wizToggleRow('w-ue-'+srcKey, 'Activer le dépivotage', s.unpivot_enabled)}
+      <div id="unpivot-fields-${srcKey}">${unpivotFieldsHtml}</div>
+    </div>`;
+
+  // Binding toggle fixed_width
+  const fwEl = document.getElementById('w-fw-'+srcKey);
+  if (fwEl) fwEl.addEventListener('change', () => wizToggleFW(srcKey));
+
+  // Binding toggle unpivot
+  const ueEl = document.getElementById('w-ue-'+srcKey);
+  if (ueEl) ueEl.addEventListener('change', () => {
+    wizReadSourceForm(srcKey);
+    document.getElementById('unpivot-fields-'+srcKey).innerHTML =
+      WS.sources[srcKey].unpivot_enabled ? `
+        <div class="wiz-grid" style="margin-top:.5rem">
+          ${wizField('Anchor fields (virgule)', wizInput('w-ua-'+srcKey, WS.sources[srcKey].unpivot.anchor_fields.join(', '), ''))}
+          ${wizField('Location field', wizInput('w-ul-'+srcKey, WS.sources[srcKey].unpivot.location_field, 'location_key'))}
+          ${wizField('Value field', wizInput('w-uv-'+srcKey, WS.sources[srcKey].unpivot.value_field, 'pivot_value'))}
+        </div>
+        <table class="col-table">
+          <thead><tr><th>Colonne source</th><th>Location value</th><th></th></tr></thead>
+          <tbody id="ptbody-${srcKey}">${wizPivotRows(srcKey, WS.sources[srcKey])}</tbody>
+        </table>
+        <button class="btn-wiz-add" onclick="wizAddPivot('${srcKey}')">+ Entrée pivot</button>` : '';
+  });
+
+  // Binding format change
+  const fmtEl = document.getElementById('w-fmt-'+srcKey);
+  if (fmtEl) fmtEl.addEventListener('change', () => {
+    wizReadSourceForm(srcKey);
+    wizRenderSource(stepEl, srcKey, label);
+  });
+}
+
+function wizColRows(srcKey, s) {
+  const list = s.fixed_width ? s.column_positions : s.fields;
+  return list.map((f, i) => {
+    const typeOpts = [['string','string'],['integer','integer'],['decimal','decimal'],['date','date'],['boolean','boolean']];
+    const dfHtml = f.type === 'date' ? wizInput(`w-df-${srcKey}-${i}`, f.date_format, '%Y-%m-%d') : `<span style="color:var(--border)">—</span>`;
+    if (s.fixed_width) {
+      return `<tr>
+        <td>${wizInput(`w-cn-${srcKey}-${i}`, f.name, 'nom')}</td>
+        <td>${wizInput(`w-cp-${srcKey}-${i}`, f.position, '0')}</td>
+        <td>${wizInput(`w-cw-${srcKey}-${i}`, f.width, '1')}</td>
+        <td>${wizSelect(`w-ct-${srcKey}-${i}`, typeOpts, f.type||'string')}</td>
+        <td id="w-df-wrap-${srcKey}-${i}">${dfHtml}</td>
+        <td><button class="btn-icon" onclick="wizRemoveCol('${srcKey}',${i})" title="Supprimer">✕</button></td>
+      </tr>`;
+    } else {
+      return `<tr>
+        <td>${wizInput(`w-cn-${srcKey}-${i}`, f.name, 'nom')}</td>
+        <td>${wizSelect(`w-ct-${srcKey}-${i}`, typeOpts, f.type||'string')}</td>
+        <td id="w-df-wrap-${srcKey}-${i}">${dfHtml}</td>
+        <td><button class="btn-icon" onclick="wizRemoveCol('${srcKey}',${i})" title="Supprimer">✕</button></td>
+      </tr>`;
+    }
+  }).join('');
+}
+
+function wizPivotRows(srcKey, s) {
+  return (s.unpivot.pivot_fields||[]).map((p, i) => `<tr>
+    <td>${wizInput(`w-ps-${srcKey}-${i}`, p.source, 'colonne source')}</td>
+    <td>${wizInput(`w-pl-${srcKey}-${i}`, p.location, 'valeur location')}</td>
+    <td><button class="btn-icon" onclick="wizRemovePivot('${srcKey}',${i})" title="Supprimer">✕</button></td>
+  </tr>`).join('');
+}
+
+function wizAddCol(srcKey) {
+  wizReadSourceForm(srcKey);
+  const s = WS.sources[srcKey];
+  if (s.fixed_width) s.column_positions.push({name:'', position:0, width:1, type:'string', date_format:''});
+  else s.fields.push({name:'', type:'string', date_format:''});
+  const tbody = document.getElementById('ctbody-'+srcKey);
+  if (tbody) tbody.innerHTML = wizColRows(srcKey, s);
+}
+
+function wizRemoveCol(srcKey, idx) {
+  wizReadSourceForm(srcKey);
+  const s = WS.sources[srcKey];
+  if (s.fixed_width) s.column_positions.splice(idx,1);
+  else s.fields.splice(idx,1);
+  const tbody = document.getElementById('ctbody-'+srcKey);
+  if (tbody) tbody.innerHTML = wizColRows(srcKey, s);
+}
+
+function wizAddPivot(srcKey) {
+  wizReadSourceForm(srcKey);
+  WS.sources[srcKey].unpivot.pivot_fields.push({source:'', location:''});
+  const tbody = document.getElementById('ptbody-'+srcKey);
+  if (tbody) tbody.innerHTML = wizPivotRows(srcKey, WS.sources[srcKey]);
+}
+
+function wizRemovePivot(srcKey, idx) {
+  wizReadSourceForm(srcKey);
+  WS.sources[srcKey].unpivot.pivot_fields.splice(idx,1);
+  const tbody = document.getElementById('ptbody-'+srcKey);
+  if (tbody) tbody.innerHTML = wizPivotRows(srcKey, WS.sources[srcKey]);
+}
+
+function wizToggleFW(srcKey) {
+  wizReadSourceForm(srcKey);
+  const s = WS.sources[srcKey];
+  s.fixed_width = !s.fixed_width;
+  if (s.fixed_width) {
+    s.column_positions = s.fields.map(f => ({name:f.name, position:0, width:1, type:f.type, date_format:f.date_format}));
+    s.fields = [];
+  } else {
+    s.fields = s.column_positions.map(f => ({name:f.name, type:f.type, date_format:f.date_format}));
+    s.column_positions = [];
+  }
+  const tbody = document.getElementById('ctbody-'+srcKey);
+  const thead = tbody?.closest('table')?.querySelector('thead tr');
+  if (thead) thead.innerHTML = s.fixed_width
+    ? '<th>Nom</th><th>Position</th><th>Largeur</th><th>Type</th><th>Date fmt</th><th></th>'
+    : '<th>Nom</th><th>Type</th><th>Date fmt</th><th></th>';
+  if (tbody) tbody.innerHTML = wizColRows(srcKey, s);
+}
+
+function wizReadSourceForm(srcKey) {
+  const s  = WS.sources[srcKey];
+  const g  = id => { const el = document.getElementById(id); return el ? el.value : null; };
+  const gc = id => { const el = document.getElementById(id); return el ? el.checked : null; };
+  if (g('w-fmt-'+srcKey) !== null) s.format  = g('w-fmt-'+srcKey);
+  if (g('w-lbl-'+srcKey) !== null) s.label   = g('w-lbl-'+srcKey);
+  if (g('w-enc-'+srcKey) !== null) s.encoding = g('w-enc-'+srcKey);
+  if (g('w-del-'+srcKey) !== null) s.delimiter = g('w-del-'+srcKey);
+  if (g('w-sk-'+srcKey)  !== null) s.skip_rows = Number(g('w-sk-'+srcKey))||0;
+  if (g('w-mc-'+srcKey)  !== null) s.max_columns = g('w-mc-'+srcKey);
+  if (g('w-rf-'+srcKey)  !== null) s.record_filter_marker = g('w-rf-'+srcKey);
+  if (gc('w-hh-'+srcKey) !== null) s.has_header = gc('w-hh-'+srcKey);
+  if (gc('w-ue-'+srcKey) !== null) s.unpivot_enabled = gc('w-ue-'+srcKey);
+  if (gc('w-fw-'+srcKey) !== null) s.fixed_width = gc('w-fw-'+srcKey);
+  // Colonnes
+  const list = s.fixed_width ? s.column_positions : s.fields;
+  list.forEach((f, i) => {
+    if (g(`w-cn-${srcKey}-${i}`) !== null) f.name = g(`w-cn-${srcKey}-${i}`);
+    if (g(`w-ct-${srcKey}-${i}`) !== null) f.type = g(`w-ct-${srcKey}-${i}`);
+    if (g(`w-df-${srcKey}-${i}`) !== null) f.date_format = g(`w-df-${srcKey}-${i}`);
+    if (s.fixed_width) {
+      if (g(`w-cp-${srcKey}-${i}`) !== null) f.position = Number(g(`w-cp-${srcKey}-${i}`))||0;
+      if (g(`w-cw-${srcKey}-${i}`) !== null) f.width    = Number(g(`w-cw-${srcKey}-${i}`))||1;
+    }
+  });
+  // Unpivot
+  if (g('w-ua-'+srcKey) !== null) {
+    s.unpivot.anchor_fields  = g('w-ua-'+srcKey).split(',').map(v=>v.trim()).filter(Boolean);
+  }
+  if (g('w-ul-'+srcKey) !== null) s.unpivot.location_field = g('w-ul-'+srcKey);
+  if (g('w-uv-'+srcKey) !== null) s.unpivot.value_field    = g('w-uv-'+srcKey);
+  (s.unpivot.pivot_fields||[]).forEach((p, i) => {
+    if (g(`w-ps-${srcKey}-${i}`) !== null) p.source   = g(`w-ps-${srcKey}-${i}`);
+    if (g(`w-pl-${srcKey}-${i}`) !== null) p.location = g(`w-pl-${srcKey}-${i}`);
+  });
+}
+
+function wizRenderSource0() {
+  wizRenderSource(document.getElementById('wstep-0'), 'reference', 'Source A — Référence');
+}
+function wizRenderSource1() {
+  wizRenderSource(document.getElementById('wstep-1'), 'target', 'Source B — Cible');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  WIZARD — Étape 2 : Jointure
+// ═══════════════════════════════════════════════════════════
+function wizRenderJoin() {
+  const refNames = wGetFieldNames('reference');
+  const tgtNames = wGetFieldNames('target');
+  const warn = (!refNames.length || !tgtNames.length)
+    ? `<div class="wiz-warn">Les colonnes ne sont pas encore déclarées. Revenez aux étapes ① et ② pour les définir.</div>` : '';
+
+  const rowsHtml = WS.join.keys.map((k, i) => `<tr>
+    <td>${wizFieldSelect('w-jsr-'+i, refNames, k.source_field)}</td>
+    <td>${wizFieldSelect('w-jtg-'+i, tgtNames, k.target_field)}</td>
+    <td><button class="btn-icon" onclick="wizRemoveJoinKey(${i})">✕</button></td>
+  </tr>`).join('');
+
+  document.getElementById('wstep-2').innerHTML = `
+    <div class="wiz-section">
+      <div class="wiz-section-title">Clés de jointure</div>
+      ${warn}
+      <table class="col-table">
+        <thead><tr><th>Champ Source A</th><th>Champ Source B</th><th></th></tr></thead>
+        <tbody id="jtbody">${rowsHtml}</tbody>
+      </table>
+      <button class="btn-wiz-add" onclick="wizAddJoinKey()">+ Ajouter une clé</button>
+    </div>
+    <div class="wiz-section">
+      <div class="wiz-section-title">Test de jointure</div>
+      <button class="btn-xs" id="btn-test-join" onclick="wizTestJoin()"
+        ${(!fileRef || !fileTgt) ? 'disabled title="Chargez les fichiers pour tester"' : ''}>
+        Tester la jointure
+      </button>
+      ${(!fileRef || !fileTgt) ? '<span style="font-size:.72rem;color:var(--muted);margin-left:.5rem">⚠ Fichiers non chargés</span>' : ''}
+      <div id="join-result"></div>
+    </div>`;
+}
+
+function wizAddJoinKey() {
+  wizReadJoinForm();
+  WS.join.keys.push({source_field:'', target_field:''});
+  wizRenderJoin();
+}
+
+function wizRemoveJoinKey(idx) {
+  wizReadJoinForm();
+  WS.join.keys.splice(idx,1);
+  wizRenderJoin();
+}
+
+function wizReadJoinForm() {
+  WS.join.keys.forEach((k, i) => {
+    const s = document.getElementById('w-jsr-'+i);
+    const t = document.getElementById('w-jtg-'+i);
+    if (s) k.source_field = s.value;
+    if (t) k.target_field = t.value;
+  });
+}
+
+async function wizTestJoin() {
+  wizReadJoinForm();
+  const btn = document.getElementById('btn-test-join');
+  const res = document.getElementById('join-result');
+  btn.disabled = true;
+  btn.textContent = '…';
+  res.innerHTML = '';
+  try {
+    // YAML partiel avec seulement sources + join
+    const partialObj = { sources: wizBuildSourcesObj(), join: { keys: WS.join.keys.filter(k=>k.source_field&&k.target_field) } };
+    const partialYaml = jsyaml.dump(partialObj, {lineWidth:120, noRefs:true});
+    const fd = new FormData();
+    fd.append('file_ref', fileRef);
+    fd.append('file_tgt', fileTgt);
+    fd.append('config_yaml', partialYaml);
+    const resp = await fetch('/api/test-join', { method:'POST', body:fd });
+    const data = await resp.json();
+    if (data.error) { res.innerHTML = `<div class="wiz-warn">${esc(data.error)}</div>`; return; }
+    const sampleHtml = data.sample.length ? `
+      <table class="col-table" style="margin-top:.5rem">
+        <thead><tr><th>Clé</th><th>Exemple</th></tr></thead>
+        <tbody>${data.sample.map(s=>`<tr><td class="tk">${esc(s.key)}</td><td style="font-size:.68rem;color:var(--muted)">${Object.values(s.ref).join(' § ')} ↔ ${Object.values(s.tgt).join(' § ')}</td></tr>`).join('')}</tbody>
+      </table>` : '';
+    res.innerHTML = `<div class="join-result">
+      <div class="join-stats">
+        <div class="join-stat m"><span class="n">${data.matched.toLocaleString('fr-FR')}</span><span>paires matchées</span></div>
+        <div class="join-stat a"><span class="n">${data.orphelins_a.toLocaleString('fr-FR')}</span><span>orphelins A</span></div>
+        <div class="join-stat b"><span class="n">${data.orphelins_b.toLocaleString('fr-FR')}</span><span>orphelins B</span></div>
+        <div class="join-stat" style="color:var(--muted)"><span class="n" style="font-size:.85rem">${data.total_ref}</span><span>réf.</span></div>
+        <div class="join-stat" style="color:var(--muted)"><span class="n" style="font-size:.85rem">${data.total_tgt}</span><span>cible</span></div>
+      </div>
+      ${sampleHtml}
+    </div>`;
+  } catch(e) {
+    res.innerHTML = `<div class="wiz-warn">Erreur réseau : ${esc(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Tester la jointure';
+  }
+}
+
+function wizBuildSourcesObj() {
+  const obj = {};
+  ['reference','target'].forEach(k => {
+    const s = WS.sources[k];
+    const sr = { format:s.format };
+    if (s.encoding) sr.encoding = s.encoding;
+    if (s.delimiter) sr.delimiter = s.delimiter;
+    sr.has_header = s.has_header;
+    if (s.skip_rows) sr.skip_rows = s.skip_rows;
+    if (s.record_filter_marker) sr.record_filter = { marker:s.record_filter_marker };
+    if (s.fixed_width) sr.fixed_width = true;
+    if (s.fixed_width) {
+      if (s.column_positions.length) sr.column_positions = s.column_positions.map(f=>({name:f.name, position:Number(f.position), width:Number(f.width), type:f.type||'string'}));
+    } else {
+      if (s.fields.length) sr.fields = s.fields.map(f=>({name:f.name, type:f.type||'string'}));
+    }
+    if (s.unpivot_enabled) {
+      sr.unpivot = {
+        anchor_fields: s.unpivot.anchor_fields,
+        location_field: s.unpivot.location_field,
+        value_field: s.unpivot.value_field,
+        pivot_fields: s.unpivot.pivot_fields
+      };
+    }
+    obj[k] = sr;
+  });
+  return obj;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  WIZARD — Étape 3 : Règles
+// ═══════════════════════════════════════════════════════════
+function wizRenderRules() {
+  const el = document.getElementById('wstep-3');
+  const refNames = wGetFieldNames('reference');
+  const tgtNames = wGetFieldNames('target');
+
+  const rulesHtml = WS.rules.map((r, ri) => `
+    <div class="rule-card" id="rcard-${ri}">
+      <div class="rule-card-hdr">
+        <input class="wiz-input" style="flex:1" id="w-rn-${ri}" value="${esc(r.name)}" placeholder="Nom de la règle">
+        ${wizSelect('w-rl-'+ri, [['AND','AND'],['OR','OR']], r.logic)}
+        <button class="btn-icon" onclick="wizMoveRule(${ri},-1)" title="Monter">↑</button>
+        <button class="btn-icon" onclick="wizMoveRule(${ri},1)"  title="Descendre">↓</button>
+        <button class="btn-icon" onclick="wizRemoveRule(${ri})" title="Supprimer règle">✕</button>
+      </div>
+      <div class="rule-card-body">
+        <table class="col-table">
+          <thead><tr><th>Mode</th><th>Champ A</th><th>Champ/Valeur B</th><th>Tolérance</th><th>Normalize</th><th></th></tr></thead>
+          <tbody id="rfbody-${ri}">${wizRuleFieldRows(ri, r, refNames, tgtNames)}</tbody>
+        </table>
+        <button class="btn-wiz-add" onclick="wizAddRuleField(${ri})">+ Champ</button>
+      </div>
+    </div>`).join('');
+
+  el.innerHTML = `
+    <div class="wiz-section">
+      <div class="wiz-section-title">Règles de contrôle</div>
+      <div id="rules-list">${rulesHtml || '<p style="color:var(--muted);font-size:.78rem">Aucune règle. Cliquez sur + pour en ajouter.</p>'}</div>
+      <button class="btn-wiz-add" onclick="wizAddRule()">+ Ajouter une règle</button>
+    </div>`;
+}
+
+function wizRuleFieldRows(ri, r, refNames, tgtNames) {
+  return r.fields.map((f, fi) => {
+    const modeOpts = [['compare','Comparaison'],['fixed','Valeur fixe'],['advanced','Avancé']];
+    const normOpts = [['none','none'],['trim','trim'],['lowercase','lowercase'],['both','both']];
+    const mode = f.mode || 'compare';
+    let chpA = '', chpB = '';
+    if (mode === 'compare') {
+      chpA = wizFieldSelect(`w-rf-sa-${ri}-${fi}`, refNames, f.source_field);
+      chpB = wizFieldSelect(`w-rf-ta-${ri}-${fi}`, tgtNames, f.target_field);
+    } else if (mode === 'fixed') {
+      chpA = wizFieldSelect(`w-rf-sa-${ri}-${fi}`, refNames, f.source_field);
+      chpB = `<input class="wiz-input" id="w-rf-tv-${ri}-${fi}" value="${esc(String(f.target_value??''))}" placeholder="valeur fixe">`;
+    } else {
+      chpA = `<input class="wiz-input" id="w-rf-sa-${ri}-${fi}" value="${esc(f.src_data_field||'')}" placeholder="champ source">`;
+      chpB = `<input class="wiz-input" id="w-rf-ta-${ri}-${fi}" value="${esc(f.tgt_data_field||f.tgt_data_value||'')}" placeholder="champ ou valeur">`;
+    }
+    return `<tr>
+      <td>${wizSelect(`w-rf-mode-${ri}-${fi}`, modeOpts, mode)}</td>
+      <td>${chpA}</td>
+      <td>${chpB}</td>
+      <td><input class="wiz-input" id="w-rf-tol-${ri}-${fi}" value="${esc(String(f.tolerance??''))}" placeholder="0.01" style="width:60px"></td>
+      <td>${mode === 'compare' ? wizSelect(`w-rf-norm-${ri}-${fi}`, normOpts, f.normalize||'none') : '<span style="color:var(--border)">—</span>'}</td>
+      <td><button class="btn-icon" onclick="wizRemoveRuleField(${ri},${fi})">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function wizReadRulesForm() {
+  WS.rules.forEach((r, ri) => {
+    const n = document.getElementById('w-rn-'+ri);
+    const l = document.getElementById('w-rl-'+ri);
+    if (n) r.name  = n.value;
+    if (l) r.logic = l.value;
+    r.fields.forEach((f, fi) => {
+      const mode = document.getElementById(`w-rf-mode-${ri}-${fi}`)?.value || f.mode;
+      f.mode = mode;
+      const sa = document.getElementById(`w-rf-sa-${ri}-${fi}`);
+      const ta = document.getElementById(`w-rf-ta-${ri}-${fi}`);
+      const tv = document.getElementById(`w-rf-tv-${ri}-${fi}`);
+      const tl = document.getElementById(`w-rf-tol-${ri}-${fi}`);
+      const tn = document.getElementById(`w-rf-norm-${ri}-${fi}`);
+      if (mode === 'compare') {
+        if (sa) f.source_field = sa.value;
+        if (ta) f.target_field = ta.value;
+        if (tl) f.tolerance    = tl.value;
+        if (tn) f.normalize    = tn.value;
+      } else if (mode === 'fixed') {
+        if (sa) f.source_field = sa.value;
+        if (tv) f.target_value = tv.value;
+      } else {
+        if (sa) f.src_data_field = sa.value;
+        if (ta) { const v = ta.value; f.tgt_data_field = v; f.tgt_data_value = v; }
+        if (tl) f.tgt_data_tol  = tl.value;
+      }
+    });
+  });
+}
+
+function wizAddRule() {
+  wizReadRulesForm();
+  WS.rules.push({ name:'', logic:'AND', fields:[] });
+  wizRenderRules();
+}
+
+function wizRemoveRule(ri) {
+  wizReadRulesForm();
+  WS.rules.splice(ri,1);
+  wizRenderRules();
+}
+
+function wizMoveRule(ri, dir) {
+  wizReadRulesForm();
+  const ni = ri + dir;
+  if (ni < 0 || ni >= WS.rules.length) return;
+  [WS.rules[ri], WS.rules[ni]] = [WS.rules[ni], WS.rules[ri]];
+  wizRenderRules();
+}
+
+function wizAddRuleField(ri) {
+  wizReadRulesForm();
+  WS.rules[ri].fields.push({ mode:'compare', source_field:'', target_field:'', tolerance:'', normalize:'none' });
+  wizRenderRules();
+}
+
+function wizRemoveRuleField(ri, fi) {
+  wizReadRulesForm();
+  WS.rules[ri].fields.splice(fi,1);
+  wizRenderRules();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  WIZARD — Étape 4 : Filtres & Rapport
+// ═══════════════════════════════════════════════════════════
+function wizRenderFilters() {
+  const filterRows = WS.filters.map((f, i) => `<tr>
+    <td>${wizInput('w-ff-'+i, f.field, 'champ')}</td>
+    <td>${wizSelect('w-fs-'+i, [['reference','Source A'],['target','Source B']], f.source)}</td>
+    <td>${wizInput('w-fv-'+i, f.values, 'val1, val2, …')}</td>
+    <td><button class="btn-icon" onclick="wizRemoveFilter(${i})">✕</button></td>
+  </tr>`).join('');
+
+  document.getElementById('wstep-4').innerHTML = `
+    <div class="wiz-section">
+      <div class="wiz-section-title">Filtres</div>
+      <table class="col-table">
+        <thead><tr><th>Champ</th><th>Source</th><th>Valeurs (virgule)</th><th></th></tr></thead>
+        <tbody id="ftbody">${filterRows}</tbody>
+      </table>
+      <button class="btn-wiz-add" onclick="wizAddFilter()">+ Filtre</button>
+    </div>
+    <div class="wiz-section">
+      <div class="wiz-section-title">Rapport</div>
+      <div class="wiz-grid">
+        ${wizField('Max lignes prévisualisées', wizInput('w-rp-mdp', WS.report.max_diff_preview, '500'))}
+      </div>
+      ${wizToggleRow('w-rp-sm', 'Afficher les lignes conformes (show_matching)', WS.report.show_matching)}
+    </div>
+    <div class="wiz-section">
+      <div class="wiz-section-title">Méta</div>
+      <div class="wiz-grid">
+        ${wizField("Nom de l'audit", wizInput('w-meta-name', WS.meta.name, 'Audit …'))}
+        ${wizField('Version', wizInput('w-meta-ver', WS.meta.version, '1.0'))}
+      </div>
+    </div>`;
+}
+
+function wizAddFilter() {
+  wizReadFiltersForm();
+  WS.filters.push({ field:'', source:'reference', values:'' });
+  wizRenderFilters();
+}
+
+function wizRemoveFilter(i) {
+  wizReadFiltersForm();
+  WS.filters.splice(i,1);
+  wizRenderFilters();
+}
+
+function wizReadFiltersForm() {
+  WS.filters.forEach((f, i) => {
+    const ff = document.getElementById('w-ff-'+i);
+    const fs = document.getElementById('w-fs-'+i);
+    const fv = document.getElementById('w-fv-'+i);
+    if (ff) f.field  = ff.value;
+    if (fs) f.source = fs.value;
+    if (fv) f.values = fv.value;
+  });
+  const mdp = document.getElementById('w-rp-mdp');
+  const sm  = document.getElementById('w-rp-sm');
+  const mn  = document.getElementById('w-meta-name');
+  const mv  = document.getElementById('w-meta-ver');
+  if (mdp) WS.report.max_diff_preview = Number(mdp.value)||500;
+  if (sm)  WS.report.show_matching    = sm.checked;
+  if (mn)  WS.meta.name    = mn.value;
+  if (mv)  WS.meta.version = mv.value;
+}
 </script>
 <!-- ── Modal prévisualisation ── -->
 <div class="modal-backdrop" id="preview-modal" onclick="closePreview(event)">
@@ -953,6 +1975,37 @@ report:
     <div class="modal-body">
       <div id="preview-table-wrap"></div>
       <div id="preview-raw-wrap"  style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal Wizard Configuration ── -->
+<div class="modal-backdrop" id="wizard-modal" onclick="closeWizardBackdrop(event)">
+  <div class="modal wizard-modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title" style="white-space:nowrap;margin-right:.5rem">Configuration</span>
+      <div class="wizard-stepper" id="wizard-stepper">
+        <button class="wstep active" data-step="0" onclick="wizardGoStep(0)">① Source A</button>
+        <button class="wstep" data-step="1" onclick="wizardGoStep(1)" disabled>② Source B</button>
+        <button class="wstep" data-step="2" onclick="wizardGoStep(2)" disabled>③ Jointure</button>
+        <button class="wstep" data-step="3" onclick="wizardGoStep(3)" disabled>④ Règles</button>
+        <button class="wstep" data-step="4" onclick="wizardGoStep(4)" disabled>⑤ Filtres & Rapport</button>
+      </div>
+      <button class="modal-close" onclick="closeWizard()" style="margin-left:.5rem">✕</button>
+    </div>
+    <div class="wiz-err" id="wiz-err"></div>
+    <div class="modal-body wizard-body" id="wizard-body">
+      <div class="wizard-step active" id="wstep-0"></div>
+      <div class="wizard-step" id="wstep-1"></div>
+      <div class="wizard-step" id="wstep-2"></div>
+      <div class="wizard-step" id="wstep-3"></div>
+      <div class="wizard-step" id="wstep-4"></div>
+    </div>
+    <div class="wizard-footer">
+      <button class="btn-xs" id="wbtn-prev" onclick="wizardPrev()" style="display:none">← Précédent</button>
+      <div style="flex:1"></div>
+      <button class="btn-xs" id="wbtn-next" onclick="wizardNext()">Suivant →</button>
+      <button class="btn-xs" id="wbtn-apply" onclick="applyWizard()" style="display:none;background:var(--acc);color:#fff;border-color:var(--acc)">✓ Appliquer le YAML</button>
     </div>
   </div>
 </div>

@@ -125,3 +125,109 @@ Anomalies injectées (pour validation) :
 
 5. **SSE et threading** : chaque audit tourne dans un thread daemon séparé.
    Flask doit être lancé avec `threaded=True`.
+
+## Spécification fonctionnelle (docs/specifications.md)                                                      
+                                                                                                            
+  La spec est le contrat de comportement de l'application — elle est mise à jour avant d'implémenter tout   
+  nouveau comportement ou correctif (spec-first).                                                           
+                                                            
+  Structure du document                                                                                     
+                                                            
+  Frontmatter YAML (tags, updated)
+  ├── Introduction — flux principal, versions de référence                                                  
+  ├── Schéma de données — structure JSON / modèle, avec tables de champs et exemples complets               
+  └── Règles de gestion (RG) — organisées par écran, dans l'ordre du parcours utilisateur                   
+                                                                                                            
+  Format d'une règle de gestion (RG)                                                                        
+                                                                                                            
+  Chaque règle a un code unique RG-ECRAN-NN et suit ce gabarit :                                            
+                                                            
+  #### RG-ECRAN-NN — Titre court                                                                            
+                                                            
+  | Métadonnée | Valeur |                                                                                   
+  |---|---|
+  | Issue | #42 |                                                                                           
+  | Commit | `vX.Y` |                                                                                       
+  | Tests | `—` |
+                                                                                                            
+  **Résumé :** Une phrase décrivant le comportement visible par l'utilisateur.                              
+  
+  **Algorithme :**                                                                                          
+  ```                                                       
+  1. Étape en pseudo-code
+  2. Cas alternatifs et conditions                                                                          
+  3. …                                                                                                      
+  ```                                                                                                       
+                                                                                                            
+  Conventions                                               
+
+  - Le champ updated: du frontmatter est mis à jour à chaque commit qui modifie un comportement.            
+  - Les fonctionnalités déclarées mais non encore implémentées sont signalées avec un bloc > [!warning].
+  - La spec décrit le comportement attendu, pas l'implémentation interne — elle sert de référence pour les  
+  tests et la maintenance.                                                                                  
+
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+B
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+A
+  - Le pseudo-code des algorithmes est suffisamment précis pour être directement testable.     

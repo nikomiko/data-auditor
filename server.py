@@ -246,6 +246,75 @@ def export():
 
 
 # ─────────────────────────────────────────────────────────────
+#  POST /api/test-join  — test de jointure (wizard)
+# ─────────────────────────────────────────────────────────────
+@app.route("/api/test-join", methods=["POST"])
+def test_join():
+    import yaml as pyyaml
+    if "file_ref" not in request.files or "file_tgt" not in request.files:
+        return jsonify({"error": "Fichiers manquants."}), 400
+    config_yaml = request.form.get("config_yaml", "")
+    if not config_yaml.strip():
+        return jsonify({"error": "config_yaml manquant."}), 400
+    try:
+        config = pyyaml.safe_load(config_yaml)
+    except Exception as e:
+        return jsonify({"error": f"YAML invalide : {e}"}), 422
+
+    try:
+        src_ref   = config.get("sources", {}).get("reference", {})
+        src_tgt   = config.get("sources", {}).get("target", {})
+        join_keys = config.get("join", {}).get("keys", [])
+        if not join_keys:
+            return jsonify({"error": "join.keys manquant ou vide."}), 422
+
+        ref_bytes = request.files["file_ref"].read()
+        tgt_bytes = request.files["file_tgt"].read()
+
+        df_ref = normalize_dataframe(parse_file(ref_bytes, src_ref), src_ref)
+        df_tgt = normalize_dataframe(parse_file(tgt_bytes, src_tgt), src_tgt)
+
+        if src_ref.get("unpivot"):
+            df_ref = unpivot_dataframe(df_ref, src_ref["unpivot"])
+        if src_tgt.get("unpivot"):
+            df_tgt = unpivot_dataframe(df_tgt, src_tgt["unpivot"])
+
+        ref_cols = [k["source_field"] for k in join_keys]
+        tgt_cols = [k["target_field"] for k in join_keys]
+
+        def make_key(row, cols):
+            return "\u00a7".join(str(row[c]).strip() if c in row.index else "" for c in cols)
+
+        ref_map = {}
+        for _, row in df_ref.iterrows():
+            k = make_key(row, ref_cols)
+            if k not in ref_map:
+                ref_map[k] = {c: str(row.get(c, "")) for c in ref_cols}
+
+        tgt_map = {}
+        for _, row in df_tgt.iterrows():
+            k = make_key(row, tgt_cols)
+            if k not in tgt_map:
+                tgt_map[k] = {c: str(row.get(c, "")) for c in tgt_cols}
+
+        matched_keys = set(ref_map) & set(tgt_map)
+        sample = [
+            {"key": k, "ref": ref_map[k], "tgt": tgt_map[k]}
+            for k in sorted(matched_keys)[:5]
+        ]
+        return jsonify({
+            "total_ref":   len(df_ref),
+            "total_tgt":   len(df_tgt),
+            "matched":     len(matched_keys),
+            "orphelins_a": len(set(ref_map) - set(tgt_map)),
+            "orphelins_b": len(set(tgt_map) - set(ref_map)),
+            "sample":      sample,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 422
+
+
+# ─────────────────────────────────────────────────────────────
 #  Historique
 # ─────────────────────────────────────────────────────────────
 @app.route("/api/history")
