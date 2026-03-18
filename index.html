@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DataAuditor v2</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg:      #f0f2f7;
+  --s1:      #ffffff;
+  --s2:      #e8ebf2;
+  --border:  #d0d5e2;
+  --acc:     #2563eb;
+  --acc-dim: #dbeafe;
+  --text:    #1e2440;
+  --muted:   #6b7280;
+  --dim:     #4b5563;
+  --oa: #dc2626; --oa-bg: #fef2f2; --oa-bd: #fca5a5;
+  --ob: #ea580c; --ob-bg: #fff7ed; --ob-bd: #fdba74;
+  --dv: #b45309; --dv-bg: #fffbeb; --dv-bd: #fcd34d;
+  --ok: #15803d; --ok-bg: #f0fdf4; --ok-bd: #86efac;
+  --r: 6px;
+  --mono: 'IBM Plex Mono', monospace;
+  --sans: 'IBM Plex Sans', sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
+
+/* ── Header ── */
+header{height:50px;background:var(--s1);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.5rem;gap:.75rem;position:sticky;top:0;z-index:100}
+.logo{font-family:var(--mono);font-size:.88rem;font-weight:600;color:var(--acc)}
+.logo em{color:var(--muted);font-style:normal;font-weight:400}
+.logo-tag{font-size:.62rem;background:var(--acc-dim);color:var(--acc);border:1px solid #93c5fd;border-radius:4px;padding:.15rem .45rem;font-family:var(--mono);margin-left:.4rem;vertical-align:middle}
+.logo-ver{font-size:.62rem;background:var(--s2);color:var(--muted);border:1px solid var(--border);border-radius:4px;padding:.15rem .45rem;font-family:var(--mono);margin-left:.2rem;vertical-align:middle}
+.hdr-tabs{margin-left:auto;display:flex;gap:.25rem}
+.tab-btn{background:none;border:none;color:var(--muted);font-family:var(--sans);font-size:.8rem;padding:.4rem .9rem;border-radius:var(--r);cursor:pointer;transition:all .15s}
+.tab-btn:hover{background:var(--s2);color:var(--text)}
+.tab-btn.active{background:var(--acc-dim);color:var(--acc)}
+
+/* ── Layout ── */
+.layout{display:flex;flex-direction:column;flex:1;min-height:0;height:calc(100vh - 50px)}
+
+/* ── Config panel ── */
+.config-panel{width:100%;height:300px;min-height:80px;max-height:calc(100vh - 160px);background:var(--s1);border-bottom:1px solid var(--border);display:flex;flex-direction:row;overflow:hidden;flex-shrink:0;transition:height .3s cubic-bezier(.4,0,.2,1);position:relative}
+.config-panel.collapsed{height:44px!important;min-height:44px}
+.config-panel.collapsed .left-content{opacity:0;pointer-events:none}
+.left-content{display:flex;flex-direction:row;flex:1;overflow:hidden;transition:opacity .2s;padding-top:44px}
+
+.resize-handle{position:absolute;bottom:0;left:0;right:0;height:6px;cursor:ns-resize;z-index:20;display:flex;align-items:center;justify-content:center}
+.resize-handle::after{content:'';width:40px;height:3px;border-radius:2px;background:var(--border);transition:background .15s}
+.resize-handle:hover::after{background:var(--acc)}
+.config-panel.collapsed .resize-handle{display:none}
+
+.panel-titlebar{position:absolute;top:0;left:0;right:0;height:44px;display:flex;align-items:center;padding:0 1rem;gap:.75rem;background:var(--s1);border-bottom:1px solid var(--border);z-index:10;cursor:pointer;user-select:none}
+.panel-titlebar:hover{background:var(--s2)}
+.panel-title{font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);flex:1}
+.panel-pills{display:flex;gap:.4rem;align-items:center}
+.panel-pill{font-family:var(--mono);font-size:.62rem;padding:.1rem .45rem;border-radius:3px;border:1px solid var(--border);color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.panel-pill.ok{border-color:var(--ok-bd);color:var(--ok);background:var(--ok-bg)}
+.collapse-btn{background:none;border:1px solid var(--border);color:var(--muted);width:22px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;flex-shrink:0}
+.collapse-btn:hover{border-color:var(--acc);color:var(--acc)}
+.collapse-btn svg{transition:transform .3s}
+.config-panel.collapsed .collapse-btn svg{transform:rotate(180deg)}
+
+.col-files{width:220px;min-width:180px;border-right:1px solid var(--border);display:flex;flex-direction:column;padding:.75rem 1rem;gap:.5rem;overflow:hidden}
+.col-yaml{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.col-run{width:130px;min-width:110px;border-left:1px solid var(--border);display:flex;flex-direction:column;padding:.75rem;gap:.5rem;justify-content:flex-end}
+
+.section-title{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:.5rem}
+
+/* Drop zones */
+.dz{border:1.5px dashed var(--border);border-radius:var(--r);padding:.55rem .8rem;cursor:pointer;display:flex;align-items:center;gap:.5rem;font-size:.75rem;color:var(--muted);background:var(--bg);transition:all .15s;margin-bottom:.4rem}
+.dz:last-of-type{margin-bottom:0}
+.dz:hover{border-color:var(--acc);color:var(--acc);background:var(--acc-dim)}
+.dz.ok{border-color:var(--ok);color:var(--ok);border-style:solid}
+.dz input{display:none}
+.dz-name{font-family:var(--mono);font-size:.66rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.dz-badge{font-size:.6rem;font-weight:600;padding:.1rem .4rem;border-radius:3px;font-family:var(--mono);flex-shrink:0}
+.dz-badge.A{background:var(--oa-bg);color:var(--oa);border:1px solid var(--oa-bd)}
+.dz-badge.B{background:var(--ob-bg);color:var(--ob);border:1px solid var(--ob-bd)}
+
+.yaml-hdr{display:flex;align-items:center;padding:.65rem 1.1rem .4rem;gap:.4rem}
+.yaml-hdr .section-title{margin:0;flex:1}
+.btn-xs{background:none;border:1px solid var(--border);color:var(--muted);font-size:.68rem;padding:.25rem .6rem;border-radius:var(--r);cursor:pointer;font-family:var(--sans);transition:all .15s}
+.btn-xs:hover{border-color:var(--acc);color:var(--acc)}
+textarea#yaml{flex:1;background:var(--bg);border:none;border-top:1px solid var(--border);color:#1e4620;font-family:var(--mono);font-size:.7rem;line-height:1.65;padding:.75rem 1.1rem;resize:none;outline:none;width:100%}
+textarea#yaml::placeholder{color:var(--muted)}
+
+.btn-run{width:100%;padding:.65rem;background:var(--acc);color:#fff;border:none;border-radius:var(--r);font-family:var(--sans);font-size:.85rem;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.5rem}
+.btn-run:hover{background:#6fa3ff}
+.btn-run:disabled{opacity:.35;cursor:not-allowed}
+
+/* ── Results panel ── */
+.right{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.view{display:none;flex-direction:column;flex:1;overflow:hidden}
+.view.active{display:flex}
+
+/* Empty */
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.75rem;color:var(--muted);text-align:center;padding:2rem}
+.empty svg{opacity:.15}
+.empty h2{font-size:.95rem;font-weight:500;color:var(--dim)}
+.empty p{font-size:.78rem;max-width:280px;line-height:1.6}
+
+/* Error */
+.err-box{display:none;margin:.75rem 1.25rem;padding:.65rem 1rem;background:var(--oa-bg);border:1px solid var(--oa-bd);border-radius:var(--r);font-size:.78rem;color:var(--oa);line-height:1.5}
+.err-box.show{display:block}
+
+/* ── Barre de progression ── */
+.progress-wrap{display:none;flex-direction:column;gap:.5rem;padding:1rem 1.5rem;background:var(--s1);border-bottom:1px solid var(--border)}
+.progress-wrap.show{display:flex}
+.progress-header{display:flex;align-items:baseline;gap:.75rem}
+.progress-label{font-size:.78rem;color:var(--dim);flex:1}
+.progress-pct{font-family:var(--mono);font-size:.85rem;font-weight:600;color:var(--acc)}
+.progress-counts{font-family:var(--mono);font-size:.68rem;color:var(--muted)}
+.progress-step{font-size:.7rem;color:var(--muted);font-style:italic}
+.progress-bar-track{height:6px;background:var(--s2);border-radius:3px;overflow:hidden}
+.progress-bar-fill{height:100%;background:var(--acc);border-radius:3px;transition:width .2s ease;width:0%}
+.progress-bar-fill.indeterminate{width:40%;animation:indeterminate 1.2s ease-in-out infinite}
+@keyframes indeterminate{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
+
+/* Summary bar */
+.summary-bar{background:var(--s1);border-bottom:1px solid var(--border);padding:.7rem 1.25rem;display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap}
+.stats{display:flex;gap:1.25rem;flex:1;flex-wrap:wrap;align-items:baseline}
+.stat{display:flex;align-items:baseline;gap:.35rem}
+.stat-n{font-family:var(--mono);font-size:1.05rem;font-weight:600}
+.stat-l{font-size:.68rem;color:var(--muted)}
+.stat.a .stat-n{color:var(--oa)}.stat.b .stat-n{color:var(--ob)}.stat.d .stat-n{color:var(--dv)}.stat.t .stat-n{color:var(--dim)}
+.export-row{display:flex;gap:.5rem}
+.btn-exp{background:var(--s2);border:1px solid var(--border);color:var(--dim);font-size:.72rem;padding:.35rem .8rem;border-radius:var(--r);cursor:pointer;font-family:var(--sans);transition:all .15s;display:flex;align-items:center;gap:.3rem;text-decoration:none}
+.btn-exp:hover{border-color:var(--acc);color:var(--acc)}
+.btn-exp:disabled{opacity:.35;pointer-events:none}
+
+/* Filter bar */
+.filter-bar{background:var(--s1);border-bottom:1px solid var(--border);padding:.5rem 1.25rem;display:flex;flex-wrap:wrap;gap:.35rem .45rem;align-items:center}
+.fl{font-size:.68rem;color:var(--muted);margin-right:.2rem}
+.chip{background:none;border:1px solid var(--border);color:var(--muted);font-size:.68rem;padding:.2rem .6rem;border-radius:99px;cursor:pointer;font-family:var(--sans);transition:all .15s;display:flex;align-items:center;gap:.3rem}
+.chip:hover{color:var(--text);border-color:#4a5380}
+.chip.on.ca{background:var(--oa-bg);border-color:var(--oa);color:var(--oa)}
+.chip.on.cb{background:var(--ob-bg);border-color:var(--ob);color:var(--ob)}
+.chip.on.cd{background:var(--dv-bg);border-color:var(--dv);color:var(--dv)}
+.chip.on.co{background:var(--ok-bg);border-color:var(--ok);color:var(--ok)}
+.chip.on.cr{background:#ede9fe;border-color:#7c3aed;color:#5b21b6}
+.chip-c{background:rgba(0,0,0,.07);border-radius:99px;padding:0 .4rem;font-family:var(--mono);font-size:.6rem}
+.filter-sep{width:1px;height:18px;background:var(--border);margin:0 .2rem;align-self:center;flex-shrink:0}
+.filter-group{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center}
+.filter-group-label{font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);white-space:nowrap}
+
+/* Table */
+.tbl-wrap{flex:1;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:.78rem}
+thead th{background:var(--s1);padding:.55rem .85rem;text-align:left;font-size:.63rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr:hover{background:var(--s1)}
+td{padding:.5rem .85rem;vertical-align:middle}
+.tk{font-family:var(--mono);font-size:.72rem;color:var(--dim);white-space:nowrap}
+.tf{font-family:var(--mono);font-size:.69rem;color:var(--muted)}
+.tv{font-family:var(--mono);font-size:.72rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tv.r{color:#1d4ed8}.tv.t{color:#c05621}
+.td-det{font-size:.69rem;color:var(--muted);white-space:nowrap}
+.badge{display:inline-block;padding:.18rem .5rem;border-radius:4px;font-size:.64rem;font-weight:600;font-family:var(--mono);white-space:nowrap}
+.badge-ORPHELIN_A{background:var(--oa-bg);color:var(--oa);border:1px solid var(--oa-bd)}
+.badge-ORPHELIN_B{background:var(--ob-bg);color:var(--ob);border:1px solid var(--ob-bd)}
+.badge-DIVERGENT{background:var(--dv-bg);color:var(--dv);border:1px solid var(--dv-bd)}
+.badge-OK{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-bd)}
+.trunc{padding:.6rem 1.25rem;background:var(--s1);border-top:1px solid var(--border);font-size:.72rem;color:var(--muted);text-align:center}
+
+/* History */
+.history-list{flex:1;overflow:auto;padding:1.25rem;display:flex;flex-direction:column;gap:.6rem}
+.hist-item{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:.85rem 1.1rem;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:1rem}
+.hist-item:hover{border-color:var(--acc)}
+.hist-ts{font-family:var(--mono);font-size:.7rem;color:var(--muted);min-width:130px}
+.hist-name{font-size:.85rem;font-weight:500;flex:1}
+.hist-stats{display:flex;gap:.75rem}
+.hs{font-family:var(--mono);font-size:.75rem}
+.hs.a{color:var(--oa)}.hs.b{color:var(--ob)}.hs.d{color:var(--dv)}
+.hist-empty{color:var(--muted);text-align:center;padding:3rem;font-size:.875rem}
+
+/* Spinner */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{width:15px;height:15px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#b0b8d0}
+
+/* ── Modal prévisualisation ── */
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;align-items:center;justify-content:center}
+.modal-backdrop.show{display:flex}
+.modal{background:var(--s1);border:1px solid var(--border);border-radius:8px;width:min(900px,95vw);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.15)}
+.modal-header{display:flex;align-items:center;padding:.75rem 1rem;border-bottom:1px solid var(--border);gap:.75rem}
+.modal-title{font-size:.82rem;font-weight:600;flex:1}
+.modal-tabs{display:flex;gap:.25rem}
+.modal-tab{background:none;border:1px solid var(--border);color:var(--muted);font-size:.72rem;padding:.25rem .7rem;border-radius:var(--r);cursor:pointer;font-family:var(--sans);transition:all .15s}
+.modal-tab:hover{color:var(--text);border-color:var(--dim)}
+.modal-tab.active{background:var(--acc-dim);border-color:var(--acc);color:var(--acc)}
+.modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.1rem;line-height:1;padding:.1rem .3rem;border-radius:3px}
+.modal-close:hover{background:var(--s2);color:var(--text)}
+.modal-body{flex:1;overflow:auto;padding:0}
+.preview-table{width:100%;border-collapse:collapse;font-size:.72rem;font-family:var(--mono)}
+.preview-table th{background:var(--s2);padding:.4rem .75rem;text-align:left;font-size:.62rem;font-weight:600;color:var(--muted);border-bottom:1px solid var(--border);position:sticky;top:0;white-space:nowrap}
+.preview-table td{padding:.35rem .75rem;border-bottom:1px solid var(--border);white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis;color:var(--dim)}
+.preview-raw{padding:.75rem 1rem;font-family:var(--mono);font-size:.68rem;line-height:1.7;color:#1e4620;white-space:pre;overflow:auto}
+.preview-na{padding:2rem;text-align:center;color:var(--muted);font-size:.8rem;font-style:italic}
+
+/* btn-icon inline */
+.btn-icon{background:none;border:none;color:var(--muted);cursor:pointer;padding:.2rem .3rem;border-radius:3px;transition:all .15s;vertical-align:middle;flex-shrink:0}
+.btn-icon:hover{background:var(--s2);color:var(--acc)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">data<em>/</em>auditor
+    <span class="logo-tag">server</span>
+    <span class="logo-ver">v2.2.0</span>
+  </div>
+  <div class="hdr-tabs">
+    <button class="tab-btn active" onclick="showView('audit')">Audit</button>
+    <button class="tab-btn" onclick="showView('history'); loadHistory()">Historique</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- ── Config panel ── -->
+  <div class="config-panel" id="config-panel">
+    <div class="panel-titlebar" onclick="togglePanel()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h6M3 15h6"/></svg>
+      <span class="panel-title">Configuration</span>
+      <div class="panel-pills">
+        <span class="panel-pill" id="pill-ref">Source A…</span>
+        <span class="panel-pill" id="pill-tgt">Source B…</span>
+      </div>
+      <button class="collapse-btn" title="Réduire / agrandir">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+      </button>
+    </div>
+
+    <div class="left-content">
+      <div class="col-files">
+        <div class="section-title">Fichiers</div>
+        <div class="dz" id="dz-ref" onclick="document.getElementById('f-ref').click()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <span class="dz-name" id="n-ref">Référence…</span>
+          <span class="dz-badge A">A</span>
+          <input type="file" id="f-ref" accept=".csv,.txt,.dat,.json,.xlsx">
+          <button class="btn-icon" id="eye-ref" style="display:none" title="Prévisualiser" onclick="previewFile('ref', event)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <div class="dz" id="dz-tgt" onclick="document.getElementById('f-tgt').click()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <span class="dz-name" id="n-tgt">Cible…</span>
+          <span class="dz-badge B">B</span>
+          <input type="file" id="f-tgt" accept=".csv,.txt,.dat,.json,.xlsx">
+          <button class="btn-icon" id="eye-tgt" style="display:none" title="Prévisualiser" onclick="previewFile('tgt', event)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="col-yaml">
+        <div class="yaml-hdr">
+          <div class="section-title">Configuration YAML</div>
+          <button class="btn-xs" onclick="loadExample()">Exemple</button>
+          <button class="btn-xs" onclick="document.getElementById('f-yaml').click()">📂 Charger</button>
+          <button class="btn-xs" onclick="document.getElementById('yaml').value=''">Vider</button>
+          <input type="file" id="f-yaml" accept=".yaml,.yml" style="display:none">
+        </div>
+        <textarea id="yaml" spellcheck="false" placeholder="Collez votre YAML ici…&#10;Ou cliquez sur Exemple / Charger."></textarea>
+      </div>
+
+      <div class="col-run">
+        <button class="btn-run" id="btn-run" onclick="runAudit()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Lancer
+        </button>
+        <button class="btn-xs" onclick="togglePanel()" style="text-align:center">Réduire</button>
+      </div>
+    </div>
+    <div class="resize-handle" id="resize-handle"></div>
+  </div>
+
+  <!-- ── Results ── -->
+  <div class="right">
+
+    <!-- VIEW: audit -->
+    <div class="view active" id="view-audit">
+
+      <div class="empty" id="empty">
+        <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><circle cx="12" cy="12" r="10"/><path d="M9 9h.01M15 9h.01M8 14s1.5 2 4 2 4-2 4-2"/></svg>
+        <h2>Aucun audit lancé</h2>
+        <p>Chargez vos fichiers, configurez le YAML et lancez l'audit.</p>
+      </div>
+
+      <div class="err-box" id="err"></div>
+
+      <!-- Barre de progression -->
+      <div class="progress-wrap" id="progress-wrap">
+        <div class="progress-header">
+          <span class="progress-label" id="prog-label">Initialisation…</span>
+          <span class="progress-pct" id="prog-pct">—</span>
+          <span class="progress-counts" id="prog-counts"></span>
+        </div>
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill indeterminate" id="prog-bar"></div>
+        </div>
+        <div class="progress-step" id="prog-step"></div>
+      </div>
+
+      <div id="results-area" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+        <div class="summary-bar">
+          <div class="stats">
+            <div class="stat t"><span class="stat-n" id="s-ref">—</span><span class="stat-l">réf.</span></div>
+            <div class="stat t"><span class="stat-n" id="s-tgt">—</span><span class="stat-l">cible</span></div>
+            <div class="stat a"><span class="stat-n" id="s-oa">0</span><span class="stat-l">orphelins A</span></div>
+            <div class="stat b"><span class="stat-n" id="s-ob">0</span><span class="stat-l">orphelins B</span></div>
+            <div class="stat d"><span class="stat-n" id="s-dv">0</span><span class="stat-l">divergents</span></div>
+          </div>
+          <div class="export-row">
+            <button class="btn-exp" id="btn-csv" onclick="exportReport('csv')" disabled>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV
+            </button>
+            <button class="btn-exp" id="btn-html" onclick="exportReport('html')" disabled>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>HTML
+            </button>
+          </div>
+        </div>
+
+        <div class="filter-bar" id="filter-bar">
+          <div class="filter-group">
+            <span class="filter-group-label">Type</span>
+            <button class="chip ca on" data-kind="type" data-t="ORPHELIN_A" onclick="toggleChip(this)">Orphelin A <span class="chip-c" id="c-oa">0</span></button>
+            <button class="chip cb on" data-kind="type" data-t="ORPHELIN_B" onclick="toggleChip(this)">Orphelin B <span class="chip-c" id="c-ob">0</span></button>
+            <button class="chip cd on" data-kind="type" data-t="DIVERGENT"  onclick="toggleChip(this)">Divergent  <span class="chip-c" id="c-dv">0</span></button>
+            <button class="chip co"   data-kind="type" data-t="OK"          onclick="toggleChip(this)">OK         <span class="chip-c" id="c-ok">0</span></button>
+          </div>
+          <div id="filter-dynamic"></div>
+        </div>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr><th>Clé</th><th>Type</th><th>Rule</th><th>Champ</th><th>Valeur réf.</th><th>Valeur cible</th><th>Détail</th></tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+        <div class="trunc" id="trunc" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- VIEW: history -->
+    <div class="view" id="view-history">
+      <div class="history-list" id="history-list">
+        <div class="hist-empty">Chargement…</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════
+let allResults     = [];
+let lastSummary    = {};
+let lastConfig     = {};
+let currentToken   = null;
+let activeFilters  = new Set(['ORPHELIN_A','ORPHELIN_B','DIVERGENT']);
+let activeRuleFilters = null;
+
+// ═══════════════════════════════════════════════════════════
+//  FILES
+// ═══════════════════════════════════════════════════════════
+let fileRef = null, fileTgt = null;
+const TEXT_EXTS = new Set(['csv','txt','dat','json']);
+
+function isBinary(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  return !TEXT_EXTS.has(ext);
+}
+
+document.getElementById('f-ref').addEventListener('change', e => {
+  fileRef = e.target.files[0];
+  if (fileRef) {
+    document.getElementById('n-ref').textContent = fileRef.name;
+    document.getElementById('dz-ref').classList.add('ok');
+    const p = document.getElementById('pill-ref');
+    p.textContent = fileRef.name; p.classList.add('ok');
+    document.getElementById('eye-ref').style.display = isBinary(fileRef) ? 'none' : '';
+  }
+});
+document.getElementById('f-tgt').addEventListener('change', e => {
+  fileTgt = e.target.files[0];
+  if (fileTgt) {
+    document.getElementById('n-tgt').textContent = fileTgt.name;
+    document.getElementById('dz-tgt').classList.add('ok');
+    const p = document.getElementById('pill-tgt');
+    p.textContent = fileTgt.name; p.classList.add('ok');
+    document.getElementById('eye-tgt').style.display = isBinary(fileTgt) ? 'none' : '';
+  }
+});
+
+// Chargement fichier YAML
+document.getElementById('f-yaml').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = ev => { document.getElementById('yaml').value = ev.target.result; };
+  reader.readAsText(f, 'utf-8');
+  e.target.value = ''; // reset pour permettre rechargement du même fichier
+});
+
+// ═══════════════════════════════════════════════════════════
+//  TABS + PANEL
+// ═══════════════════════════════════════════════════════════
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.querySelector(`[onclick*="'${name}'"]`).classList.add('active');
+}
+
+function togglePanel(forceCollapse) {
+  const p = document.getElementById('config-panel');
+  const c = forceCollapse !== undefined ? forceCollapse : !p.classList.contains('collapsed');
+  p.classList.toggle('collapsed', c);
+}
+
+// Resize drag
+(function() {
+  const handle = document.getElementById('resize-handle');
+  const panel  = document.getElementById('config-panel');
+  let dragging = false, startY = 0, startH = 0;
+  handle.addEventListener('mousedown', e => {
+    dragging = true; startY = e.clientY; startH = panel.offsetHeight;
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const newH = Math.max(80, Math.min(startH + e.clientY - startY, window.innerHeight - 160));
+    panel.style.height = newH + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════
+//  PROGRESSION
+// ═══════════════════════════════════════════════════════════
+function showProgress(show) {
+  document.getElementById('progress-wrap').classList.toggle('show', show);
+}
+
+function updateProgress(ev) {
+  const bar    = document.getElementById('prog-bar');
+  const pct    = ev.pct || 0;
+  const done   = ev.done || 0;
+  const total  = ev.total || 0;
+
+  document.getElementById('prog-label').textContent = ev.step || 'Traitement en cours…';
+  document.getElementById('prog-step').textContent  = '';
+
+  if (total > 0) {
+    bar.classList.remove('indeterminate');
+    bar.style.width = pct + '%';
+    document.getElementById('prog-pct').textContent    = pct.toFixed(1) + '%';
+    document.getElementById('prog-counts').textContent = `${done.toLocaleString('fr-FR')} / ${total.toLocaleString('fr-FR')} lignes`;
+  } else {
+    bar.classList.add('indeterminate');
+    bar.style.width = '40%';
+    document.getElementById('prog-pct').textContent    = '…';
+    document.getElementById('prog-counts').textContent = '';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RUN AUDIT
+// ═══════════════════════════════════════════════════════════
+async function runAudit() {
+  hideErr();
+  const yamlText = document.getElementById('yaml').value.trim();
+  if (!fileRef)  { showErr('Chargez le fichier de référence (Source A).'); return; }
+  if (!fileTgt)  { showErr('Chargez le fichier cible (Source B).'); return; }
+  if (!yamlText) { showErr('La configuration YAML est vide.'); return; }
+
+  const RUN_BTN_HTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Lancer';
+  const btn = document.getElementById('btn-run');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spin"></div> Envoi…';
+
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('results-area').style.display = 'none';
+  document.getElementById('trunc').style.display = 'none';
+  allResults = [];
+  document.getElementById('tbody').innerHTML = '';
+
+  const fd = new FormData();
+  fd.append('file_ref', fileRef);
+  fd.append('file_tgt', fileTgt);
+  fd.append('config_yaml', yamlText);
+
+  try {
+    const resp = await fetch('/api/audit', { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (!resp.ok || data.error) {
+      showErr(data.error || 'Erreur serveur.');
+      btn.innerHTML = RUN_BTN_HTML;
+      btn.disabled = false;
+      return;
+    }
+
+    currentToken = data.token;
+    showProgress(true);
+    updateProgress({ pct: 0, done: 0, total: 0, step: 'Démarrage…' });
+    togglePanel(true);
+
+    // Afficher le tableau de suite (rempli au fil des events)
+    document.getElementById('results-area').style.display = 'flex';
+    document.getElementById('btn-csv').disabled  = true;
+    document.getElementById('btn-html').disabled = true;
+
+    listenSSE(currentToken);
+
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Lancer';
+    btn.disabled = false;
+
+  } catch(e) {
+    showErr('Erreur réseau : ' + e.message);
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Lancer';
+    btn.disabled = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SSE LISTENER
+// ═══════════════════════════════════════════════════════════
+function listenSSE(token) {
+  const es = new EventSource(`/api/stream/${token}`);
+  let   config = null;
+
+  try { config = jsyaml.load(document.getElementById('yaml').value); } catch(_) {}
+
+  es.onmessage = function(e) {
+    const ev = JSON.parse(e.data);
+
+    if (ev.event === 'progress') {
+      updateProgress(ev);
+
+    } else if (ev.event === 'filter_counts') {
+      // Mise à jour des compteurs ref/cible après filtrage serveur
+      document.getElementById('s-ref').textContent = ev.ref_count.toLocaleString('fr-FR');
+      document.getElementById('s-tgt').textContent = ev.tgt_count.toLocaleString('fr-FR');
+
+    } else if (ev.event === 'result') {
+      const max = config?.report?.max_diff_preview || 500;
+      if (allResults.length < max) {
+        allResults.push(ev);
+        appendRow(ev);
+      }
+      // Mise à jour compteurs live
+      updateLiveCounts();
+
+    } else if (ev.event === 'summary') {
+      lastSummary = ev;
+      lastConfig  = config || {};
+      document.getElementById('s-ref').textContent = ev.total_reference;
+      document.getElementById('s-tgt').textContent = ev.total_cible;
+      document.getElementById('s-oa').textContent  = ev.orphelins_a;
+      document.getElementById('s-ob').textContent  = ev.orphelins_b;
+      document.getElementById('s-dv').textContent  = ev.divergents;
+      updateChipCounts();
+      buildRuleFilterBar(ev, config);
+
+    } else if (ev.event === 'done') {
+      updateProgress({ pct: 100, done: ev.total_results, total: ev.total_results,
+                       step: `Terminé — ${ev.total_results.toLocaleString('fr-FR')} résultats` });
+      document.getElementById('prog-bar').classList.remove('indeterminate');
+      document.getElementById('prog-bar').style.width = '100%';
+
+      // Activer exports
+      document.getElementById('btn-csv').disabled  = false;
+      document.getElementById('btn-html').disabled = false;
+
+      // Avertissement si troncature
+      const max = config?.report?.max_diff_preview || 500;
+      if (ev.total_results > max) {
+        const t = document.getElementById('trunc');
+        t.style.display = 'block';
+        t.textContent = `Affichage limité à ${allResults.length} lignes sur ${ev.total_results.toLocaleString('fr-FR')}. Exportez pour la liste complète.`;
+      }
+      es.close();
+
+    } else if (ev.event === 'error') {
+      showErr(ev.message);
+      showProgress(false);
+      togglePanel(false);   // rouvrir le volet pour corriger
+      document.getElementById('btn-run').disabled = false;
+      document.getElementById('btn-run').innerHTML =
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Lancer';
+      es.close();
+    }
+  };
+
+  es.onerror = function() {
+    es.close();
+  };
+}
+
+// ── Ajout d'une ligne au tableau ──────────────────────────
+function appendRow(r) {
+  if (!activeFilters.has(r.type_ecart)) return;
+  if (activeRuleFilters && r.rule_name && !activeRuleFilters.has(r.rule_name)) return;
+  const tbody = document.getElementById('tbody');
+  const tr    = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="tk">${esc(r.join_key)}</td>
+    <td><span class="badge badge-${r.type_ecart}">${r.type_ecart}</span></td>
+    <td class="tf" style="color:#7c3aed;font-size:.65rem">${esc(r.rule_name)}</td>
+    <td class="tf">${esc(r.champ)}</td>
+    <td class="tv r" title="${esc(r.valeur_reference)}">${esc(r.valeur_reference)}</td>
+    <td class="tv t" title="${esc(r.valeur_cible)}">${esc(r.valeur_cible)}</td>
+    <td class="td-det">${esc(r.detail)}</td>`;
+  tbody.appendChild(tr);
+}
+
+function updateLiveCounts() {
+  const counts = { ORPHELIN_A:0, ORPHELIN_B:0, DIVERGENT:0, OK:0 };
+  allResults.forEach(r => { if (r.type_ecart in counts) counts[r.type_ecart]++; });
+  document.getElementById('c-oa').textContent = counts.ORPHELIN_A;
+  document.getElementById('c-ob').textContent = counts.ORPHELIN_B;
+  document.getElementById('c-dv').textContent = counts.DIVERGENT;
+  document.getElementById('c-ok').textContent = counts.OK;
+}
+
+function updateChipCounts() {
+  const counts = { ORPHELIN_A:0, ORPHELIN_B:0, DIVERGENT:0, OK:0 };
+  allResults.forEach(r => { if (r.type_ecart in counts) counts[r.type_ecart]++; });
+  document.getElementById('c-oa').textContent = counts.ORPHELIN_A;
+  document.getElementById('c-ob').textContent = counts.ORPHELIN_B;
+  document.getElementById('c-dv').textContent = counts.DIVERGENT;
+  document.getElementById('c-ok').textContent = counts.OK;
+}
+
+function buildRuleFilterBar(summary, config) {
+  const dyn   = document.getElementById('filter-dynamic');
+  dyn.innerHTML = '';
+  const rules = config?.rules || [];
+  if (!rules.length) { activeRuleFilters = null; return; }
+
+  activeRuleFilters = new Set(rules.map(r => r.name));
+  const sep = document.createElement('div');
+  sep.className = 'filter-sep';
+  dyn.appendChild(sep);
+
+  const grp = document.createElement('div');
+  grp.className = 'filter-group';
+  grp.innerHTML = '<span class="filter-group-label">Rules</span>';
+
+  rules.forEach(rule => {
+    const ko  = summary.rule_stats?.[rule.name] || 0;
+    const btn = document.createElement('button');
+    btn.className = 'chip cr on';
+    btn.dataset.kind = 'rule';
+    btn.dataset.t    = rule.name;
+    btn.onclick = function() { toggleChip(this); };
+    btn.innerHTML = `${esc(rule.name)} <span class="chip-c">${ko}</span>`;
+    grp.appendChild(btn);
+  });
+  dyn.appendChild(grp);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  FILTERS
+// ═══════════════════════════════════════════════════════════
+function toggleChip(btn) {
+  const kind = btn.dataset.kind || 'type';
+  const t    = btn.dataset.t;
+  const isOn = btn.classList.contains('on');
+  btn.classList.toggle('on', !isOn);
+
+  if (kind === 'type') {
+    if (isOn) activeFilters.delete(t); else activeFilters.add(t);
+  } else if (kind === 'rule') {
+    if (!activeRuleFilters) activeRuleFilters = new Set();
+    if (isOn) activeRuleFilters.delete(t); else activeRuleFilters.add(t);
+  }
+  rebuildTable();
+}
+
+function rebuildTable() {
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  const max = lastConfig?.report?.max_diff_preview || 500;
+  let shown = 0;
+  for (const r of allResults) {
+    if (shown >= max) break;
+    if (!activeFilters.has(r.type_ecart)) continue;
+    if (activeRuleFilters && r.rule_name && !activeRuleFilters.has(r.rule_name)) continue;
+    appendRow(r);
+    shown++;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  EXPORT
+// ═══════════════════════════════════════════════════════════
+function exportReport(fmt) {
+  if (!currentToken) return;
+  window.location.href = `/api/export?token=${currentToken}&format=${fmt}`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  HISTORY
+// ═══════════════════════════════════════════════════════════
+async function loadHistory() {
+  const c = document.getElementById('history-list');
+  c.innerHTML = '<div class="hist-empty">Chargement…</div>';
+  try {
+    const data = await fetch('/api/history').then(r => r.json());
+    if (!data.length) { c.innerHTML = '<div class="hist-empty">Aucun audit historisé.</div>'; return; }
+    c.innerHTML = data.map(h => `
+      <div class="hist-item" onclick="loadHistoryEntry('${h.filename}')">
+        <span class="hist-ts">${fmtTs(h.timestamp)}</span>
+        <span class="hist-name">${esc(h.audit_name)}</span>
+        <div class="hist-stats">
+          <span class="hs a">A:${h.summary.orphelins_a||0}</span>
+          <span class="hs b">B:${h.summary.orphelins_b||0}</span>
+          <span class="hs d">Δ:${h.summary.divergents||0}</span>
+        </div>
+      </div>`).join('');
+  } catch(e) { c.innerHTML = '<div class="hist-empty">Erreur de chargement.</div>'; }
+}
+
+async function loadHistoryEntry(filename) {
+  try {
+    const data = await fetch(`/api/history/${filename}`).then(r => r.json());
+    showView('audit');
+    allResults  = data.results || [];
+    lastSummary = data.summary || {};
+    lastConfig  = data.config  || {};
+    currentToken = null;
+
+    document.getElementById('s-ref').textContent = lastSummary.total_reference || '—';
+    document.getElementById('s-tgt').textContent = lastSummary.total_cible     || '—';
+    document.getElementById('s-oa').textContent  = lastSummary.orphelins_a;
+    document.getElementById('s-ob').textContent  = lastSummary.orphelins_b;
+    document.getElementById('s-dv').textContent  = lastSummary.divergents;
+    updateChipCounts();
+    rebuildTable();
+    showProgress(false);
+    document.getElementById('empty').style.display         = 'none';
+    document.getElementById('results-area').style.display  = 'flex';
+    document.getElementById('btn-csv').disabled  = true;
+    document.getElementById('btn-html').disabled = true;
+
+    if (data.truncated) {
+      const t = document.getElementById('trunc');
+      t.style.display  = 'block';
+      t.textContent    = `Affichage limité à ${allResults.length} lignes sur ${data.total_results}.`;
+    }
+  } catch(e) { showErr('Impossible de charger l\'audit : ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════════════════════
+function esc(s) {
+  if (!s && s !== 0) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function showErr(msg) { const e=document.getElementById('err'); e.textContent='⚠ '+msg; e.classList.add('show'); }
+function hideErr()    { document.getElementById('err').classList.remove('show'); }
+function fmtTs(iso)   {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PRÉVISUALISATION FICHIER
+// ═══════════════════════════════════════════════════════════
+let previewData = { ref: null, tgt: null };
+
+async function previewFile(which, evt) {
+  evt && evt.stopPropagation();
+  const file = which === 'ref' ? fileRef : fileTgt;
+  if (!file || isBinary(file)) return;
+
+  const label = which === 'ref' ? 'Référence' : 'Cible';
+  document.getElementById('preview-title').textContent =
+    `Prévisualisation — ${label} : ${file.name}`;
+
+  // Lire les premières lignes (max 50KB)
+  const slice = file.slice(0, 51200);
+  const text  = await slice.text();
+  const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l => l.trim());
+
+  // Stocker
+  previewData[which] = lines;
+
+  // Essayer de détecter le délimiteur depuis le YAML
+  let delim = ';';
+  try {
+    const cfg = jsyaml.load(document.getElementById('yaml').value);
+    const src = which === 'ref' ? cfg?.sources?.reference : cfg?.sources?.target;
+    if (src?.delimiter) delim = src.delimiter;
+  } catch(_) {}
+
+  renderPreviewTable(lines, delim);
+  renderPreviewRaw(lines);
+  switchPreviewTab('table');
+  document.getElementById('preview-modal').classList.add('show');
+}
+
+function renderPreviewTable(lines, delim) {
+  const wrap = document.getElementById('preview-table-wrap');
+  const MAX_ROWS = 20, MAX_COLS = 30;
+
+  if (!lines.length) { wrap.innerHTML = '<div class="preview-na">Fichier vide.</div>'; return; }
+
+  // Splitter simplement (sans gestion des quotes pour la préview)
+  const split = line => line.split(delim).slice(0, MAX_COLS);
+
+  const headers = split(lines[0]);
+  const rows    = lines.slice(1, MAX_ROWS + 1);
+  const truncC  = lines[0].split(delim).length > MAX_COLS;
+  const truncR  = lines.length - 1 > MAX_ROWS;
+
+  let html = '<table class="preview-table"><thead><tr>';
+  html += '<th style="color:var(--muted);font-weight:400">#</th>';
+  headers.forEach((h, i) => {
+    html += `<th title="${esc(h)}">${esc(h.trim())}</th>`;
+  });
+  if (truncC) html += '<th style="color:var(--muted)">…</th>';
+  html += '</tr></thead><tbody>';
+
+  rows.forEach((line, ri) => {
+    const cells = split(line);
+    html += `<tr><td style="color:var(--muted);font-size:.6rem">${ri + 1}</td>`;
+    headers.forEach((_, ci) => {
+      const val = cells[ci] !== undefined ? cells[ci] : '';
+      html += `<td title="${esc(val)}">${esc(val.trim())}</td>`;
+    });
+    if (truncC) html += '<td>…</td>';
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  if (truncR) {
+    html += `<div class="preview-na" style="padding:.5rem 1rem">… ${(lines.length - 1).toLocaleString('fr-FR')} lignes au total (aperçu limité à ${MAX_ROWS})</div>`;
+  }
+  wrap.innerHTML = html;
+}
+
+function renderPreviewRaw(lines) {
+  const wrap = document.getElementById('preview-raw-wrap');
+  const preview = lines.slice(0, 30).join('\n');
+  wrap.innerHTML = `<div class="preview-raw">${esc(preview)}</div>`;
+}
+
+function switchPreviewTab(tab) {
+  document.getElementById('preview-table-wrap').style.display = tab === 'table' ? '' : 'none';
+  document.getElementById('preview-raw-wrap').style.display   = tab === 'raw'   ? '' : 'none';
+  document.getElementById('tab-table').classList.toggle('active', tab === 'table');
+  document.getElementById('tab-raw').classList.toggle('active',   tab === 'raw');
+}
+
+function closePreview(e) {
+  if (!e || e.target === document.getElementById('preview-modal')) {
+    document.getElementById('preview-modal').classList.remove('show');
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closePreview();
+});
+
+function loadExample() {
+  document.getElementById('yaml').value =
+`meta:
+  name: "Exemple — Audit commandes"
+
+sources:
+  reference:
+    label: "Export ERP"
+    format: csv
+    encoding: utf-8
+    delimiter: ";"
+    has_header: true
+    fields:
+      - { name: order_id,      type: string  }
+      - { name: customer_code, type: string  }
+      - { name: order_date,    type: date,    date_format: "%d/%m/%Y" }
+      - { name: amount,        type: decimal }
+
+  target:
+    label: "Export WMS"
+    format: csv
+    encoding: utf-8
+    delimiter: ","
+    has_header: true
+    fields:
+      - { name: order_id,      type: string  }
+      - { name: customer_code, type: string  }
+      - { name: order_date,    type: date,    date_format: "%Y-%m-%d" }
+      - { name: amount,        type: decimal }
+
+join:
+  keys:
+    - { source_field: order_id, target_field: order_id }
+
+rules:
+  - name: "Montant cohérent"
+    logic: AND
+    fields:
+      - { source_field: amount, target_field: amount, tolerance: 0.01 }
+
+  - name: "Client identique"
+    logic: AND
+    fields:
+      - { source_field: customer_code, target_field: customer_code, normalize: both }
+
+report:
+  show_matching: false
+  max_diff_preview: 500
+`;
+}
+</script>
+<!-- ── Modal prévisualisation ── -->
+<div class="modal-backdrop" id="preview-modal" onclick="closePreview(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title" id="preview-title">Prévisualisation</span>
+      <div class="modal-tabs">
+        <button class="modal-tab active" id="tab-table" onclick="switchPreviewTab('table')">Tableau</button>
+        <button class="modal-tab" id="tab-raw"   onclick="switchPreviewTab('raw')">Brut</button>
+      </div>
+      <button class="modal-close" onclick="closePreview()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="preview-table-wrap"></div>
+      <div id="preview-raw-wrap"  style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,281 @@
+"""
+server.py — Serveur Flask avec streaming SSE pour la progression.
+
+Endpoints :
+  POST /api/audit          → lance l'audit (multipart : file_ref, file_tgt, config_yaml)
+  GET  /api/stream/<token> → flux SSE de progression et résultats
+  GET  /api/export         → export CSV ou HTML (?format=csv|html)
+  GET  /api/history        → liste des audits
+  GET  /api/history/<f>    → charge un audit historisé
+"""
+import io
+import json
+import os
+import time
+import threading
+import uuid
+from flask import Flask, request, jsonify, send_file, send_from_directory, Response, stream_with_context
+
+from config_loader import load_config, ConfigError
+from parser        import parse_file
+from normalizer    import normalize_dataframe
+from unpivot       import unpivot_dataframe
+from comparator    import compare_with_progress
+from report        import save_history, list_history, load_history, to_csv, to_html
+
+app = Flask(__name__, static_folder=".", static_url_path="")
+
+# ── Stockage session ──────────────────────────────────────────
+# Token → {status, results, summary, config, queue}
+_sessions: dict = {}
+_sessions_lock  = threading.Lock()
+
+MAX_PREVIEW = 500   # lignes max en mémoire pour l'UI
+
+
+@app.route("/")
+def index():
+    return send_from_directory(".", "index.html")
+
+
+# ─────────────────────────────────────────────────────────────
+#  POST /api/audit  — démarre l'audit en arrière-plan
+# ─────────────────────────────────────────────────────────────
+@app.route("/api/audit", methods=["POST"])
+def start_audit():
+    if "file_ref" not in request.files:
+        return jsonify({"error": "Fichier de référence (file_ref) manquant."}), 400
+    if "file_tgt" not in request.files:
+        return jsonify({"error": "Fichier cible (file_tgt) manquant."}), 400
+    config_yaml = request.form.get("config_yaml", "")
+    if not config_yaml.strip():
+        return jsonify({"error": "config_yaml manquant."}), 400
+
+    file_ref_bytes = request.files["file_ref"].read()
+    file_tgt_bytes = request.files["file_tgt"].read()
+
+    # Valider la config avant de démarrer
+    try:
+        config = load_config(config_yaml)
+    except ConfigError as e:
+        return jsonify({"error": str(e)}), 422
+
+    token = str(uuid.uuid4())
+    with _sessions_lock:
+        _sessions[token] = {
+            "status":  "running",
+            "results": [],
+            "summary": {},
+            "config":  config,
+            "events":  [],          # buffer d'événements SSE
+            "done":    False,
+            "error":   None,
+        }
+
+    thread = threading.Thread(
+        target=_run_audit,
+        args=(token, file_ref_bytes, file_tgt_bytes, config),
+        daemon=True,
+    )
+    thread.start()
+    return jsonify({"token": token})
+
+
+def _run_audit(token: str, ref_bytes: bytes, tgt_bytes: bytes, config: dict):
+    sess = _sessions[token]
+    try:
+        src_ref = config["sources"]["reference"]
+        src_tgt = config["sources"]["target"]
+
+        _push(token, {"event": "progress", "done": 0, "total": 0, "pct": 0,
+                      "step": "Parsing du fichier de référence…"})
+        df_ref = parse_file(ref_bytes, src_ref)
+
+        _push(token, {"event": "progress", "done": 0, "total": 0, "pct": 0,
+                      "step": "Parsing du fichier cible…"})
+        df_tgt = parse_file(tgt_bytes, src_tgt)
+
+        _push(token, {"event": "progress", "done": 0, "total": 0, "pct": 0,
+                      "step": "Normalisation…"})
+        df_ref = normalize_dataframe(df_ref, src_ref)
+        df_tgt = normalize_dataframe(df_tgt, src_tgt)
+
+        if src_ref.get("unpivot"):
+            _push(token, {"event": "progress", "done": 0, "total": 0, "pct": 0,
+                          "step": "Dep. reference..."})
+            df_ref = unpivot_dataframe(df_ref, src_ref["unpivot"])
+
+        if src_tgt.get("unpivot"):
+            _push(token, {"event": "progress", "done": 0, "total": 0, "pct": 0,
+                          "step": "Dep. cible..."})
+            df_tgt = unpivot_dataframe(df_tgt, src_tgt["unpivot"])
+
+        # Filtres YAML appliques avant comparaison
+        filters = config.get("filters", [])
+        if filters:
+            _push(token, {"event": "progress", "done": 0, "total": 0, "pct": 0,
+                          "step": "Application des filtres..."})
+            df_ref, df_tgt = apply_filters(df_ref, df_tgt, filters, config)
+            _push(token, {"event": "filter_counts",
+                          "ref_count": len(df_ref),
+                          "tgt_count": len(df_tgt)})
+
+        results = []
+        summary = {}
+
+        for event in compare_with_progress(df_ref, df_tgt, config):
+            if event["event"] == "result":
+                results.append(event)
+            elif event["event"] == "summary":
+                summary = {k: v for k, v in event.items() if k != "event"}
+                sess["results"] = results
+                sess["summary"] = summary
+            _push(token, event)
+
+        # Historisation
+        history_file = save_history(results, summary, config)
+        _push(token, {"event": "done", "history_file": history_file,
+                      "total_results": len(results)})
+
+    except (ConfigError, Exception) as e:
+        msg = str(e)
+        sess["error"] = msg
+        _push(token, {"event": "error", "message": msg})
+    finally:
+        sess["done"] = True
+
+
+def apply_filters(df_ref, df_tgt, filters, config):
+    """
+    Filtre chaque source par les valeurs déclarées dans 'filters'.
+    Pas de propagation croisée : les orphelins restent visibles dans le comparateur.
+    """
+    for f in filters:
+        field  = f.get("field")
+        src    = f.get("source", "reference")
+        values = f.get("values")
+        if not field or values is None:
+            continue
+        values_set = set(str(v) for v in values)
+
+        if src == "reference":
+            if field not in df_ref.columns:
+                raise ConfigError(f"filters: champ '{field}' introuvable dans la reference.")
+            df_ref = df_ref[df_ref[field].astype(str).isin(values_set)].reset_index(drop=True)
+        elif src == "target":
+            if field not in df_tgt.columns:
+                raise ConfigError(f"filters: champ '{field}' introuvable dans la cible.")
+            df_tgt = df_tgt[df_tgt[field].astype(str).isin(values_set)].reset_index(drop=True)
+    return df_ref, df_tgt
+
+
+def _push(token: str, event: dict):
+    with _sessions_lock:
+        if token in _sessions:
+            _sessions[token]["events"].append(event)
+
+
+# ─────────────────────────────────────────────────────────────
+#  GET /api/stream/<token>  — flux SSE
+# ─────────────────────────────────────────────────────────────
+@app.route("/api/stream/<token>")
+def stream(token: str):
+    def generate():
+        cursor = 0
+        while True:
+            with _sessions_lock:
+                sess = _sessions.get(token)
+                if not sess:
+                    yield _sse({"event": "error", "message": "Session introuvable."})
+                    return
+                events = sess["events"][cursor:]
+                cursor += len(events)
+                done   = sess["done"]
+
+            for ev in events:
+                yield _sse(ev)
+
+            if done and cursor >= len(_sessions.get(token, {}).get("events", [])):
+                return
+
+            time.sleep(0.05)
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control":   "no-cache",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
+def _sse(data: dict) -> str:
+    return f"data: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
+
+
+# ─────────────────────────────────────────────────────────────
+#  GET /api/export  — CSV ou HTML
+# ─────────────────────────────────────────────────────────────
+@app.route("/api/export")
+def export():
+    token  = request.args.get("token", "")
+    fmt    = request.args.get("format", "csv").lower()
+    with _sessions_lock:
+        sess = _sessions.get(token, {})
+
+    results = sess.get("results", [])
+    summary = sess.get("summary", {})
+    config  = sess.get("config", {})
+
+    if fmt == "csv":
+        content = "\ufeff" + to_csv(results)   # BOM pour Excel
+        return send_file(
+            io.BytesIO(content.encode("utf-8")),
+            mimetype="text/csv", as_attachment=True,
+            download_name="rapport_audit.csv"
+        )
+    elif fmt == "html":
+        content = to_html(results, summary, config)
+        return send_file(
+            io.BytesIO(content.encode("utf-8")),
+            mimetype="text/html", as_attachment=True,
+            download_name="rapport_audit.html"
+        )
+    return jsonify({"error": "Format invalide."}), 400
+
+
+# ─────────────────────────────────────────────────────────────
+#  Historique
+# ─────────────────────────────────────────────────────────────
+@app.route("/api/history")
+def get_history():
+    return jsonify(list_history())
+
+
+@app.route("/api/history/<filename>")
+def get_history_entry(filename: str):
+    try:
+        data    = load_history(filename)
+        results = data.get("results", [])
+        max_p   = data.get("meta", {}).get("config", {}).get(
+            "report", {}
+        ).get("max_diff_preview", MAX_PREVIEW)
+        return jsonify({
+            "summary":       data.get("summary", {}),
+            "results":       results[:max_p],
+            "truncated":     len(results) > max_p,
+            "total_results": len(results),
+            "config":        data.get("meta", {}).get("config", {}),
+            "token":         None,
+        })
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+if __name__ == "__main__":
+    print("=" * 55)
+    print("  DataAuditor v2 — serveur Flask")
+    print("  → http://localhost:5000")
+    print("=" * 55)
+    app.run(debug=False, host="0.0.0.0", port=5000, threaded=True)
