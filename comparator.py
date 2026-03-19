@@ -160,6 +160,35 @@ def _check_detail(resolved: dict, condition_met: bool) -> str:
         return f'"{v_ref}" {sym} "{v_tgt}" — condition non vérifiée'
 
 
+# ── Construction vectorisée des maps de jointure ──────────────
+_NULL_STRS = {"nan", "NaT", "None", "<NA>", ""}
+
+
+def _build_key_series(df: pd.DataFrame, cols: list) -> "pd.Series":
+    """Construit une Series de clés de jointure de façon vectorisée (×10–50 vs iterrows)."""
+    parts = []
+    for c in cols:
+        s = df[c].fillna("").astype(str).str.strip()
+        s = s.where(~s.isin(_NULL_STRS), "")
+        parts.append(s)
+    if len(parts) == 1:
+        return parts[0]
+    result = parts[0].copy()
+    for p in parts[1:]:
+        result = result + "§" + p
+    return result
+
+
+def _build_key_map(df: pd.DataFrame, cols: list) -> dict:
+    """Retourne {clé: row_dict} en dédupliquant sur la première occurrence."""
+    return (
+        df.assign(__key=_build_key_series(df, cols))
+          .drop_duplicates("__key")
+          .set_index("__key")
+          .to_dict("index")
+    )
+
+
 # ── Comparaison principale avec générateur de progression ─────
 def compare_with_progress(
     df_ref: pd.DataFrame,
@@ -201,29 +230,12 @@ def compare_with_progress(
             f"{', '.join(missing_tgt)}. Colonnes disponibles : {', '.join(df_tgt.columns)}"
         )
 
-    # ── Construction des clés de jointure ─────────────────────
+    # ── Construction des clés de jointure (vectorisé) ─────────
     yield {"event": "progress", "done": 0, "total": 0, "pct": 0,
            "step": "Construction des index de jointure…"}
 
-    def make_key(row: pd.Series, cols: list) -> str:
-        def _part(v) -> str:
-            if v is None or (isinstance(v, float) and math.isnan(v)):
-                return ""
-            s = str(v).strip()
-            return "" if s in ("nan", "NaT", "None", "<NA>") else s
-        return "§".join(_part(row.get(c)) for c in cols)
-
-    ref_map = {}
-    for _, row in df_ref.iterrows():
-        k = make_key(row, ref_key_cols)
-        if k not in ref_map:
-            ref_map[k] = row.to_dict()
-
-    tgt_map = {}
-    for _, row in df_tgt.iterrows():
-        k = make_key(row, tgt_key_cols)
-        if k not in tgt_map:
-            tgt_map[k] = row.to_dict()
+    ref_map = _build_key_map(df_ref, ref_key_cols)
+    tgt_map = _build_key_map(df_tgt, tgt_key_cols)
 
     ref_keys = set(ref_map.keys())
     tgt_keys = set(tgt_map.keys())

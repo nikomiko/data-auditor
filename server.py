@@ -20,7 +20,7 @@ from config_loader import load_config, ConfigError
 from parser        import parse_file
 from normalizer    import normalize_dataframe
 from unpivot       import unpivot_dataframe
-from comparator    import compare_with_progress
+from comparator    import compare_with_progress, _build_key_series
 import report
 from report        import save_history, list_history, load_history, to_csv, to_html, to_xlsx
 
@@ -152,28 +152,21 @@ def _run_audit(token: str, ref_bytes: bytes, tgt_bytes: bytes, config: dict):
         ref_key_cols  = [k["source_field"] for k in join_keys_cfg]
         tgt_key_cols  = [k["target_field"]  for k in join_keys_cfg]
 
-        def _make_key(row_dict, cols):
-            def _p(v):
-                if v is None or (isinstance(v, float) and v != v): return ""
-                s = str(v).strip()
-                return "" if s in ("nan", "NaT", "None", "<NA>") else s
-            return "§".join(_p(row_dict.get(c)) for c in cols)
+        _NULL_SET = {"nan", "NaT", "None", "<NA>"}
 
-        def _row_dict(row):
-            return {c: ('' if str(v) in ('nan', 'NaT', 'None', '<NA>') else str(v))
-                    for c, v in row.items()}
+        def _build_rows_map(df, cols):
+            """Construit {clé: {col: str_val, ...}} de façon vectorisée."""
+            tmp = (
+                df.assign(__key=_build_key_series(df, cols))
+                  .drop_duplicates("__key")
+                  .set_index("__key")
+                  .astype(str)
+                  .replace(_NULL_SET, "")
+            )
+            return tmp.to_dict("index")
 
-        ref_rows_map = {}
-        for _, row in df_ref.iterrows():
-            k = _make_key(row.to_dict(), ref_key_cols)
-            if k not in ref_rows_map:
-                ref_rows_map[k] = _row_dict(row)
-
-        tgt_rows_map = {}
-        for _, row in df_tgt.iterrows():
-            k = _make_key(row.to_dict(), tgt_key_cols)
-            if k not in tgt_rows_map:
-                tgt_rows_map[k] = _row_dict(row)
+        ref_rows_map = _build_rows_map(df_ref, ref_key_cols)
+        tgt_rows_map = _build_rows_map(df_tgt, tgt_key_cols)
 
         sess["ref_rows_map"]    = ref_rows_map
         sess["tgt_rows_map"]    = tgt_rows_map
@@ -351,26 +344,22 @@ def test_join():
                 f"{', '.join(missing_tgt)}. Disponibles : {', '.join(df_tgt.columns)}"
             )
 
-        def _key_part(v) -> str:
-            if v is None or (isinstance(v, float) and v != v):
-                return ""
-            s = str(v).strip()
-            return "" if s in ("nan", "NaT", "None", "<NA>") else s
-
-        def make_key(row, cols):
-            return "§".join(_key_part(row.get(c) if hasattr(row, "get") else (row[c] if c in row.index else None)) for c in cols)
-
-        ref_map = {}
-        for _, row in df_ref.iterrows():
-            k = make_key(row, ref_cols)
-            if k not in ref_map:
-                ref_map[k] = {c: str(row.get(c, "")) for c in ref_cols}
-
-        tgt_map = {}
-        for _, row in df_tgt.iterrows():
-            k = make_key(row, tgt_cols)
-            if k not in tgt_map:
-                tgt_map[k] = {c: str(row.get(c, "")) for c in tgt_cols}
+        ref_map = (
+            df_ref[ref_cols]
+            .assign(__key=_build_key_series(df_ref, ref_cols))
+            .drop_duplicates("__key")
+            .set_index("__key")
+            .astype(str)
+            .to_dict("index")
+        )
+        tgt_map = (
+            df_tgt[tgt_cols]
+            .assign(__key=_build_key_series(df_tgt, tgt_cols))
+            .drop_duplicates("__key")
+            .set_index("__key")
+            .astype(str)
+            .to_dict("index")
+        )
 
         matched_keys = set(ref_map) & set(tgt_map)
         sample = [
