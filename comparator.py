@@ -13,7 +13,8 @@ from normalizer import apply_comparison_norm
 _OP_ALIAS = {"=": "equals", "<>": "differs", ">": "greater", "<": "less"}
 
 _OP_LABEL = {"equals": "=", "differs": "≠", "greater": ">", "less": "<",
-             "contains": "∋", "not_contains": "∌"}
+             "contains": "∋", "not_contains": "∌",
+             "matches": "∼", "not_matches": "≁"}
 
 
 # ── Résolution d'une field-rule ───────────────────────────────
@@ -131,6 +132,16 @@ def check_field_condition(resolved: dict) -> bool:
         if _is_null(v_ref) or _is_null(v_tgt):
             return False
         return str(apply_comparison_norm(v_tgt, norm)) not in str(apply_comparison_norm(v_ref, norm))
+
+    if op in ("matches", "not_matches"):
+        import re
+        if _is_null(v_ref) or _is_null(v_tgt):
+            return False
+        try:
+            hit = bool(re.search(str(v_tgt), str(apply_comparison_norm(v_ref, norm))))
+            return hit if op == "matches" else not hit
+        except re.error:
+            return False
 
     return False
 

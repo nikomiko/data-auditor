@@ -831,7 +831,7 @@ function wizRenderRules() {
 }
 
 function wizRuleFieldRows(ri, r, refNames, tgtNames) {
-  const opOpts = [['equals','= (equals)'],['differs','≠ (differs)'],['greater','> (greater)'],['less','< (less)'],['contains','contient'],['not_contains','ne contient pas']];
+  const opOpts = [['equals','= (equals)'],['differs','≠ (differs)'],['greater','> (greater)'],['less','< (less)'],['contains','contient'],['not_contains','ne contient pas'],['matches','∼ regex match'],['not_matches','≁ regex non match']];
   const normOpts = [['none','none'],['trim','trim'],['lowercase','lowercase'],['both','both']];
 
   return r.fields.map((f, fi) => {
