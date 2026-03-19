@@ -1030,18 +1030,24 @@ async function runAudit() {
   fd.append('file_tgt', fileTgt);
   fd.append('config_yaml', yamlText);
 
+  // Toujours basculer vers la page résultats (step 6) dès le lancement
+  if (wfUnlocked < 6) wfUnlocked = 6;
+  goWFStep(6);
+  showProgress(true);
+  updateProgress({ pct: 0, done: 0, total: 0, step: 'Envoi de la configuration…' });
+
   try {
     const resp = await fetch('/api/audit', { method: 'POST', body: fd });
     const data = await resp.json();
     if (!resp.ok || data.error) {
       showErr(data.error || 'Erreur serveur.');
+      showProgress(false);
       btn.innerHTML = RUN_BTN_HTML;
       btn.disabled = false;
       return;
     }
 
     currentToken = data.token;
-    showProgress(true);
     updateProgress({ pct: 0, done: 0, total: 0, step: 'Démarrage…' });
 
     // Afficher le tableau de suite (rempli au fil des events)
@@ -1051,13 +1057,13 @@ async function runAudit() {
     document.getElementById('btn-xlsx').disabled = true;
 
     listenSSE(currentToken);
-    goWFStep(6);
 
     btn.innerHTML = RUN_BTN_HTML;
     btn.disabled = false;
 
   } catch(e) {
     showErr('Erreur réseau : ' + e.message);
+    showProgress(false);
     btn.innerHTML = RUN_BTN_HTML;
     btn.disabled = false;
   }
