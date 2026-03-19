@@ -1961,7 +1961,20 @@ const WS = {
 function wGetFieldNames(src) {
   const s = WS.sources[src];
   const list = s.fixed_width ? s.column_positions : s.fields;
-  return list.map(f => f.name).filter(Boolean);
+  const raw = list.map(f => f.name).filter(Boolean);
+
+  // Quand le dépivotage est actif, le DataFrame résultant ne contient plus
+  // les colonnes pivot_fields : seuls anchor_fields + location_field + value_field subsistent.
+  if (s.unpivot_enabled) {
+    const anchors  = (s.unpivot.anchor_fields || []).filter(Boolean);
+    const locField = s.unpivot.location_field || 'location_key';
+    const valField = s.unpivot.value_field    || 'pivot_value';
+    // Conserver uniquement les anchors présents dans les colonnes brutes, plus les deux champs générés
+    const anchorSet = new Set(anchors);
+    return [...raw.filter(n => anchorSet.has(n)), locField, valField];
+  }
+
+  return raw;
 }
 
 // ── Lecture YAML → WizardState ─────────────────────────────
