@@ -265,21 +265,24 @@ clé ∈ tgt_keys ET ∉ ref_keys → ORPHELIN_B
 | Commit | `v3.0.0` |
 | Tests | — |
 
-**Résumé :** Une règle est évaluée champ par champ. Le résultat global (KO/OK) dépend du nombre de champs en écart et de la logique (AND/OR).
+**Résumé :** Une règle est "passante" quand ses champs satisfont la condition de l'opérateur selon la logique AND/OR. Le `type_ecart` émis dépend du `rule_type`.
 
 **Algorithme :**
 ```
-field_diffs = [champs dont _values_differ() retourne True]
-n_fail = len(field_diffs)
+field_evals = [(resolved, check_field_condition(resolved)) pour chaque champ]
+n_pass  = nombre de champs dont la condition est satisfaite
+n_total = nombre de champs évalués
 
-Si logic == "AND" : rule_ko = (n_fail > 0)
-Si logic == "OR"  : rule_ko = (n_fail > 0)   # même comportement v3
+Si logic == "AND" : rule_passes = (n_pass == n_total)   # toutes les conditions satisfaites
+Si logic == "OR"  : rule_passes = (n_pass > 0)           # au moins une condition satisfaite
 
-Si rule_ko :
-  → Émettre un événement result KO pour chaque champ en écart
-  → Incrémenter rule_ko_keys[rule.name]
+Si rule_passes :
+  type_ecart = "KO" si rule_type == "incoherence", sinon "OK"
+  → Émettre un événement result pour chaque champ dont la condition est satisfaite
+  → Si type_ecart == "KO" : incrémenter rule_ko_keys[rule.name]
+
 Sinon et show_matching :
-  → Émettre un événement result OK avec détail "conforme" ou "aucune incohérence"
+  → Émettre un événement result résumé (règle non passante)
 ```
 
 #### RG-RULE-02 — Sémantique des opérateurs
@@ -289,23 +292,25 @@ Sinon et show_matching :
 | Commit | `v3.0.0` |
 | Tests | — |
 
-**Résumé :** Tous les opérateurs suivent la sémantique mathématique : `_values_differ()` retourne `True` quand la condition est vraie (et non quand elle est violée).
+**Résumé :** `check_field_condition()` retourne `True` quand la condition mathématique de l'opérateur est **satisfaite**.
 
 **Algorithme :**
 ```
-equals      : True si A ≠ B (les valeurs diffèrent)
-differs     : True si A = B (les valeurs sont identiques → incohérence)
+equals      : True si A = B
+differs     : True si A ≠ B
 greater     : True si float(A) > float(B)
 less        : True si float(A) < float(B)
 contains    : True si str(B) ∈ str(A)
 not_contains: True si str(B) ∉ str(A)
 
 Cas nuls (None, NaN, "", "nan", "NaT", "<NA>") :
-  equals : null ≠ null → False ; null ≠ non-null → True
-  autres : null → False (condition non évaluable)
+  equals  : null = null → True ; null ≠ non-null → False
+  differs : null ≠ null → False ; null ≠ non-null → True
+  autres  : null → False (condition non évaluable)
 
-Tolérance (uniquement pour equals) :
-  True si |float(A) - float(B)| > tolerance
+Tolérance :
+  equals  : True si |float(A) - float(B)| ≤ tolerance
+  differs : True si |float(A) - float(B)| > tolerance
 ```
 
 #### RG-RULE-03 — Alias d'opérateurs (compatibilité ascendante)
@@ -330,20 +335,17 @@ op = _OP_ALIAS.get(operator, operator)
 | Commit | `v3.0.0` |
 | Tests | — |
 
-**Résumé :** Le `rule_type` détermine si une règle peut produire un KO. Une règle `coherence` ne produit jamais de KO ; une règle `incoherence` produit KO dès qu'un écart est détecté.
+**Résumé :** Le `rule_type` détermine le `type_ecart` émis quand une règle est passante. Il détermine également dans quel pill UI les résultats sont affichés.
 
 **Algorithme :**
 ```
-n_fail = nombre de champs en écart dans la règle
+rule_passes = True  (voir RG-RULE-01)
 
 si rule_type == "incoherence" :
-  rule_ko = n_fail > 0
-  → KO si au moins un champ diffère
-  → OK si aucun écart (et show_matching)
+  type_ecart = "KO"  → pill "Contrôles KO" (rouge)
 
 si rule_type == "coherence" :
-  rule_ko = False  (jamais KO)
-  → OK uniquement si n_fail == 0 et show_matching
+  type_ecart = "OK"  → pill "Contrôles OK" (vert)
 
 Affichage UI :
   coherence   → chip verte, libellé "Cohérence"

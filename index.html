@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DataAuditor v2</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 
@@ -25,6 +26,7 @@
   --r: 6px;
   --mono: 'IBM Plex Mono', monospace;
   --sans: 'IBM Plex Sans', sans-serif;
+  --btn-h: 2.25rem;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
@@ -36,14 +38,52 @@ header{height:50px;background:var(--s1);border-bottom:1px solid var(--border);di
 .logo-tag{font-size:.62rem;background:var(--acc-dim);color:var(--acc);border:1px solid #93c5fd;border-radius:4px;padding:.15rem .45rem;font-family:var(--mono);margin-left:.4rem;vertical-align:middle}
 .logo-ver{font-size:.62rem;background:var(--s2);color:var(--muted);border:1px solid var(--border);border-radius:4px;padding:.15rem .45rem;font-family:var(--mono);margin-left:.2rem;vertical-align:middle}
 .hdr-tabs{margin-left:auto;display:flex;gap:.25rem}
-.tab-btn{background:none;border:none;color:var(--muted);font-family:var(--sans);font-size:.8rem;padding:.4rem .9rem;border-radius:var(--r);cursor:pointer;transition:all .15s}
+.tab-btn{background:none;border:none;color:var(--muted);font-family:var(--sans);font-size:.8rem;padding:0 .9rem;border-radius:var(--r);cursor:pointer;transition:all .15s;height:var(--btn-h);display:inline-flex;align-items:center}
 .tab-btn:hover{background:var(--s2);color:var(--text)}
 .tab-btn.active{background:var(--acc-dim);color:var(--acc)}
+.btn-help{flex-shrink:0;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:var(--s2);color:var(--muted);font-family:var(--mono);font-size:.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;margin-left:.25rem}
+.btn-help:hover{background:var(--acc-dim);border-color:var(--acc);color:var(--acc)}
+/* ── Help modal ── */
+.help-modal{background:var(--s1);border-radius:8px;width:min(860px,96vw);height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.18)}
+.help-modal-header{display:flex;align-items:center;padding:.65rem 1.1rem;border-bottom:1px solid var(--border);gap:.75rem;flex-shrink:0}
+.help-modal-title{font-size:.88rem;font-weight:600;flex:1;color:var(--text)}
+.help-modal-tabs{display:flex;gap:.25rem}
+.help-modal-tab{background:none;border:none;font-family:var(--sans);font-size:.78rem;color:var(--muted);padding:.3rem .75rem;border-radius:var(--r);cursor:pointer;transition:all .15s}
+.help-modal-tab:hover{background:var(--s2);color:var(--text)}
+.help-modal-tab.active{background:var(--acc-dim);color:var(--acc);font-weight:600}
+.help-modal-body{flex:1;overflow:auto;min-height:0}
+.help-pane{display:none;padding:1.5rem 2rem;height:100%;overflow:auto}
+.help-pane.active{display:block}
+/* Markdown rendu dans le help modal */
+.help-pane h1{font-size:1.3rem;font-weight:700;margin-bottom:1rem;color:var(--text)}
+.help-pane h2{font-size:1rem;font-weight:700;margin:1.75rem 0 .6rem;color:var(--text);border-bottom:1px solid var(--border);padding-bottom:.3rem}
+.help-pane h3{font-size:.88rem;font-weight:600;margin:1.25rem 0 .4rem;color:var(--dim)}
+.help-pane h4{font-size:.82rem;font-weight:600;margin:1rem 0 .3rem;color:var(--muted)}
+.help-pane p{font-size:.82rem;line-height:1.7;margin-bottom:.7rem;color:var(--text)}
+.help-pane ul,.help-pane ol{font-size:.82rem;line-height:1.7;margin:.4rem 0 .7rem 1.4rem;color:var(--text)}
+.help-pane li{margin-bottom:.2rem}
+.help-pane code{font-family:var(--mono);font-size:.75rem;background:var(--s2);border:1px solid var(--border);border-radius:3px;padding:.1rem .3rem}
+.help-pane pre{background:#f8fff8;border:1px solid var(--border);border-radius:6px;padding:.85rem 1rem;margin:.5rem 0 1rem;overflow-x:auto}
+.help-pane pre code{background:none;border:none;padding:0;font-size:.73rem;line-height:1.65;color:#1e4620}
+.help-pane table{width:100%;border-collapse:collapse;font-size:.79rem;margin:.5rem 0 1rem}
+.help-pane th{background:var(--s2);font-weight:600;padding:.4rem .75rem;text-align:left;border:1px solid var(--border)}
+.help-pane td{padding:.35rem .75rem;border:1px solid var(--border);vertical-align:top}
+.help-pane tr:nth-child(even) td{background:var(--bg)}
+.help-pane blockquote{border-left:3px solid var(--acc);margin:.5rem 0;padding:.4rem .85rem;background:var(--acc-dim);border-radius:0 4px 4px 0;font-size:.8rem;color:var(--dim)}
+.help-pane a{color:var(--acc);text-decoration:none}
+.help-pane a:hover{text-decoration:underline}
+.help-samples{display:flex;flex-direction:column;gap:.75rem;padding:1.5rem 2rem}
+.help-sample-card{background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:1rem 1.25rem;display:flex;align-items:center;gap:1rem}
+.help-sample-icon{font-size:1.6rem;flex-shrink:0}
+.help-sample-info{flex:1;min-width:0}
+.help-sample-name{font-family:var(--mono);font-size:.8rem;font-weight:600;color:var(--text)}
+.help-sample-desc{font-size:.76rem;color:var(--muted);margin-top:.2rem}
+.help-sample-dl{flex-shrink:0}
 
 /* ── Workflow steps — chevrons ── */
 .wf-steps{display:flex;align-items:stretch;gap:0;flex:1;overflow:hidden;min-width:0}
-.wf-chev{position:relative;display:flex;align-items:center;gap:.35rem;padding:.25rem .9rem .25rem 1.3rem;background:var(--s2);color:var(--muted);font-family:var(--sans);border:none;cursor:pointer;white-space:nowrap;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 50%,calc(100% - 10px) 100%,0 100%,10px 50%);transition:background .15s,color .15s;min-width:0;flex:1}
-.wf-chev:first-child{clip-path:polygon(0 0,calc(100% - 10px) 0,100% 50%,calc(100% - 10px) 100%,0 100%);padding-left:.75rem}
+.wf-chev{position:relative;display:flex;align-items:center;gap:.35rem;padding:0 .9rem 0 1.3rem;height:var(--btn-h);background:var(--s2);color:var(--muted);font-family:var(--sans);border:none;cursor:pointer;white-space:nowrap;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 50%,calc(100% - 10px) 100%,0 100%,10px 50%);transition:background .15s,color .15s;min-width:0;flex:1}
+.wf-chev:first-child{clip-path:polygon(0 0,calc(100% - 10px) 0,100% 50%,calc(100% - 10px) 100%,0 100%);padding-left:.75rem;padding-right:.9rem}
 .wf-chev:last-child{clip-path:polygon(0 0,100% 0,100% 100%,0 100%,10px 50%)}
 .wf-chev:disabled{opacity:.45;cursor:not-allowed}
 .wf-chev.active{background:#fbbf24;color:#78350f;font-weight:600}
@@ -96,16 +136,19 @@ textarea#yaml{flex:1;background:#f8fff8;border:none;color:#1e4620;font-family:va
 
 .section-title{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
 
-.btn-xs{background:none;border:1px solid var(--border);color:var(--muted);font-size:.68rem;padding:.25rem .6rem;border-radius:var(--r);cursor:pointer;font-family:var(--sans);transition:all .15s}
+.btn-xs{background:none;border:1px solid var(--border);color:var(--muted);font-size:.75rem;padding:0 .85rem;border-radius:var(--r);cursor:pointer;font-family:var(--sans);transition:all .15s;height:var(--btn-h);display:inline-flex;align-items:center;white-space:nowrap}
 .btn-xs:hover{border-color:var(--acc);color:var(--acc)}
 textarea#yaml::placeholder{color:var(--muted)}
 
-.btn-run{width:100%;padding:.65rem;background:#15803d;color:#fff;border:none;border-radius:var(--r);font-family:var(--sans);font-size:.85rem;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.5rem}
+.btn-run{width:100%;height:var(--btn-h);padding:0 1.5rem;background:#15803d;color:#fff;border:none;border-radius:var(--r);font-family:var(--sans);font-size:.88rem;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.5rem;white-space:nowrap}
 .btn-run:hover{background:#16a34a}
 .btn-run:disabled{opacity:.35;cursor:not-allowed}
-.btn-nav{padding:.55rem 1.25rem;background:var(--acc);color:#fff;border:none;border-radius:var(--r);font-family:var(--sans);font-size:.85rem;font-weight:600;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;justify-content:center;gap:.5rem;white-space:nowrap}
+.btn-nav{height:var(--btn-h);padding:0 1.25rem;background:var(--acc);color:#fff;border:none;border-radius:var(--r);font-family:var(--sans);font-size:.85rem;font-weight:600;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;justify-content:center;gap:.5rem;white-space:nowrap}
 .btn-nav:hover{background:#1d4ed8}
 .btn-nav:disabled{opacity:.35;cursor:not-allowed}
+.btn-nav-sec{background:var(--s2);color:var(--text);border:1px solid var(--border)}
+.btn-nav-sec:hover{border-color:var(--acc);color:var(--acc);background:var(--s2)}
+.wfv-topbar{display:flex;align-items:center;gap:.75rem;padding:.75rem 1.25rem;border-bottom:1px solid var(--border);background:var(--s1);flex-shrink:0}
 
 /* ── Results panel ── */
 
@@ -140,12 +183,13 @@ textarea#yaml::placeholder{color:var(--muted)}
 .stat-l{font-size:.68rem;color:var(--muted)}
 .stat.a .stat-n{color:var(--oa)}.stat.b .stat-n{color:var(--ob)}.stat.d .stat-n{color:var(--dv)}.stat.t .stat-n{color:var(--dim)}
 .export-row{display:flex;gap:.5rem}
-.btn-exp{background:var(--s2);border:1px solid var(--border);color:var(--dim);font-size:.72rem;padding:.35rem .8rem;border-radius:var(--r);cursor:pointer;font-family:var(--sans);transition:all .15s;display:flex;align-items:center;gap:.3rem;text-decoration:none}
+.btn-exp{background:var(--s2);border:1px solid var(--border);color:var(--dim);font-size:.75rem;height:var(--btn-h);padding:0 .9rem;border-radius:var(--r);cursor:pointer;font-family:var(--sans);transition:all .15s;display:inline-flex;align-items:center;gap:.35rem;text-decoration:none;white-space:nowrap}
 .btn-exp:hover{border-color:var(--acc);color:var(--acc)}
 .btn-exp:disabled{opacity:.35;pointer-events:none}
 
 /* Filter bar */
 .filter-bar{background:var(--s1);border-bottom:1px solid var(--border);padding:.5rem 1.25rem;display:flex;flex-wrap:wrap;gap:.35rem .45rem;align-items:center}
+#filter-dynamic{flex-basis:100%;display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;min-height:0}
 .fl{font-size:.68rem;color:var(--muted);margin-right:.2rem}
 .chip{background:none;border:1px solid var(--border);color:var(--muted);font-size:.68rem;padding:.2rem .6rem;border-radius:99px;cursor:pointer;font-family:var(--sans);transition:all .15s;display:flex;align-items:center;gap:.3rem}
 .chip:hover{color:var(--text);border-color:#4a5380}
@@ -158,6 +202,14 @@ textarea#yaml::placeholder{color:var(--muted)}
 .filter-sep{width:1px;height:18px;background:var(--border);margin:0 .2rem;align-self:center;flex-shrink:0}
 .filter-group{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center}
 .filter-group-label{font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);white-space:nowrap}
+.filter-search{margin-left:auto;display:flex;align-items:center;gap:.4rem;flex-shrink:0}
+.filter-search input{background:var(--s2);border:1px solid var(--border);color:var(--text);font-size:.72rem;padding:.2rem .6rem;border-radius:4px;font-family:var(--sans);width:190px;outline:none}
+.filter-search input:focus{border-color:var(--acc)}
+.filter-search input::placeholder{color:var(--muted)}
+th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+th.sortable:hover{background:var(--s2)}
+.sort-ic{opacity:.25;font-size:.65rem;margin-left:.25rem}
+th.sort-asc .sort-ic,th.sort-desc .sort-ic{opacity:1;color:var(--acc)}
 
 /* Table */
 .tbl-wrap{flex:1;overflow:auto}
@@ -180,8 +232,14 @@ td{padding:.5rem .85rem;vertical-align:middle}
 
 /* History */
 .history-list{flex:1;overflow:auto;padding:1.25rem;display:flex;flex-direction:column;gap:.6rem}
-.hist-item{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:.85rem 1.1rem;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:1rem}
+.hist-item{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:.85rem 1.1rem;transition:all .15s;display:flex;align-items:center;gap:.75rem}
 .hist-item:hover{border-color:var(--acc)}
+.hist-main{display:flex;align-items:center;gap:1rem;flex:1;cursor:pointer}
+.hist-del{background:none;border:none;cursor:pointer;font-size:.85rem;opacity:.35;padding:.2rem .4rem;border-radius:4px;transition:opacity .15s,background .15s;flex-shrink:0}
+.hist-del:hover{opacity:1;background:#fee2e2}
+.hist-purge-bar{display:flex;justify-content:flex-end;margin-bottom:.5rem}
+.btn-danger{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+.btn-danger:hover{background:#fca5a5}
 .hist-ts{font-family:var(--mono);font-size:.7rem;color:var(--muted);min-width:130px}
 .hist-name{font-size:.85rem;font-weight:500;flex:1}
 .hist-stats{display:flex;gap:.75rem}
@@ -334,6 +392,7 @@ td{padding:.5rem .85rem;vertical-align:middle}
     <button class="wf-chev" id="wfs-6" onclick="goWFStep(6)" disabled><span class="wf-chev-num">⑥</span><span class="wf-chev-lbl">Résultats</span></button>
   </div>
   <button class="tab-btn" id="tab-history" onclick="goWFStep(7); loadHistory()">Historique</button>
+  <button class="btn-help" onclick="openHelp()" title="Manuel utilisateur">?</button>
 </header>
 
 <div class="layout">
@@ -380,27 +439,25 @@ td{padding:.5rem .85rem;vertical-align:middle}
           <div class="file-drop-sub" id="dz-ref-sub">ou cliquez pour parcourir — CSV, TXT, DAT, JSON, XLSX</div>
           <input type="file" id="f-ref" accept=".csv,.txt,.dat,.json,.xlsx" style="display:none">
         </div>
-        <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;justify-content:center">
-          <button class="btn-icon" id="eye-ref" style="display:none" title="Prévisualiser" onclick="previewFile('ref', event)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            Prévisualiser
-          </button>
-          <button class="btn-icon" id="val-ref" style="display:none" title="Vérifier la compatibilité colonnes/configuration" onclick="validateColumns('ref', event)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-            Vérifier les colonnes
-          </button>
-          <span id="val-badge-ref" style="display:none"></span>
-        </div>
       </div>
-      <div class="file-step-cfg" id="wfv-1-src">
-        <p style="color:var(--muted);font-size:.78rem;text-align:center;padding:2rem">Chargez un fichier ou configurez la source manuellement ci-dessous une fois le fichier chargé.</p>
-      </div>
-      <div class="step-nav-bar">
-        <button class="btn-nav" onclick="goWFStep(0)">← Config</button>
+      <div class="wfv-topbar">
+        <button class="btn-nav btn-nav-sec" id="eye-ref" style="display:none" title="Prévisualiser" onclick="previewFile('ref', event)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Prévisualiser
+        </button>
+        <button class="btn-nav btn-nav-sec" id="val-ref" style="display:none" title="Vérifier la compatibilité colonnes/configuration" onclick="validateColumns('ref', event)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Vérifier les colonnes
+        </button>
+        <span id="val-badge-ref" style="display:none"></span>
         <div style="flex:1"></div>
+        <button class="btn-nav" onclick="goWFStep(0)">← Config</button>
         <button class="btn-nav" id="btn-ref-next" onclick="goWFStep(2)" disabled>
           Suivant → <span id="nav-lbl-tgt">Cible</span>
         </button>
+      </div>
+      <div class="file-step-cfg" id="wfv-1-src">
+        <p style="color:var(--muted);font-size:.78rem;text-align:center;padding:2rem">Chargez un fichier ou configurez la source manuellement ci-dessous une fois le fichier chargé.</p>
       </div>
     </div>
   </div>
@@ -424,27 +481,25 @@ td{padding:.5rem .85rem;vertical-align:middle}
           <div class="file-drop-sub" id="dz-tgt-sub">ou cliquez pour parcourir — CSV, TXT, DAT, JSON, XLSX</div>
           <input type="file" id="f-tgt" accept=".csv,.txt,.dat,.json,.xlsx" style="display:none">
         </div>
-        <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;justify-content:center">
-          <button class="btn-icon" id="eye-tgt" style="display:none" title="Prévisualiser" onclick="previewFile('tgt', event)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            Prévisualiser
-          </button>
-          <button class="btn-icon" id="val-tgt" style="display:none" title="Vérifier la compatibilité colonnes/configuration" onclick="validateColumns('tgt', event)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-            Vérifier les colonnes
-          </button>
-          <span id="val-badge-tgt" style="display:none"></span>
-        </div>
       </div>
-      <div class="file-step-cfg" id="wfv-2-src">
-        <p style="color:var(--muted);font-size:.78rem;text-align:center;padding:2rem">Chargez un fichier ou configurez la source manuellement ci-dessous une fois le fichier chargé.</p>
-      </div>
-      <div class="step-nav-bar">
-        <button class="btn-nav" onclick="goWFStep(1)">← <span id="nav-lbl-ref">Référence</span></button>
+      <div class="wfv-topbar">
+        <button class="btn-nav btn-nav-sec" id="eye-tgt" style="display:none" title="Prévisualiser" onclick="previewFile('tgt', event)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Prévisualiser
+        </button>
+        <button class="btn-nav btn-nav-sec" id="val-tgt" style="display:none" title="Vérifier la compatibilité colonnes/configuration" onclick="validateColumns('tgt', event)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Vérifier les colonnes
+        </button>
+        <span id="val-badge-tgt" style="display:none"></span>
         <div style="flex:1"></div>
+        <button class="btn-nav" onclick="goWFStep(1)">← <span id="nav-lbl-ref">Référence</span></button>
         <button class="btn-nav" id="btn-tgt-next" onclick="goWFStep(3)" disabled>
           Suivant → Jointure
         </button>
+      </div>
+      <div class="file-step-cfg" id="wfv-2-src">
+        <p style="color:var(--muted);font-size:.78rem;text-align:center;padding:2rem">Chargez un fichier ou configurez la source manuellement ci-dessous une fois le fichier chargé.</p>
       </div>
     </div>
   </div>
@@ -452,26 +507,26 @@ td{padding:.5rem .85rem;vertical-align:middle}
   <!-- ③ Jointure -->
   <div class="wf-view" id="wfv-3">
     <div class="config-view">
-      <div id="wfv-3-body" class="wizard-body"></div>
-      <div class="wfv-footer">
+      <div class="wfv-topbar">
         <button class="btn-nav" onclick="goWFStep(2)">← <span id="nav-lbl-tgt2">Cible</span></button>
         <div style="flex:1"></div>
         <div class="wiz-err" id="wiz-err-3"></div>
         <button class="btn-nav" onclick="saveStepAndGo(4)">Suivant : Règles →</button>
       </div>
+      <div id="wfv-3-body" class="wizard-body"></div>
     </div>
   </div>
 
   <!-- ④ Règles -->
   <div class="wf-view" id="wfv-4">
     <div class="config-view">
-      <div id="wfv-4-body" class="wizard-body"></div>
-      <div class="wfv-footer">
+      <div class="wfv-topbar">
         <button class="btn-nav" onclick="goWFStep(3)">← Jointure</button>
         <div style="flex:1"></div>
         <div class="wiz-err" id="wiz-err-4"></div>
         <button class="btn-nav" onclick="saveStepAndGo(5)">Suivant : Filtres &amp; Rapport →</button>
       </div>
+      <div id="wfv-4-body" class="wizard-body"></div>
     </div>
   </div>
 
@@ -486,16 +541,16 @@ td{padding:.5rem .85rem;vertical-align:middle}
         <button class="btn-xs" onclick="loadYamlFile()">📂 Charger YAML</button>
         <button class="btn-xs" id="btn-toggle-yaml" onclick="toggleYamlEditor()">‹/› YAML</button>
       </div>
-      <div id="wfv-5-body" class="wizard-body"></div>
-      <div class="wfv-footer">
+      <div class="wfv-topbar">
         <button class="btn-nav" onclick="goWFStep(4)">← Règles</button>
         <div style="flex:1"></div>
         <div class="wiz-err" id="wiz-err-5"></div>
-        <button class="btn-run" id="btn-run" onclick="runAudit()" style="width:auto;padding:.55rem 1.5rem">
+        <button class="btn-run" id="btn-run" onclick="runAudit()" style="width:auto">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
           Lancer l'audit
         </button>
       </div>
+      <div id="wfv-5-body" class="wizard-body"></div>
     </div>
   </div>
 
@@ -509,6 +564,9 @@ td{padding:.5rem .85rem;vertical-align:middle}
       </button>
       <button class="btn-exp" id="btn-html" onclick="exportReport('html')" disabled>
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>HTML
+      </button>
+      <button class="btn-exp" id="btn-xlsx" onclick="exportReport('xlsx')" disabled>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>XLS
       </button>
     </div>
 
@@ -549,13 +607,24 @@ td{padding:.5rem .85rem;vertical-align:middle}
           <button class="chip co on" data-kind="ruletype" data-t="coherence"   id="chip-coh" onclick="toggleChip(this)">Cohérence   <span class="chip-c" id="c-coh">0</span></button>
           <button class="chip ca on" data-kind="ruletype" data-t="incoherence" id="chip-inc" onclick="toggleChip(this)">Incohérence <span class="chip-c" id="c-inc">0</span></button>
         </div>
+        <div class="filter-search">
+          <span class="filter-group-label">Recherche</span>
+          <input type="search" id="filter-text" placeholder="Clé, Valeur réf., Valeur cible…" oninput="setFilterText(this.value)">
+        </div>
         <div id="filter-dynamic"></div>
       </div>
 
       <div class="tbl-wrap">
         <table>
           <thead>
-            <tr><th>Clé</th><th>Type</th><th>Règle</th><th>Valeur réf.</th><th>Valeur cible</th><th></th></tr>
+            <tr>
+            <th class="sortable" onclick="setSortCol('key')">Clé<span class="sort-ic" id="si-key">↕</span></th>
+            <th class="sortable" onclick="setSortCol('type')">Type<span class="sort-ic" id="si-type">↕</span></th>
+            <th class="sortable" onclick="setSortCol('rule')">Règle<span class="sort-ic" id="si-rule">↕</span></th>
+            <th class="sortable" onclick="setSortCol('ref')">Valeur réf.<span class="sort-ic" id="si-ref">↕</span></th>
+            <th class="sortable" onclick="setSortCol('tgt')">Valeur cible<span class="sort-ic" id="si-tgt">↕</span></th>
+            <th></th>
+          </tr>
           </thead>
           <tbody id="tbody"></tbody>
         </table>
@@ -586,6 +655,9 @@ let refLabel       = '';
 let tgtLabel       = '';
 let activeFilters  = new Set(['ORPHELIN_A','ORPHELIN_B']);  // KO filtré par rule uniquement
 let activeRuleFilters = null;
+let filterText     = '';
+let sortCol        = null;   // 'key'|'type'|'rule'|'ref'|'tgt'
+let sortDir        = 1;      // 1=asc, -1=desc
 let yamlFilename   = 'config.yaml';
 let yamlOriginal   = '';
 let yamlFileHandle = null;  // File System Access API handle (Chrome/Edge)
@@ -736,7 +808,7 @@ document.getElementById('f-yaml').addEventListener('change', e => {
   e.target.value = '';
 });
 
-document.getElementById('yaml').addEventListener('input', updateSaveBtn);
+// Listener enregistré lazily dans toggleYamlEditor (textarea hors du script block)
 
 function updateSaveBtn() {
   const btn   = document.getElementById('btn-save-yaml');
@@ -925,6 +997,15 @@ async function runAudit() {
   document.getElementById('results-area').style.display = 'none';
   document.getElementById('trunc').style.display = 'none';
   allResults = [];
+  filterText = ''; sortCol = null; sortDir = 1;
+  const ftEl = document.getElementById('filter-text');
+  if (ftEl) ftEl.value = '';
+  ['key','type','rule','ref','tgt'].forEach(c => {
+    const th = document.getElementById('si-' + c)?.parentElement;
+    const ic = document.getElementById('si-' + c);
+    if (th) { th.classList.remove('sort-asc','sort-desc'); }
+    if (ic) ic.textContent = '↕';
+  });
   document.getElementById('tbody').innerHTML = '';
 
   const fd = new FormData();
@@ -950,6 +1031,7 @@ async function runAudit() {
     document.getElementById('results-area').style.display = 'flex';
     document.getElementById('btn-csv').disabled  = true;
     document.getElementById('btn-html').disabled = true;
+    document.getElementById('btn-xlsx').disabled = true;
 
     listenSSE(currentToken);
     goWFStep(6);
@@ -1013,6 +1095,7 @@ function listenSSE(token) {
       // Activer exports
       document.getElementById('btn-csv').disabled  = false;
       document.getElementById('btn-html').disabled = false;
+      document.getElementById('btn-xlsx').disabled = false;
 
       // Débloquer l'étape résultats
       wfUnlocked = 6;
@@ -1030,7 +1113,6 @@ function listenSSE(token) {
     } else if (ev.event === 'error') {
       showErr(ev.message);
       showProgress(false);
-      goWFStep(5);   // retourner à Filtres & Rapport pour corriger
       document.getElementById('btn-run').disabled = false;
       document.getElementById('btn-run').innerHTML =
         '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Lancer l\'audit';
@@ -1050,6 +1132,7 @@ function appendRow(r) {
     if (!activeFilters.has(r.type_ecart)) return;
   }
   if (activeRuleFilters !== null && r.rule_name && !activeRuleFilters.has(r.rule_name)) return;
+  if (!_rowMatchesText(r)) return;
   const tbody = document.getElementById('tbody');
   const tr    = document.createElement('tr');
   tr.innerHTML = `
@@ -1091,8 +1174,9 @@ function updateChipCounts() {
   allResults.forEach(r => {
     if (r.type_ecart === 'ORPHELIN_A') counts.ORPHELIN_A++;
     else if (r.type_ecart === 'ORPHELIN_B') counts.ORPHELIN_B++;
-    else if (r.type_ecart === 'KO' || r.type_ecart === 'DIVERGENT') {
-      const rt = r.rule_name ? (ruleTypeMap[r.rule_name] || 'coherence') : 'coherence';
+    else if (r.rule_name) {
+      // KO → incoherence ; OK → coherence (selon le nouveau modèle)
+      const rt = ruleTypeMap[r.rule_name] || 'coherence';
       ruleTypeCounts[rt]++;
     }
   });
@@ -1100,6 +1184,33 @@ function updateChipCounts() {
   document.getElementById('c-ob').textContent  = counts.ORPHELIN_B;
   document.getElementById('c-coh').textContent = ruleTypeCounts.coherence;
   document.getElementById('c-inc').textContent = ruleTypeCounts.incoherence;
+}
+
+function ruleTooltip(rule) {
+  const OP_LABEL = { equals:'=', '=':'=', differs:'≠', '<>':'≠', greater:'>',  '>':'>',
+                     less:'<', '<':'<', contains:'∋', not_contains:'∌' };
+  const type  = rule.rule_type === 'incoherence' ? 'Incohérence' : 'Cohérence';
+  const logic = rule.logic || 'AND';
+  const fields = (rule.fields || []).map(f => {
+    const op = OP_LABEL[f.operator] || f.operator || '=';
+    // source_data / target_data form
+    if (f.source_data) {
+      const src = f.source_data.field || '?';
+      const tgt = f.target_data?.field || f.target_data?.value || '?';
+      const tol = f.target_data?.tolerance ? ` ±${f.target_data.tolerance}` : '';
+      return `  • ${src} ${op} ${tgt}${tol}`;
+    }
+    // fixed target_value
+    if (f.target_value !== undefined) {
+      return `  • ${f.source_field || '?'} ${op} "${f.target_value}"`;
+    }
+    // standard source_field / target_field
+    const src = f.source_field || '?';
+    const tgt = f.target_field || '?';
+    const tol = f.tolerance ? ` ±${f.tolerance}` : '';
+    return `  • ${src} ${op} ${tgt}${tol}`;
+  });
+  return `${type} | ${logic}\n${fields.join('\n')}`;
 }
 
 function buildRuleFilterBar(summary, config) {
@@ -1129,17 +1240,23 @@ function buildRuleFilterBar(summary, config) {
   grp.className = 'filter-group';
   grp.innerHTML = '<span class="filter-group-label">Règles</span>';
 
+  // Comptage par règle depuis allResults (rule_stats ne couvre que les KO)
+  const ruleCounts = {};
+  allResults.forEach(r => {
+    if (r.rule_name) ruleCounts[r.rule_name] = (ruleCounts[r.rule_name] || 0) + 1;
+  });
+
   rules.forEach(rule => {
     const ruleType = rule.rule_type || 'coherence';
-    const ko  = summary.rule_stats?.[rule.name] || 0;
+    const cnt = ruleCounts[rule.name] || 0;
     const btn = document.createElement('button');
-    // Vert pour cohérence, rouge pour incohérence
     btn.className = ruleType === 'incoherence' ? 'chip ca on' : 'chip co on';
     btn.dataset.kind     = 'rule';
     btn.dataset.t        = rule.name;
     btn.dataset.ruleType = ruleType;
+    btn.title = ruleTooltip(rule);
     btn.addEventListener('click', function() { toggleChip(this); });
-    btn.innerHTML = `${esc(rule.name)} <span class="chip-c">${ko}</span>`;
+    btn.innerHTML = `${esc(rule.name)} <span class="chip-c">${cnt}</span>`;
     grp.appendChild(btn);
   });
   dyn.appendChild(grp);
@@ -1213,26 +1330,243 @@ function filterToRule(name) {
   rebuildTable();
 }
 
+function setFilterText(v) {
+  filterText = v.trim().toLowerCase();
+  rebuildTable();
+}
+
+function setSortCol(col) {
+  if (sortCol === col) { sortDir = -sortDir; }
+  else { sortCol = col; sortDir = 1; }
+  // Mise à jour visuelle des icônes
+  ['key','type','rule','ref','tgt'].forEach(c => {
+    const th = document.getElementById('si-' + c)?.parentElement;
+    const ic = document.getElementById('si-' + c);
+    if (!th || !ic) return;
+    th.classList.remove('sort-asc','sort-desc');
+    ic.textContent = '↕';
+    if (c === sortCol) {
+      th.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
+      ic.textContent = sortDir === 1 ? '↑' : '↓';
+    }
+  });
+  rebuildTable();
+}
+
+const _SORT_KEY = { key:'join_key', type:'type_ecart', rule:'rule_name', ref:'valeur_reference', tgt:'valeur_cible' };
+
+function _rowMatchesText(r) {
+  if (!filterText) return true;
+  return (r.join_key || '').toLowerCase().includes(filterText)
+      || (r.valeur_reference || '').toLowerCase().includes(filterText)
+      || (r.valeur_cible || '').toLowerCase().includes(filterText);
+}
+
 function rebuildTable() {
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
   const max = lastConfig?.report?.max_diff_preview || 500;
-  let shown = 0;
-  for (const r of allResults) {
-    if (shown >= max) break;
-    if ((r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') && !activeFilters.has(r.type_ecart)) continue;
-    if (activeRuleFilters !== null && r.rule_name && !activeRuleFilters.has(r.rule_name)) continue;
-    appendRow(r);
-    shown++;
+
+  let rows = allResults.filter(r => {
+    if ((r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') && !activeFilters.has(r.type_ecart)) return false;
+    if (activeRuleFilters !== null && r.rule_name && !activeRuleFilters.has(r.rule_name)) return false;
+    if (!_rowMatchesText(r)) return false;
+    return true;
+  });
+
+  if (sortCol) {
+    const key = _SORT_KEY[sortCol];
+    rows = rows.slice().sort((a, b) => {
+      const va = (a[key] || '').toString().toLowerCase();
+      const vb = (b[key] || '').toString().toLowerCase();
+      return va < vb ? -sortDir : va > vb ? sortDir : 0;
+    });
   }
+
+  rows.slice(0, max).forEach(r => appendRow(r));
 }
 
 // ═══════════════════════════════════════════════════════════
 //  EXPORT
 // ═══════════════════════════════════════════════════════════
 function exportReport(fmt) {
-  if (!currentToken) return;
-  window.location.href = `/api/export?token=${currentToken}&format=${fmt}`;
+  if (fmt === 'csv') {
+    if (!currentToken) return;
+    window.location.href = `/api/export?token=${currentToken}&format=csv`;
+  } else if (fmt === 'xlsx') {
+    if (!currentToken) return;
+    window.location.href = `/api/export?token=${currentToken}&format=xlsx`;
+  } else {
+    exportHTMLDynamic();
+  }
+}
+
+function _getVisibleRows() {
+  // Reconstruit la liste visible (filtres + tri actuels) sans limite max
+  const rows = allResults.filter(r => {
+    if ((r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') && !activeFilters.has(r.type_ecart)) return false;
+    if (activeRuleFilters !== null && r.rule_name && !activeRuleFilters.has(r.rule_name)) return false;
+    if (!_rowMatchesText(r)) return false;
+    return true;
+  });
+  if (!sortCol) return rows;
+  const key = _SORT_KEY[sortCol];
+  return rows.slice().sort((a, b) => {
+    const va = (a[key] || '').toString().toLowerCase();
+    const vb = (b[key] || '').toString().toLowerCase();
+    return va < vb ? -sortDir : va > vb ? sortDir : 0;
+  });
+}
+
+function exportHTMLDynamic() {
+  const all   = allResults;
+  const s     = lastSummary;
+  const name  = lastConfig?.meta?.name || 'Audit';
+  const rules = lastConfig?.rules || [];
+  const now   = new Date().toLocaleString('fr-FR');
+  const esc2  = v => String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  const ruleChips = rules.length
+    ? `<div class="filter-sep"></div><span class="fl">Règles</span>` +
+      rules.map(r => `<button class="chip cr on" data-k="rule" data-v="${esc2(r.name||'')}" onclick="toggleChip(this)">${esc2(r.name||'')} <span class="chip-c">0</span></button>`).join('')
+    : '';
+
+  const html = `<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><title>Rapport \u2014 ${esc2(name)}</title><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#f4f6f9;color:#2d3748}
+.layout{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+header{padding:.75rem 1.5rem;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;flex-shrink:0}
+h1{font-size:1.15rem;font-weight:700}.meta{font-size:.72rem;color:#718096}
+.cards{display:flex;gap:.6rem;flex-wrap:wrap;padding:.6rem 1.5rem;background:#fff;border-bottom:1px solid #e2e8f0;flex-shrink:0}
+.card{background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;padding:.4rem .85rem;text-align:center;min-width:80px}
+.card .v{font-size:1.25rem;font-weight:700}.card .l{font-size:.62rem;color:#718096;margin-top:.1rem}
+.ca .v{color:#e53e3e}.cb .v{color:#dd6b20}.cd .v{color:#d69e2e}.co .v{color:#276749}
+.filter-bar{padding:.45rem 1rem;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;flex-wrap:wrap;gap:.3rem .45rem;align-items:center;flex-shrink:0}
+.chip{background:none;border:1px solid #cbd5e0;color:#718096;font-size:.67rem;padding:.18rem .55rem;border-radius:99px;cursor:pointer;font-family:inherit;transition:all .15s}
+.chip:hover{color:#2d3748;border-color:#4a5568}
+.chip.on.ca{background:#fff5f5;border-color:#fc8181;color:#c53030}
+.chip.on.cb{background:#fffaf0;border-color:#fbd38d;color:#c05621}
+.chip.on.cd{background:#fffff0;border-color:#f6e05e;color:#b7791f}
+.chip.on.co{background:#f0fff4;border-color:#9ae6b4;color:#276749}
+.chip.on.cr{background:#ede9fe;border-color:#c4b5fd;color:#5b21b6}
+.chip-c{background:rgba(0,0,0,.08);border-radius:99px;padding:0 .35rem;font-size:.58rem}
+.fl{font-size:.63rem;color:#718096;margin-right:.1rem}
+.filter-sep{width:1px;height:16px;background:#e2e8f0;margin:0 .2rem;flex-shrink:0;align-self:center}
+.srch{border:1px solid #e2e8f0;border-radius:4px;padding:.22rem .55rem;font-size:.73rem;color:#2d3748;background:#f7fafc;outline:none;width:200px;margin-left:auto}
+.srch:focus{border-color:#3b82f6}
+.tbl-wrap{flex:1;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:.77rem;background:#fff}
+thead th{background:#fff;padding:.48rem .8rem;text-align:left;font-size:.61rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:#718096;border-bottom:1px solid #e2e8f0;position:sticky;top:0;cursor:pointer;user-select:none;white-space:nowrap}
+thead th:hover{background:#f7fafc}
+tbody tr{border-bottom:1px solid #f0f4f8}tbody tr:hover{background:#f7fafc}
+td{padding:.42rem .8rem;vertical-align:middle}
+.tk{font-family:monospace;font-size:.71rem;color:#4a5568;white-space:nowrap}
+.tv{font-family:monospace;font-size:.71rem;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tv.r{color:#1d4ed8}.tv.t{color:#c05621}
+.td-rule{font-size:.71rem;color:#7c3aed;font-family:monospace;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.td-det{font-size:.67rem;color:#718096;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.badge{display:inline-block;padding:.13rem .45rem;border-radius:4px;font-size:.62rem;font-weight:700;font-family:monospace}
+.badge-ORPHELIN_A{background:#fff5f5;color:#c53030;border:1px solid #fed7d7}
+.badge-ORPHELIN_B{background:#fffaf0;color:#c05621;border:1px solid #feebc8}
+.badge-KO,.badge-DIVERGENT{background:#fffff0;color:#b7791f;border:1px solid #fefcbf}
+.badge-OK{background:#f0fff4;color:#276749;border:1px solid #c6f6d5}
+.sort-ic{opacity:.22;margin-left:.2rem;font-size:.58rem}
+th.sort-asc .sort-ic,th.sort-desc .sort-ic{opacity:1;color:#3b82f6}
+.empty{text-align:center;padding:3rem;color:#a0aec0;font-style:italic;display:none}
+</style></head><body><div class="layout">
+<header><h1>\ud83d\udcc8 ${esc2(name)}</h1><span class="meta">G\xe9n\xe9r\xe9 le ${now}</span></header>
+<div class="cards">
+  <div class="card"><div class="v">${s.total_reference||0}</div><div class="l">R\xe9f.</div></div>
+  <div class="card"><div class="v">${s.total_cible||0}</div><div class="l">Cible</div></div>
+  <div class="card ca"><div class="v">${s.orphelins_a||0}</div><div class="l">Orphelins A</div></div>
+  <div class="card cb"><div class="v">${s.orphelins_b||0}</div><div class="l">Orphelins B</div></div>
+  <div class="card cd"><div class="v">${s.divergents||0}</div><div class="l">KO</div></div>
+  <div class="card co"><div class="v">${s.ok||0}</div><div class="l">OK</div></div>
+</div>
+<div class="filter-bar">
+  <span class="fl">Types</span>
+  <button class="chip ca on" data-k="type" data-v="ORPHELIN_A" onclick="toggleChip(this)">Orphelin A <span class="chip-c" id="cc-a">0</span></button>
+  <button class="chip cb on" data-k="type" data-v="ORPHELIN_B" onclick="toggleChip(this)">Orphelin B <span class="chip-c" id="cc-b">0</span></button>
+  <button class="chip cd on" data-k="type" data-v="KO" onclick="toggleChip(this)">KO <span class="chip-c" id="cc-ko">0</span></button>
+  <button class="chip co on" data-k="type" data-v="OK" onclick="toggleChip(this)">OK <span class="chip-c" id="cc-ok">0</span></button>
+  ${ruleChips}
+  <input class="srch" id="srch" type="search" placeholder="Cl\xe9, valeur r\xe9f., valeur cible\u2026" oninput="render()">
+</div>
+<div class="tbl-wrap"><table>
+<thead><tr>
+  <th onclick="sortBy('join_key')">Cl\xe9<span class="sort-ic" id="si-key">\u2195</span></th>
+  <th onclick="sortBy('type_ecart')">Type<span class="sort-ic" id="si-type">\u2195</span></th>
+  <th onclick="sortBy('rule_name')">R\xe8gle<span class="sort-ic" id="si-rule">\u2195</span></th>
+  <th onclick="sortBy('champ')">Champ<span class="sort-ic" id="si-champ">\u2195</span></th>
+  <th onclick="sortBy('valeur_reference')">Valeur r\xe9f.<span class="sort-ic" id="si-ref">\u2195</span></th>
+  <th onclick="sortBy('valeur_cible')">Valeur cible<span class="sort-ic" id="si-tgt">\u2195</span></th>
+  <th onclick="sortBy('detail')">D\xe9tail<span class="sort-ic" id="si-det">\u2195</span></th>
+</tr></thead>
+<tbody id="tbody"></tbody>
+</table><div class="empty" id="empty">Aucun r\xe9sultat.</div></div>
+</div>
+<script>
+const ALL=${JSON.stringify(all)};
+let aT=new Set(ALL.map(r=>r.type_ecart));
+let aR=new Set(ALL.filter(r=>r.rule_name).map(r=>r.rule_name));
+let sC=null,sD=1;
+function initCounts(){
+  const ct={},cr={};
+  for(const r of ALL){ct[r.type_ecart]=(ct[r.type_ecart]||0)+1;if(r.rule_name)cr[r.rule_name]=(cr[r.rule_name]||0)+1;}
+  const ids={ORPHELIN_A:'cc-a',ORPHELIN_B:'cc-b',KO:'cc-ko',OK:'cc-ok'};
+  for(const[t,id]of Object.entries(ids)){const el=document.getElementById(id);if(el)el.textContent=ct[t]||0;}
+  document.querySelectorAll('[data-k="rule"]').forEach(b=>{const sp=b.querySelector('span');if(sp)sp.textContent=cr[b.dataset.v]||0;});
+}
+function toggleChip(b){
+  b.classList.toggle('on');
+  const on=b.classList.contains('on');
+  if(b.dataset.k==='type'){if(on)aT.add(b.dataset.v);else aT.delete(b.dataset.v);}
+  else{if(on)aR.add(b.dataset.v);else aR.delete(b.dataset.v);}
+  render();
+}
+function sortBy(col){
+  if(sC===col)sD=-sD;else{sC=col;sD=1;}
+  document.querySelectorAll('thead th').forEach(th=>th.classList.remove('sort-asc','sort-desc'));
+  document.querySelectorAll('.sort-ic').forEach(ic=>ic.textContent='\u2195');
+  const m={join_key:'si-key',type_ecart:'si-type',rule_name:'si-rule',champ:'si-champ',valeur_reference:'si-ref',valeur_cible:'si-tgt',detail:'si-det'};
+  const ic=document.getElementById(m[col]);
+  if(ic){ic.textContent=sD>0?'\u2191':'\u2193';ic.closest('th').classList.add(sD>0?'sort-asc':'sort-desc');}
+  render();
+}
+function render(){
+  const q=(document.getElementById('srch')?.value||'').toLowerCase();
+  let rows=ALL.filter(r=>{
+    if(!aT.has(r.type_ecart))return false;
+    if(r.rule_name&&!aR.has(r.rule_name))return false;
+    if(q&&![(r.join_key||''),(r.valeur_reference||''),(r.valeur_cible||'')].some(v=>v.toLowerCase().includes(q)))return false;
+    return true;
+  });
+  if(sC)rows=[...rows].sort((a,b)=>String(a[sC]||'').localeCompare(String(b[sC]||''),'fr',{numeric:true})*sD);
+  const esc=v=>String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const tb=document.getElementById('tbody');
+  const em=document.getElementById('empty');
+  if(!rows.length){tb.innerHTML='';em.style.display='block';return;}
+  em.style.display='none';
+  tb.innerHTML=rows.map(r=>\`<tr>
+    <td class="tk">\${esc(r.join_key)}</td>
+    <td><span class="badge badge-\${esc(r.type_ecart)}">\${esc(r.type_ecart)}</span></td>
+    <td class="td-rule">\${esc(r.rule_name)}</td>
+    <td class="tv">\${esc(r.champ)}</td>
+    <td class="tv r">\${esc(r.valeur_reference)}</td>
+    <td class="tv t">\${esc(r.valeur_cible)}</td>
+    <td class="td-det" title="\${esc(r.detail)}">\${esc(r.detail)}</td>
+  </tr>\`).join('');
+}
+initCounts();render();
+<\/script></body></html>`;
+
+  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = `rapport_${name.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.html`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1244,17 +1578,35 @@ async function loadHistory() {
   try {
     const data = await fetch('/api/history').then(r => r.json());
     if (!data.length) { c.innerHTML = '<div class="hist-empty">Aucun audit historisé.</div>'; return; }
-    c.innerHTML = data.map(h => `
-      <div class="hist-item" onclick="loadHistoryEntry('${h.filename}')">
-        <span class="hist-ts">${fmtTs(h.timestamp)}</span>
-        <span class="hist-name">${esc(h.audit_name)}</span>
-        <div class="hist-stats">
-          <span class="hs a">A:${h.summary.orphelins_a||0}</span>
-          <span class="hs b">B:${h.summary.orphelins_b||0}</span>
-          <span class="hs d">Δ:${h.summary.divergents||0}</span>
+    const items = data.map(h => `
+      <div class="hist-item">
+        <div class="hist-main" onclick="loadHistoryEntry('${esc(h.filename)}')">
+          <span class="hist-ts">${fmtTs(h.timestamp)}</span>
+          <span class="hist-name">${esc(h.audit_name)}</span>
+          <div class="hist-stats">
+            <span class="hs a">A:${h.summary.orphelins_a||0}</span>
+            <span class="hs b">B:${h.summary.orphelins_b||0}</span>
+            <span class="hs d">Δ:${h.summary.divergents||0}</span>
+          </div>
         </div>
+        <button class="hist-del" title="Supprimer" onclick="deleteHistoryEntry(event,'${esc(h.filename)}')">🗑</button>
       </div>`).join('');
+    const purgeBtn = `<div class="hist-purge-bar"><button class="btn-xs btn-danger" onclick="purgeAllHistory()">🗑 Tout supprimer</button></div>`;
+    c.innerHTML = purgeBtn + items;
   } catch(e) { c.innerHTML = '<div class="hist-empty">Erreur de chargement.</div>'; }
+}
+
+async function deleteHistoryEntry(ev, filename) {
+  ev.stopPropagation();
+  if (!confirm(`Supprimer cet audit ?`)) return;
+  await fetch(`/api/history/${encodeURIComponent(filename)}`, {method:'DELETE'});
+  loadHistory();
+}
+
+async function purgeAllHistory() {
+  if (!confirm('Supprimer tout l\'historique ?')) return;
+  await fetch('/api/history', {method:'DELETE'});
+  loadHistory();
 }
 
 async function loadHistoryEntry(filename) {
@@ -1277,7 +1629,8 @@ async function loadHistoryEntry(filename) {
     showProgress(false);
     document.getElementById('results-area').style.display  = 'flex';
     document.getElementById('btn-csv').disabled  = true;
-    document.getElementById('btn-html').disabled = true;
+    document.getElementById('btn-html').disabled = false;
+    document.getElementById('btn-xlsx').disabled = true;
 
     if (data.truncated) {
       const t = document.getElementById('trunc');
@@ -1521,6 +1874,7 @@ function closePreview(e) {
 
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
+  if (document.getElementById('help-modal').style.display !== 'none') { closeHelp(); return; }
   if (document.getElementById('yaml-modal').style.display !== 'none') { closeYamlModal(); return; }
   closePreview();
 });
@@ -1672,6 +2026,8 @@ function wizLoadFromYaml(parsed) {
     source_field: k.source_field||'', target_field: k.target_field||''
   }));
   // rules
+  const _OP_ALIAS = {'=':'equals','<>':'differs','>':'greater','<':'less'};
+  const _normOp = op => _OP_ALIAS[op] || op || 'equals';
   WS.rules = (parsed.rules||[]).map(r => ({
     name: r.name||'', logic: r.logic||'AND', rule_type: r.rule_type||'coherence',
     fields: (r.fields||[]).map(f => {
@@ -1681,7 +2037,7 @@ function wizLoadFromYaml(parsed) {
         return {
           field_a:   sd.value !== undefined ? '__fixed__' : (sd.field||''),
           value_a:   sd.value !== undefined ? String(sd.value) : '',
-          operator:  f.operator||'=',
+          operator:  _normOp(f.operator),
           field_b:   td.value !== undefined ? '__fixed__' : (td.field||''),
           value_b:   td.value !== undefined ? String(td.value) : '',
           tolerance: td.tolerance !== undefined ? String(td.tolerance) : '',
@@ -1690,7 +2046,7 @@ function wizLoadFromYaml(parsed) {
       } else if (f.target_value !== undefined) {
         return {
           field_a:  f.source_field||'', value_a:'',
-          operator: f.operator||'=',
+          operator: _normOp(f.operator),
           field_b:  '__fixed__', value_b: String(f.target_value),
           tolerance: f.tolerance !== undefined ? String(f.tolerance) : '',
           normalize: f.normalize||'none'
@@ -1698,7 +2054,7 @@ function wizLoadFromYaml(parsed) {
       } else {
         return {
           field_a:  f.source_field||'', value_a:'',
-          operator: f.operator||'=',
+          operator: _normOp(f.operator),
           field_b:  f.target_field||f.source_field||'', value_b:'',
           tolerance: f.tolerance !== undefined ? String(f.tolerance) : '',
           normalize: f.normalize||'none'
@@ -1793,12 +2149,12 @@ function wizBuildYaml() {
       fields: r.fields.map(f => {
         const aFixed = f.field_a === '__fixed__';
         const bFixed = f.field_b === '__fixed__';
-        const op = f.operator || '=';
+        const op = f.operator || 'equals';
         if (!aFixed && bFixed) {
           // source_field + target_value (syntax courte)
           const o = { source_field: f.field_a };
           if (f.value_b !== '' && f.value_b !== undefined) o.target_value = f.value_b;
-          if (op !== '=') o.operator = op;
+          o.operator = op;
           if (f.tolerance !== '' && f.tolerance !== undefined) o.tolerance = Number(f.tolerance);
           if (f.normalize && f.normalize !== 'none') o.normalize = f.normalize;
           return o;
@@ -1811,13 +2167,13 @@ function wizBuildYaml() {
           if (bFixed) td.value = f.value_b; else td.field = f.field_b;
           if (f.tolerance !== '' && f.tolerance !== undefined) td.tolerance = Number(f.tolerance);
           const o = { source_data: sd, target_data: td };
-          if (op !== '=') o.operator = op;
+          o.operator = op;
           return o;
         } else {
           // Normal : source_field + target_field
           const o = { source_field: f.field_a };
           if (f.field_b && f.field_b !== f.field_a) o.target_field = f.field_b;
-          if (op !== '=') o.operator = op;
+          o.operator = op;
           if (f.tolerance !== '' && f.tolerance !== undefined) o.tolerance = Number(f.tolerance);
           if (f.normalize && f.normalize !== 'none') o.normalize = f.normalize;
           return o;
@@ -1836,12 +2192,18 @@ function wizBuildYaml() {
 // ═══════════════════════════════════════════════════════════
 //  WIZARD — Actions
 // ═══════════════════════════════════════════════════════════
+let _yamlListenerAdded = false;
 function toggleYamlEditor() {
-  const modal = document.getElementById('yaml-modal');
+  const modal  = document.getElementById('yaml-modal');
   if (modal.style.display !== 'none') { closeYamlModal(); return; }
   _saveCurrentWFStep();
-  document.getElementById('yaml').value = wizBuildYaml();
-  yamlOriginal = document.getElementById('yaml').value;
+  const yamlEl = document.getElementById('yaml');
+  if (!_yamlListenerAdded) {
+    yamlEl.addEventListener('input', updateSaveBtn);
+    _yamlListenerAdded = true;
+  }
+  yamlEl.value = wizBuildYaml();
+  yamlOriginal = yamlEl.value;
   updateSaveBtn();
   modal.style.display = 'flex';
 }
@@ -1849,6 +2211,38 @@ function toggleYamlEditor() {
 function closeYamlModal(e) {
   if (e && e.target !== document.getElementById('yaml-modal')) return;
   document.getElementById('yaml-modal').style.display = 'none';
+}
+
+// ── Aide / Manuel ────────────────────────────────────────────
+let _helpLoaded = false;
+function openHelp() {
+  document.getElementById('help-modal').style.display = 'flex';
+  if (!_helpLoaded) {
+    _helpLoaded = true;
+    fetch('/docs/usermanual.md')
+      .then(r => r.text())
+      .then(md => {
+        document.getElementById('help-pane-manual').innerHTML =
+          typeof marked !== 'undefined' ? marked.parse(md) : '<pre>' + esc(md) + '</pre>';
+      })
+      .catch(() => {
+        document.getElementById('help-pane-manual').innerHTML =
+          '<p style="color:var(--muted)">Manuel non disponible — consultez docs/usermanual.md</p>';
+      });
+  }
+}
+function closeHelp(e) {
+  if (e && e.target !== document.getElementById('help-modal')) return;
+  document.getElementById('help-modal').style.display = 'none';
+}
+function switchHelpTab(name, btn) {
+  document.querySelectorAll('.help-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.help-modal-tab').forEach(b => b.classList.remove('active'));
+  const pane = document.getElementById('help-pane-' + name);
+  pane.classList.add('active');
+  // help-samples a un display:none inline au départ
+  pane.style.display = name === 'samples' ? 'flex' : 'block';
+  btn.classList.add('active');
 }
 
 function applyWizard() {
@@ -2343,12 +2737,12 @@ function wizRenderRules() {
     <div class="wiz-section">
       <div class="wiz-section-title">Règles de contrôle</div>
       <div id="rules-list">${rulesHtml || '<p style="color:var(--muted);font-size:.78rem">Aucune règle. Cliquez sur + pour en ajouter.</p>'}</div>
-      <button class="btn-wiz-add" onclick="wizAddRule()">+ Ajouter une règle</button>
+      <button class="btn-nav" onclick="wizAddRule()">+ Ajouter une règle</button>
     </div>`;
 }
 
 function wizRuleFieldRows(ri, r, refNames, tgtNames) {
-  const opOpts = [['=','='],['<>','≠ (<>)'],['>','>'],['<','<'],['contains','contient'],['not_contains','ne contient pas']];
+  const opOpts = [['equals','= (equals)'],['differs','≠ (differs)'],['greater','> (greater)'],['less','< (less)'],['contains','contient'],['not_contains','ne contient pas']];
   const normOpts = [['none','none'],['trim','trim'],['lowercase','lowercase'],['both','both']];
 
   return r.fields.map((f, fi) => {
@@ -2356,7 +2750,7 @@ function wizRuleFieldRows(ri, r, refNames, tgtNames) {
     const fb  = f.field_b  !== undefined ? f.field_b  : '';
     const va  = f.value_a  !== undefined ? String(f.value_a)  : '';
     const vb  = f.value_b  !== undefined ? String(f.value_b)  : '';
-    const op  = f.operator || '=';
+    const op  = f.operator || 'equals';
     const tol = f.tolerance !== undefined ? String(f.tolerance) : '';
     const norm = f.normalize || 'none';
     const aFixed = fa === '__fixed__';
@@ -2428,7 +2822,7 @@ function wizMoveRule(ri, dir) {
 
 function wizAddRuleField(ri) {
   wizReadRulesForm();
-  WS.rules[ri].fields.push({ field_a:'', value_a:'', operator:'=', field_b:'', value_b:'', tolerance:'', normalize:'none' });
+  WS.rules[ri].fields.push({ field_a:'', value_a:'', operator:'equals', field_b:'', value_b:'', tolerance:'', normalize:'none' });
   wizRenderRules();
 }
 
@@ -2626,6 +3020,60 @@ document.addEventListener('keydown', e => {
       <div class="ctx-panel">
         <div class="ctx-panel-title" id="ctx-title-tgt">Cible</div>
         <div class="ctx-rows" id="ctx-tgt-rows"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal Aide ── -->
+<div class="modal-backdrop" id="help-modal" style="display:none" onclick="closeHelp(event)">
+  <div class="help-modal" onclick="event.stopPropagation()">
+    <div class="help-modal-header">
+      <span class="help-modal-title">Manuel utilisateur — DataAuditor v3.0</span>
+      <div class="help-modal-tabs">
+        <button class="help-modal-tab active" onclick="switchHelpTab('manual',this)">📖 Manuel</button>
+        <button class="help-modal-tab" onclick="switchHelpTab('samples',this)">⬇ Fichiers exemples</button>
+      </div>
+      <button class="modal-close" onclick="closeHelp()">✕</button>
+    </div>
+    <div class="help-modal-body">
+      <div class="help-pane active" id="help-pane-manual">
+        <p style="color:var(--muted);font-size:.8rem">Chargement…</p>
+      </div>
+      <div class="help-pane help-samples" id="help-pane-samples" style="display:none">
+        <p style="font-size:.82rem;color:var(--dim);margin-bottom:.25rem">Téléchargez ces fichiers pour tester DataAuditor immédiatement.</p>
+        <div class="help-sample-card">
+          <span class="help-sample-icon">⚙️</span>
+          <div class="help-sample-info">
+            <div class="help-sample-name">test_audit_demo.yaml</div>
+            <div class="help-sample-desc">Configuration complète — audit positionnel (DAT) vs CSV avec règles et filtres</div>
+          </div>
+          <a class="btn-nav help-sample-dl" href="/sample/test_audit_demo.yaml" download>⬇ Télécharger</a>
+        </div>
+        <div class="help-sample-card">
+          <span class="help-sample-icon">📋</span>
+          <div class="help-sample-info">
+            <div class="help-sample-name">test_reference.dat</div>
+            <div class="help-sample-desc">Fichier de référence — format positionnel 65 caractères, 100 lignes, anomalies injectées</div>
+          </div>
+          <a class="btn-nav help-sample-dl" href="/sample/test_reference.dat" download>⬇ Télécharger</a>
+        </div>
+        <div class="help-sample-card">
+          <span class="help-sample-icon">📊</span>
+          <div class="help-sample-info">
+            <div class="help-sample-name">test_target.csv</div>
+            <div class="help-sample-desc">Fichier cible — CSV délimité `;`, 100 lignes, anomalies injectées</div>
+          </div>
+          <a class="btn-nav help-sample-dl" href="/sample/test_target.csv" download>⬇ Télécharger</a>
+        </div>
+        <div style="margin-top:.5rem;padding:1rem;background:var(--acc-dim);border-radius:6px;font-size:.8rem;color:var(--dim);line-height:1.6">
+          <strong>Procédure de test :</strong><br>
+          ⓪ Charger <code>test_audit_demo.yaml</code> →
+          ① Charger <code>test_reference.dat</code> →
+          ② Charger <code>test_target.csv</code> →
+          ③④⑤ Cliquer Suivant → ⑤ Lancer l'audit →
+          ⑥ Vérifier les anomalies (ORPHELIN_A : SKU00006, ORPHELIN_B : SKU99999, KO : SKU00016…)
+        </div>
       </div>
     </div>
   </div>

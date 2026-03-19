@@ -65,17 +65,12 @@ sources:
       - name: depot
       - name: ean
       - name: qty
-        type: integer
       - name: statut
       - name: classe
       - name: type
       - name: date_mv_iso
-        type: date
-        date_format: '%Y-%m-%d'
       - name: prix
-        type: decimal
       - name: poids
-        type: decimal
 join:
   keys:
     - source_field: SKU
@@ -96,71 +91,40 @@ filters:
 rules:
   - name: Stock incohérent
     logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: Qty
+        target_field: qty
+        operator: differs
+        tolerance: 0
+  - name: Stocks identiques
+    logic: AND
     rule_type: coherence
     fields:
       - source_field: Qty
         target_field: qty
-        operator: <>
+        operator: equals
         tolerance: 0
-  - name: Type valide
-    logic: AND
-    rule_type: coherence
-    fields:
-      - source_field: Type
-        target_value: ELEC
-  - name: Statut valide
+  - name: Statut 00
     logic: AND
     rule_type: coherence
     fields:
       - source_field: Statut
         target_value: '00'
-        normalize: trim
-  - name: Prix cohérent
-    logic: AND
-    rule_type: coherence
-    fields:
-      - source_field: Prix
-        target_field: prix
-        tolerance: 0.05
-  - name: EAN identique
-    logic: AND
-    rule_type: coherence
-    fields:
-      - source_field: EAN
-        target_field: ean
-        normalize: both
-  - name: Contrôle intégrité AND
-    logic: AND
-    rule_type: coherence
-    fields:
+        operator: equals
       - source_field: Qty
-        target_field: qty
-        tolerance: 0
+        target_value: '50'
+        operator: greater
+  - name: Statut 01
+    logic: AND
+    rule_type: coherence
+    fields:
       - source_field: Statut
-        target_field: statut
-        normalize: trim
-  - name: Alerte OR (poids OU classe)
-    logic: OR
-    rule_type: coherence
-    fields:
-      - source_field: Poids
-        target_field: poids
-        tolerance: 0.1
-      - source_field: Classe
-        target_field: classe
-        normalize: trim
-  - name: Date mouvement identique
-    logic: AND
-    rule_type: coherence
-    fields:
-      - source_field: DateMvt
-        target_field: date_mv_iso
-  - name: Stock à 0 à la source
-    logic: AND
-    rule_type: coherence
-    fields:
+        target_value: '01'
+        operator: equals
       - source_field: Qty
-        target_value: '0'
+        target_value: '50'
+        operator: greater
 report:
   show_matching: false
   max_diff_preview: 500

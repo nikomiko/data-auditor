@@ -21,7 +21,8 @@ from parser        import parse_file
 from normalizer    import normalize_dataframe
 from unpivot       import unpivot_dataframe
 from comparator    import compare_with_progress
-from report        import save_history, list_history, load_history, to_csv, to_html
+import report
+from report        import save_history, list_history, load_history, to_csv, to_html, to_xlsx
 
 app = Flask(__name__, static_folder=".", static_url_path="")
 
@@ -36,6 +37,20 @@ MAX_PREVIEW = 500   # lignes max en mémoire pour l'UI
 @app.route("/")
 def index():
     return send_from_directory(".", "index.html")
+
+
+@app.route("/docs/<path:filename>")
+def serve_docs(filename):
+    return send_from_directory("docs", filename)
+
+
+@app.route("/sample/<path:filename>")
+def serve_sample(filename):
+    """Téléchargement des fichiers exemples."""
+    ALLOWED = {"test_audit_demo.yaml", "test_reference.dat", "test_target.csv"}
+    if filename not in ALLOWED:
+        return jsonify({"error": "Fichier non disponible."}), 404
+    return send_from_directory(".", filename, as_attachment=True)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -270,6 +285,13 @@ def export():
             mimetype="text/html", as_attachment=True,
             download_name="rapport_audit.html"
         )
+    elif fmt == "xlsx":
+        content = to_xlsx(results, summary, config)
+        return send_file(
+            io.BytesIO(content),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True, download_name="rapport_audit.xlsx"
+        )
     return jsonify({"error": "Format invalide."}), 400
 
 
@@ -278,6 +300,7 @@ def export():
 # ─────────────────────────────────────────────────────────────
 @app.route("/api/test-join", methods=["POST"])
 def test_join():
+    from config_loader import _Loader as _YamlLoader
     import yaml as pyyaml
     if "file_ref" not in request.files or "file_tgt" not in request.files:
         return jsonify({"error": "Fichiers manquants."}), 400
@@ -285,7 +308,7 @@ def test_join():
     if not config_yaml.strip():
         return jsonify({"error": "config_yaml manquant."}), 400
     try:
-        config = pyyaml.safe_load(config_yaml)
+        config = pyyaml.load(config_yaml, Loader=_YamlLoader)
     except Exception as e:
         return jsonify({"error": f"YAML invalide : {e}"}), 422
 
@@ -415,6 +438,28 @@ def get_history_entry(filename: str):
         })
     except FileNotFoundError as e:
         return jsonify({"error": str(e)}), 404
+
+
+@app.route("/api/history/<filename>", methods=["DELETE"])
+def delete_history_entry(filename: str):
+    import re
+    if not re.match(r'^[\w\-\.]+\.json$', filename):
+        return jsonify({"error": "Nom de fichier invalide"}), 400
+    path = os.path.join(report.REPORTS_DIR, filename)
+    if not os.path.exists(path):
+        return jsonify({"error": "Introuvable"}), 404
+    os.remove(path)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/history", methods=["DELETE"])
+def delete_all_history():
+    import shutil
+    d = report.REPORTS_DIR
+    if os.path.isdir(d):
+        shutil.rmtree(d)
+        os.makedirs(d, exist_ok=True)
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":

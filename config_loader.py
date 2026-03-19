@@ -5,6 +5,15 @@ Supporte : csv/txt/dat/json/xlsx, fixed_width, record_filter,
 """
 import yaml
 
+# PyYAML traite le scalaire bare `=` comme tag:yaml.org,2002:value (YAML 1.1).
+# Ce constructeur le ramène à la chaîne "=" pour que `operator: =` soit valide.
+class _Loader(yaml.SafeLoader):
+    pass
+_Loader.add_constructor(
+    "tag:yaml.org,2002:value",
+    lambda loader, node: "=",
+)
+
 VALID_FORMATS      = {"csv", "txt", "dat", "json", "xlsx"}
 VALID_TYPES        = {"string", "integer", "decimal", "date", "boolean"}
 VALID_NORMALIZATIONS = {"none", "lowercase", "trim", "both"}
@@ -16,7 +25,7 @@ class ConfigError(Exception):
 
 def load_config(yaml_text: str) -> dict:
     try:
-        config = yaml.safe_load(yaml_text)
+        config = yaml.load(yaml_text, Loader=_Loader)
     except yaml.YAMLError as e:
         raise ConfigError(f"YAML invalide : {e}")
     if not isinstance(config, dict):

@@ -64,6 +64,63 @@ def to_csv(results: list) -> str:
     return out.getvalue()
 
 
+def to_xlsx(results: list, summary: dict, config: dict) -> bytes:
+    from openpyxl import Workbook
+    from openpyxl.styles import PatternFill, Font, Alignment
+
+    name = config.get("meta", {}).get("name", "Audit")
+    wb   = Workbook()
+
+    # Feuille Résumé
+    ws_sum = wb.active
+    ws_sum.title = "Résumé"
+    for row in [
+        ("Audit",              name),
+        ("Généré le",          datetime.now().strftime("%d/%m/%Y %H:%M:%S")),
+        ("Référence (lignes)", summary.get("total_reference", 0)),
+        ("Cible (lignes)",     summary.get("total_cible", 0)),
+        ("Orphelins A",        summary.get("orphelins_a", 0)),
+        ("Orphelins B",        summary.get("orphelins_b", 0)),
+        ("Divergents",         summary.get("divergents", 0)),
+        ("OK",                 summary.get("ok", 0)),
+    ]:
+        ws_sum.append(row)
+    ws_sum.column_dimensions["A"].width = 22
+    ws_sum.column_dimensions["B"].width = 30
+
+    # Feuille Résultats
+    ws_res = wb.create_sheet("Résultats")
+    ws_res.append(["Clé", "Type", "Règle", "Champ", "Valeur réf.", "Valeur cible", "Détail"])
+    hdr_fill = PatternFill("solid", fgColor="2D3748")
+    hdr_font = Font(color="FFFFFF", bold=True, size=9)
+    for cell in ws_res[1]:
+        cell.fill = hdr_fill
+        cell.font = hdr_font
+        cell.alignment = Alignment(horizontal="left")
+
+    FILLS = {
+        "ORPHELIN_A": PatternFill("solid", fgColor="FFF5F5"),
+        "ORPHELIN_B": PatternFill("solid", fgColor="FFFAF0"),
+        "KO":         PatternFill("solid", fgColor="FFFFF0"),
+        "OK":         PatternFill("solid", fgColor="F0FFF4"),
+    }
+    for r in results:
+        ws_res.append([r.get(k, "") for k in
+            ["join_key", "type_ecart", "rule_name", "champ",
+             "valeur_reference", "valeur_cible", "detail"]])
+        fill = FILLS.get(r.get("type_ecart", ""))
+        if fill:
+            for cell in ws_res[ws_res.max_row]:
+                cell.fill = fill
+
+    for col, w in zip("ABCDEFG", [28, 12, 20, 20, 18, 18, 40]):
+        ws_res.column_dimensions[col].width = w
+
+    out = io.BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+
 def to_html(results: list, summary: dict, config: dict) -> str:
     name = config.get("meta", {}).get("name", "Audit")
     now  = datetime.now().strftime("%d/%m/%Y à %H:%M:%S")

@@ -21,7 +21,43 @@ unpivot.py       Dépivotage format large → long
 comparator.py    Jointure + rules + génération SSE progress
 report.py        Export CSV/HTML + historisation JSON (reports/)
 index.html       UI complète (thème clair, SSE, prévisualisation)
+docs/            Manuel utilisateur (usermanual.md) + Spec (specifications.md)
 ```
+
+## Modèle conceptuel — Types de contrôles
+
+L'audit produit deux familles de contrôles indépendantes, évaluées sur des unités différentes :
+
+### Contrôles de présence
+Évalués sur l'ensemble des clés (avant toute règle). Détectent les enregistrements présents dans une seule source.
+
+| `type_ecart` | Libellé UI | Condition |
+|---|---|---|
+| `ORPHELIN_A` | Orphelin (source) | Clé dans la référence, absente de la cible |
+| `ORPHELIN_B` | Orphelin (cible) | Clé dans la cible, absente de la référence |
+
+### Règles de contrôle
+Évaluées sur les **couples appariés** (clés communes aux deux sources). Chaque règle est **indépendante** : un même couple peut déclencher 0, 1 ou N règles simultanément.
+
+Les règles sont catégorisées par `rule_type` :
+
+| `rule_type` | Couleur UI | Logique KO/OK |
+|---|---|---|
+| `coherence` | 🟢 Vert | **Jamais KO** — OK uniquement quand tous les champs confirment (n_fail == 0, show_matching: true) |
+| `incoherence` | 🔴 Rouge | **KO** quand au moins un champ diffère (n_fail > 0) ; OK quand aucun écart |
+
+> **Important** : `rule_type` affecte directement la logique KO/OK dans `comparator.py`. Une règle `coherence` ne peut jamais produire de KO ; elle sert uniquement à confirmer la conformité. Une règle `incoherence` produit KO dès qu'un écart est détecté.
+
+### Valeurs de `type_ecart` dans les événements SSE
+
+| Valeur | Famille | Signification |
+|---|---|---|
+| `ORPHELIN_A` | Contrôle de présence | Clé manquante côté cible |
+| `ORPHELIN_B` | Contrôle de présence | Clé manquante côté référence |
+| `KO` | Règle de contrôle | Règle déclenchée (condition vraie) |
+| `OK` | Règle de contrôle | Règle non déclenchée (si `show_matching: true`) |
+
+Le champ `DIVERGENT` (legacy) est assimilé à `KO`. Les résultats `KO` portent toujours un `rule_name`.
 
 ## Fonctionnalités clés
 
@@ -48,8 +84,9 @@ join:
 rules:
   - name: "..."
     logic: AND | OR
+    rule_type: coherence | incoherence   # affecte la logique KO/OK
     fields:
-      - { source_field, target_field, tolerance, normalize }   # syntaxe courte
+      - { source_field, target_field, operator, tolerance, normalize }
       - { source_field, target_value }                         # valeur fixe
       - { source_data: {field, normalize}, target_data: {value|field, tolerance} }
 comparison:
@@ -60,25 +97,40 @@ report:
   max_diff_preview: 500
 ```
 
+### Opérateurs de règle (comparator.py)
+`check_field_condition()` retourne `True` quand la condition mathématique est **satisfaite**. Une règle est "passante" quand ses champs satisfont la condition (AND : tous ; OR : au moins un).
+
+| Opérateur YAML | Symbole | check_field_condition = True quand… |
+|---|---|---|
+| `equals` | = | A = B |
+| `differs` | ≠ | A ≠ B |
+| `greater` | > | A > B |
+| `less` | < | A < B |
+| `contains` | ∋ | B ∈ A |
+| `not_contains` | ∌ | B ∉ A |
+
+Alias legacy acceptés : `=` → `equals`, `<>` → `differs`, `>` → `greater`, `<` → `less`
+
 ### Flux SSE (server.py → index.html)
 Les événements émis pendant l'audit :
 - `progress`      : { done, total, pct, step }
 - `filter_counts` : { ref_count, tgt_count } — après apply_filters
-- `result`        : ligne d'écart { join_key, type_ecart, rule_name, champ, valeur_reference, valeur_cible, detail }
+- `result`        : { join_key, type_ecart, rule_name, champ, valeur_reference, valeur_cible, detail }
 - `summary`       : { total_reference, total_cible, orphelins_a, orphelins_b, divergents, ok, rule_stats }
 - `done`          : { history_file, total_results }
 - `error`         : { message }
 
 ### apply_filters (server.py)
 - Filtre chaque source sur son propre champ (pas de propagation croisée)
-- Orphelins restent détectables après filtrage
+- Les orphelins restent détectables après filtrage
 - Émet `filter_counts` via SSE après application
 
-### Types d'écart (comparator.py)
-- `ORPHELIN_A` : clé dans référence, absente cible
-- `ORPHELIN_B` : clé dans cible, absente référence
-- `DIVERGENT`  : clé commune, valeur différente
-- `OK`         : clé commune, conforme (si show_matching: true)
+### Évaluation des règles (comparator.py)
+- Les règles sont évaluées sur les **couples appariés** uniquement (clés communes)
+- Chaque règle est **indépendante** : plusieurs règles peuvent déclencher sur le même couple
+- La logique `AND` : KO si au moins un champ de la règle est en écart
+- La logique `OR` : même comportement que AND (v3, réservé pour évolution)
+- `rule_ko_keys[rule.name]` agrège les clés KO par règle → exposé dans `summary.rule_stats`
 
 ## Conventions de code
 
@@ -86,28 +138,30 @@ Les événements émis pendant l'audit :
 - Tout parsing retourne un `pd.DataFrame` avec colonnes nommées selon la config
 - Le comparator est un **générateur** (`yield`) pour le streaming SSE
 - Les sessions Flask sont stockées en mémoire (`_sessions` dict + lock)
-- Version affichée dans index.html : `v2.2.0` (logo-ver span)
+- Version affichée dans index.html : `v3.0.0` (logo-ver span)
+- YAML chargé via `_Loader(yaml.SafeLoader)` pour gérer le token `=` (tag:yaml.org,2002:value)
 
 ## Tests
 Données de test dans le repo :
 - `test_reference.dat`  : 100 lignes, format positionnel 65 chars
 - `test_target.csv`     : 100 lignes, CSV délimité `;`
 - `test_audit_demo.yaml`: config complète démontrant toutes les fonctionnalités
+- `test_unpivot.yaml` + `unpivot_ref.csv` + `unpivot_target.csv` : dépivotage
 
 Anomalies injectées (pour validation) :
-| SKU | Type | Description |
-|-----|------|-------------|
-| SKU00006 | ORPHELIN_A | absent du CSV |
-| SKU99999 | ORPHELIN_B | absent du DAT |
-| SKU00056 | ORPHELIN_A | site=ZZZ filtré |
-| SKU00016 | DIVERGENT  | qty+10 |
-| SKU00021 | DIVERGENT  | qty=-999 |
-| SKU00026 | DIVERGENT  | statut=99 |
-| SKU00031 | OK         | prix+0.03 dans tolérance |
-| SKU00036 | DIVERGENT  | prix+2.50 hors tolérance |
-| SKU00041 | DIVERGENT  | EAN décalé |
-| SKU00046 | DIVERGENT  | type invalide |
-| SKU00051 | DIVERGENT  | statut+qty (AND multi-champs) |
+| SKU | Contrôle | Description |
+|-----|----------|-------------|
+| SKU00006 | Présence — Orphelin source | absent du CSV |
+| SKU99999 | Présence — Orphelin cible  | absent du DAT |
+| SKU00056 | Présence — Orphelin source | site=ZZZ filtré |
+| SKU00016 | Règle KO | qty+10 |
+| SKU00021 | Règle KO | qty=-999 |
+| SKU00026 | Règle KO | statut=99 |
+| SKU00031 | Règle OK  | prix+0.03 dans tolérance |
+| SKU00036 | Règle KO | prix+2.50 hors tolérance |
+| SKU00041 | Règle KO | EAN décalé |
+| SKU00046 | Règle KO | type invalide |
+| SKU00051 | Règle KO | statut+qty (AND multi-champs) |
 
 ## Points d'attention pour les évolutions
 
@@ -126,108 +180,32 @@ Anomalies injectées (pour validation) :
 5. **SSE et threading** : chaque audit tourne dans un thread daemon séparé.
    Flask doit être lancé avec `threaded=True`.
 
-## Spécification fonctionnelle (docs/specifications.md)                                                      
-                                                                                                            
-  La spec est le contrat de comportement de l'application — elle est mise à jour avant d'implémenter tout   
-  nouveau comportement ou correctif (spec-first).                                                           
-                                                            
-  Structure du document                                                                                     
-                                                            
-  Frontmatter YAML (tags, updated)
-  ├── Introduction — flux principal, versions de référence                                                  
-  ├── Schéma de données — structure JSON / modèle, avec tables de champs et exemples complets               
-  └── Règles de gestion (RG) — organisées par écran, dans l'ordre du parcours utilisateur                   
-                                                                                                            
-  Format d'une règle de gestion (RG)                                                                        
-                                                                                                            
-  Chaque règle a un code unique RG-ECRAN-NN et suit ce gabarit :                                            
-                                                            
-  #### RG-ECRAN-NN — Titre court                                                                            
-                                                            
-  | Métadonnée | Valeur |                                                                                   
-  |---|---|
-  | Issue | #42 |                                                                                           
-  | Commit | `vX.Y` |                                                                                       
-  | Tests | `—` |
-                                                                                                            
-  **Résumé :** Une phrase décrivant le comportement visible par l'utilisateur.                              
-  
-  **Algorithme :**                                                                                          
-  ```                                                       
-  1. Étape en pseudo-code
-  2. Cas alternatifs et conditions                                                                          
-  3. …                                                                                                      
-  ```                                                                                                       
-                                                                                                            
-  Conventions                                               
+6. **Opérateur `=` en YAML** : PyYAML (1.1) parse le scalaire `=` comme
+   `tag:yaml.org,2002:value`. Le `_Loader` personnalisé le normalise en `"="`.
+   Dans le YAML généré, `jsyaml.dump` cite automatiquement `"="`.
 
-  - Le champ updated: du frontmatter est mis à jour à chaque commit qui modifie un comportement.            
-  - Les fonctionnalités déclarées mais non encore implémentées sont signalées avec un bloc > [!warning].
-  - La spec décrit le comportement attendu, pas l'implémentation interne — elle sert de référence pour les  
-  tests et la maintenance.                                                                                  
+## Spécification fonctionnelle (docs/specifications.md)
 
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-B
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-A
-  - Le pseudo-code des algorithmes est suffisamment précis pour être directement testable.     
+La spec est le contrat de comportement de l'application — elle est mise à jour avant d'implémenter tout nouveau comportement ou correctif (spec-first).
+
+Structure du document :
+```
+Frontmatter YAML (tags, updated)
+├── Introduction — flux principal, versions de référence
+├── Schéma de données — structure JSON / modèle, avec tables de champs
+└── Règles de gestion (RG) — organisées par écran, dans l'ordre du parcours
+```
+
+Format d'une règle de gestion :
+```
+#### RG-ECRAN-NN — Titre court
+| Issue | #N | Commit | vX.Y | Tests | — |
+**Résumé :** comportement visible.
+**Algorithme :** pseudo-code testable.
+```
+
+Conventions :
+- `updated:` mis à jour à chaque commit modifiant un comportement
+- Fonctionnalités non implémentées signalées avec `> [!warning]`
+- La spec décrit le comportement attendu, pas l'implémentation interne
+- Le pseudo-code est suffisamment précis pour être directement testable
