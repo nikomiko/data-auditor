@@ -283,6 +283,20 @@ td{padding:.5rem .85rem;vertical-align:middle}
 .wiz-err{background:var(--oa-bg);border:1px solid var(--oa-bd);border-radius:var(--r);padding:.35rem .65rem;font-size:.75rem;color:var(--oa);display:none;margin-right:.5rem}
 .wiz-err.show{display:block}
 .join-result{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:.75rem 1rem;margin-top:.75rem;font-size:.78rem}
+
+/* ── Validation colonnes ── */
+.val-badge{display:inline-flex;align-items:center;gap:.3rem;font-size:.7rem;padding:.2rem .6rem;border-radius:99px;border:1px solid;font-family:var(--mono);white-space:nowrap}
+.val-badge.ok{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok)}
+.val-badge.warn{background:#fffbeb;border-color:#fcd34d;color:#92400e}
+.val-badge.err{background:var(--oa-bg);border-color:var(--oa-bd);color:var(--oa)}
+.val-table{width:100%;border-collapse:collapse;font-size:.75rem}
+.val-table th{background:var(--s2);padding:.35rem .75rem;text-align:left;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);border-bottom:1px solid var(--border);position:sticky;top:0}
+.val-table td{padding:.3rem .75rem;border-bottom:1px solid var(--border);vertical-align:middle;font-family:var(--mono);font-size:.73rem}
+.val-table tr.ok  td{background:var(--ok-bg)}
+.val-table tr.warn td{background:#fffbeb}
+.val-table tr.missing td{background:var(--oa-bg)}
+.val-table td.status{font-size:.8rem;width:2rem;text-align:center}
+.val-summary{padding:.6rem 1rem;font-size:.75rem;color:var(--dim);border-bottom:1px solid var(--border);display:flex;gap:1.25rem;flex-wrap:wrap;align-items:center}
 .join-stats{display:flex;gap:1.5rem;margin-bottom:.5rem;flex-wrap:wrap}
 .join-stat{display:flex;align-items:baseline;gap:.3rem}
 .join-stat .n{font-family:var(--mono);font-weight:600;font-size:1rem}
@@ -363,11 +377,16 @@ td{padding:.5rem .85rem;vertical-align:middle}
           <div class="file-drop-sub" id="dz-ref-sub">ou cliquez pour parcourir — CSV, TXT, DAT, JSON, XLSX</div>
           <input type="file" id="f-ref" accept=".csv,.txt,.dat,.json,.xlsx" style="display:none">
         </div>
-        <div style="display:flex;gap:.75rem;align-items:center">
+        <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;justify-content:center">
           <button class="btn-icon" id="eye-ref" style="display:none" title="Prévisualiser" onclick="previewFile('ref', event)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             Prévisualiser
           </button>
+          <button class="btn-icon" id="val-ref" style="display:none" title="Vérifier la compatibilité colonnes/configuration" onclick="validateColumns('ref', event)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Vérifier les colonnes
+          </button>
+          <span id="val-badge-ref" style="display:none"></span>
         </div>
       </div>
       <div class="file-step-cfg" id="wfv-1-src">
@@ -402,11 +421,16 @@ td{padding:.5rem .85rem;vertical-align:middle}
           <div class="file-drop-sub" id="dz-tgt-sub">ou cliquez pour parcourir — CSV, TXT, DAT, JSON, XLSX</div>
           <input type="file" id="f-tgt" accept=".csv,.txt,.dat,.json,.xlsx" style="display:none">
         </div>
-        <div style="display:flex;gap:.75rem;align-items:center">
+        <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;justify-content:center">
           <button class="btn-icon" id="eye-tgt" style="display:none" title="Prévisualiser" onclick="previewFile('tgt', event)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             Prévisualiser
           </button>
+          <button class="btn-icon" id="val-tgt" style="display:none" title="Vérifier la compatibilité colonnes/configuration" onclick="validateColumns('tgt', event)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Vérifier les colonnes
+          </button>
+          <span id="val-badge-tgt" style="display:none"></span>
         </div>
       </div>
       <div class="file-step-cfg" id="wfv-2-src">
@@ -585,6 +609,8 @@ document.getElementById('f-ref').addEventListener('change', e => {
   document.getElementById('dz-ref-label').textContent = f.name;
   document.getElementById('dz-ref-sub').textContent   = (f.size/1024).toFixed(1) + ' Ko';
   document.getElementById('eye-ref').style.display    = isBinary(f) ? 'none' : '';
+  document.getElementById('val-ref').style.display    = isBinary(f) ? 'none' : '';
+  document.getElementById('val-badge-ref').style.display = 'none';
   document.getElementById('btn-ref-next').disabled    = false;
   document.getElementById('cfg-ref-pill').textContent = f.name;
   if (wfUnlocked < 2) { wfUnlocked = 2; updateWFSteps(); }
@@ -603,6 +629,8 @@ document.getElementById('f-tgt').addEventListener('change', e => {
   document.getElementById('dz-tgt-label').textContent = f.name;
   document.getElementById('dz-tgt-sub').textContent   = (f.size/1024).toFixed(1) + ' Ko';
   document.getElementById('eye-tgt').style.display    = isBinary(f) ? 'none' : '';
+  document.getElementById('val-tgt').style.display    = isBinary(f) ? 'none' : '';
+  document.getElementById('val-badge-tgt').style.display = 'none';
   document.getElementById('btn-tgt-next').disabled    = false;
   document.getElementById('cfg-tgt-pill').textContent = f.name;
   if (wfUnlocked < 3) { wfUnlocked = 3; updateWFSteps(); }
@@ -1207,12 +1235,13 @@ function fmtTs(iso)   {
 // ═══════════════════════════════════════════════════════════
 let previewData = { ref: null, tgt: null };
 
-async function previewFile(which, evt) {
+async function previewFile(which, evt, openTab) {
   evt && evt.stopPropagation();
   const file = which === 'ref' ? fileRef : fileTgt;
   if (!file || isBinary(file)) return;
 
-  const label = which === 'ref' ? 'Référence' : 'Cible';
+  const srcKey = which === 'ref' ? 'reference' : 'target';
+  const label  = which === 'ref' ? (refLabel || 'Référence') : (tgtLabel || 'Cible');
   document.getElementById('preview-title').textContent =
     `Prévisualisation — ${label} : ${file.name}`;
 
@@ -1224,18 +1253,137 @@ async function previewFile(which, evt) {
   // Stocker
   previewData[which] = lines;
 
-  // Essayer de détecter le délimiteur depuis le YAML
-  let delim = ';';
-  try {
-    const cfg = jsyaml.load(document.getElementById('yaml').value);
-    const src = which === 'ref' ? cfg?.sources?.reference : cfg?.sources?.target;
-    if (src?.delimiter) delim = src.delimiter;
-  } catch(_) {}
+  const src   = WS.sources[srcKey];
+  const delim = src.delimiter || ';';
 
   renderPreviewTable(lines, delim);
   renderPreviewRaw(lines);
-  switchPreviewTab('table');
+  renderValidationCols(which, lines);
+  switchPreviewTab(openTab || 'table');
   document.getElementById('preview-modal').classList.add('show');
+}
+
+async function validateColumns(which, evt) {
+  evt && evt.stopPropagation();
+  // Save current form state before reading WS
+  _saveCurrentWFStep();
+  await previewFile(which, null, 'cols');
+}
+
+function renderValidationCols(which, lines) {
+  const wrap   = document.getElementById('preview-cols-wrap');
+  const srcKey = which === 'ref' ? 'reference' : 'target';
+  const src    = WS.sources[srcKey];
+
+  // JSON/XLSX : colonnes auto-détectées
+  if (['json','xlsx'].includes(src.format)) {
+    wrap.innerHTML = '<div class="preview-na">Format ' + src.format + ' : colonnes détectées automatiquement au parsing, pas de validation possible ici.</div>';
+    _updateValBadge(which, null);
+    return;
+  }
+
+  // Fixed-width : vérification longueur de ligne
+  if (src.fixed_width) {
+    const skip = parseInt(src.skip_rows) || 0;
+    const dataLine = lines[skip] || '';
+    const lineLen  = dataLine.length;
+    const cols = src.column_positions;
+    if (!cols.length) {
+      wrap.innerHTML = '<div class="preview-na">Aucune colonne déclarée en fixed_width.</div>';
+      _updateValBadge(which, { ok:0, warn:0, missing: 0, note: 'Aucune colonne' });
+      return;
+    }
+    let html = `<div class="val-summary">Longueur de ligne détectée : <strong>${lineLen}</strong> caractère(s)</div>`;
+    html += '<table class="val-table"><thead><tr><th>Statut</th><th>Nom</th><th>Position</th><th>Largeur</th><th>Fin (pos+larg-1)</th></tr></thead><tbody>';
+    let nOk = 0, nWarn = 0;
+    cols.forEach(c => {
+      const end = Number(c.position) + Number(c.width) - 1;
+      const ok  = end < lineLen;
+      if (ok) nOk++; else nWarn++;
+      html += `<tr class="${ok ? 'ok' : 'missing'}">
+        <td class="status">${ok ? '✓' : '✗'}</td>
+        <td>${esc(c.name)}</td>
+        <td>${c.position}</td>
+        <td>${c.width}</td>
+        <td style="color:${ok ? 'var(--ok)' : 'var(--oa)'}">${end}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+    _updateValBadge(which, { ok: nOk, warn: nWarn, missing: 0 });
+    return;
+  }
+
+  // Délimité CSV/TXT/DAT
+  const skip   = parseInt(src.skip_rows) || 0;
+  const hdrLine = lines[skip] || '';
+  const delim  = src.delimiter || ';';
+  const fileNames = hdrLine.split(delim).map(s => s.trim().replace(/^"|"$/g, ''));
+
+  const declared = (src.fields || []).map(f => f.name);
+  const fileSet  = new Set(fileNames);
+  const declSet  = new Set(declared);
+
+  // Build rows: matched, extra (file only), missing (declared only)
+  const rows = [];
+  fileNames.forEach((fn, i) => {
+    const decl = declared[i]; // same position
+    const byPos = decl !== undefined;
+    const byName = declSet.has(fn);
+    if (byPos && decl === fn) {
+      rows.push({ status:'ok',   file: fn, declared: decl, type: (src.fields[i]||{}).type||'' });
+    } else if (byPos && decl !== fn) {
+      rows.push({ status:'warn', file: fn, declared: decl || '—', type: (src.fields[i]||{}).type||'' });
+    } else {
+      rows.push({ status:'warn', file: fn, declared: '—', type: '' });
+    }
+  });
+  // Declared columns beyond what the file has
+  declared.slice(fileNames.length).forEach((d, i) => {
+    rows.push({ status:'missing', file: '—', declared: d, type: (src.fields[fileNames.length + i]||{}).type||'' });
+  });
+
+  const nOk      = rows.filter(r => r.status === 'ok').length;
+  const nWarn    = rows.filter(r => r.status === 'warn').length;
+  const nMissing = rows.filter(r => r.status === 'missing').length;
+
+  const statusIcon = { ok:'✓', warn:'⚠', missing:'✗' };
+  const statusLabel = { ok:'Correspond', warn:'Écart', missing:'Absent du fichier' };
+
+  let html = `<div class="val-summary">
+    <span>${fileNames.length} colonne(s) dans le fichier</span>
+    <span>${declared.length} colonne(s) déclarée(s)</span>
+    ${nOk      ? `<span style="color:var(--ok)">✓ ${nOk} correspondent</span>` : ''}
+    ${nWarn    ? `<span style="color:#92400e">⚠ ${nWarn} écart(s)</span>` : ''}
+    ${nMissing ? `<span style="color:var(--oa)">✗ ${nMissing} absente(s)</span>` : ''}
+  </div>`;
+  html += '<table class="val-table"><thead><tr><th>Statut</th><th>#</th><th>Colonne fichier</th><th>Colonne déclarée</th><th>Type déclaré</th></tr></thead><tbody>';
+  rows.forEach((r, i) => {
+    html += `<tr class="${r.status}">
+      <td class="status" title="${statusLabel[r.status]}">${statusIcon[r.status]}</td>
+      <td style="color:var(--muted)">${i+1}</td>
+      <td>${esc(r.file)}</td>
+      <td>${esc(r.declared)}</td>
+      <td style="color:var(--muted)">${esc(r.type)}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+  _updateValBadge(which, { ok: nOk, warn: nWarn, missing: nMissing });
+}
+
+function _updateValBadge(which, stats) {
+  const badgeEl = document.getElementById('val-badge-' + which);
+  if (!badgeEl) return;
+  if (!stats) { badgeEl.style.display = 'none'; return; }
+  const { ok, warn, missing } = stats;
+  const total = ok + warn + missing;
+  let cls = 'ok', txt = `✓ ${ok}/${total} colonnes OK`;
+  if (missing > 0) { cls = 'err'; txt = `✗ ${missing} absente(s), ${warn} écart(s)`; }
+  else if (warn > 0) { cls = 'warn'; txt = `⚠ ${warn} écart(s) sur ${total}`; }
+  badgeEl.className = `val-badge ${cls}`;
+  badgeEl.textContent = txt;
+  badgeEl.style.display = '';
 }
 
 function renderPreviewTable(lines, delim) {
@@ -1287,8 +1435,10 @@ function renderPreviewRaw(lines) {
 function switchPreviewTab(tab) {
   document.getElementById('preview-table-wrap').style.display = tab === 'table' ? '' : 'none';
   document.getElementById('preview-raw-wrap').style.display   = tab === 'raw'   ? '' : 'none';
+  document.getElementById('preview-cols-wrap').style.display  = tab === 'cols'  ? '' : 'none';
   document.getElementById('tab-table').classList.toggle('active', tab === 'table');
   document.getElementById('tab-raw').classList.toggle('active',   tab === 'raw');
+  document.getElementById('tab-cols').classList.toggle('active',  tab === 'cols');
 }
 
 function closePreview(e) {
@@ -2359,12 +2509,14 @@ document.addEventListener('keydown', e => {
       <div class="modal-tabs">
         <button class="modal-tab active" id="tab-table" onclick="switchPreviewTab('table')">Tableau</button>
         <button class="modal-tab" id="tab-raw"   onclick="switchPreviewTab('raw')">Brut</button>
+        <button class="modal-tab" id="tab-cols"  onclick="switchPreviewTab('cols')">Colonnes</button>
       </div>
       <button class="modal-close" onclick="closePreview()">✕</button>
     </div>
     <div class="modal-body">
       <div id="preview-table-wrap"></div>
       <div id="preview-raw-wrap"  style="display:none"></div>
+      <div id="preview-cols-wrap" style="display:none"></div>
     </div>
   </div>
 </div>
