@@ -167,22 +167,35 @@ def _parse_text(data: bytes, cfg: dict, encoding: str) -> pd.DataFrame:
         hdr_cells = [_clean_name(h) for h in _split_line(lines[0], delimiter, None)]
         n_hdr     = len(hdr_cells)
         limit     = max_cols if max_cols else n_hdr
+
+        # Résolution de la colonne pour chaque champ déclaré :
+        # 1. Lookup par nom (avec correction d'artefact d'encodage) — permet de
+        #    sélectionner des colonnes spécifiques dans un fichier plus large.
+        # 2. Si au moins un champ n'est pas trouvé par nom → mapping positionnel
+        #    pour tous les champs (config = surcharge des headers du fichier).
         col_idx   = {}
-        for name in wanted:
+        use_positional = False
+        for i, name in enumerate(wanted):
             name_clean = _clean_name(name)
-            matches = [i for i, h in enumerate(hdr_cells) if h == name_clean]
+            matches = [j for j, h in enumerate(hdr_cells) if h == name_clean]
             if not matches:
-                # Tentative de correction d'artefact d'encodage (ex : bytes UTF-8 lus en latin-1)
                 name_fixed = _fix_encoding_artifact(name_clean)
                 if name_fixed != name_clean:
-                    matches = [i for i, h in enumerate(hdr_cells) if h == name_fixed]
+                    matches = [j for j, h in enumerate(hdr_cells) if h == name_fixed]
             if not matches:
-                available = ", ".join(hdr_cells)
-                raise ConfigError(
-                    f"Colonne introuvable : \"{name}\". "
-                    f"Colonnes disponibles : {available}"
-                )
+                use_positional = True
+                break
             col_idx[name] = matches[0]
+
+        if use_positional:
+            # Les noms config ne correspondent pas aux headers : mapping positionnel
+            if len(wanted) > n_hdr:
+                raise ConfigError(
+                    f"Mapping positionnel : {len(wanted)} champs déclarés mais seulement "
+                    f"{n_hdr} colonnes dans le fichier."
+                )
+            col_idx = {name: i for i, name in enumerate(wanted)}
+
         records = []
         for line in lines[1:]:
             cells = _split_line(line, delimiter, limit)
