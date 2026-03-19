@@ -184,12 +184,34 @@ def compare_with_progress(
     ref_key_cols = [k["source_field"] for k in join_keys]
     tgt_key_cols = [k["target_field"] for k in join_keys]
 
+    # ── Validation des colonnes de jointure ────────────────────
+    # Effectuée après dépivotage éventuel : les colonnes disponibles peuvent
+    # différer des champs déclarés dans la config source.
+    from config_loader import ConfigError
+    missing_ref = [c for c in ref_key_cols if c not in df_ref.columns]
+    if missing_ref:
+        raise ConfigError(
+            f"join.keys : champ(s) introuvable(s) dans la référence (après dépivotage éventuel) : "
+            f"{', '.join(missing_ref)}. Colonnes disponibles : {', '.join(df_ref.columns)}"
+        )
+    missing_tgt = [c for c in tgt_key_cols if c not in df_tgt.columns]
+    if missing_tgt:
+        raise ConfigError(
+            f"join.keys : champ(s) introuvable(s) dans la cible (après dépivotage éventuel) : "
+            f"{', '.join(missing_tgt)}. Colonnes disponibles : {', '.join(df_tgt.columns)}"
+        )
+
     # ── Construction des clés de jointure ─────────────────────
     yield {"event": "progress", "done": 0, "total": 0, "pct": 0,
            "step": "Construction des index de jointure…"}
 
     def make_key(row: pd.Series, cols: list) -> str:
-        return "§".join(str(row.get(c, "")).strip() for c in cols)
+        def _part(v) -> str:
+            if v is None or (isinstance(v, float) and math.isnan(v)):
+                return ""
+            s = str(v).strip()
+            return "" if s in ("nan", "NaT", "None", "<NA>") else s
+        return "§".join(_part(row.get(c)) for c in cols)
 
     ref_map = {}
     for _, row in df_ref.iterrows():

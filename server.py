@@ -153,7 +153,11 @@ def _run_audit(token: str, ref_bytes: bytes, tgt_bytes: bytes, config: dict):
         tgt_key_cols  = [k["target_field"]  for k in join_keys_cfg]
 
         def _make_key(row_dict, cols):
-            return "§".join(str(row_dict.get(c, "")).strip() for c in cols)
+            def _p(v):
+                if v is None or (isinstance(v, float) and v != v): return ""
+                s = str(v).strip()
+                return "" if s in ("nan", "NaT", "None", "<NA>") else s
+            return "§".join(_p(row_dict.get(c)) for c in cols)
 
         def _row_dict(row):
             return {c: ('' if str(v) in ('nan', 'NaT', 'None', '<NA>') else str(v))
@@ -333,8 +337,28 @@ def test_join():
         ref_cols = [k["source_field"] for k in join_keys]
         tgt_cols = [k["target_field"] for k in join_keys]
 
+        # Validation des colonnes de jointure (après dépivotage éventuel)
+        missing_ref = [c for c in ref_cols if c not in df_ref.columns]
+        if missing_ref:
+            raise ConfigError(
+                f"join.keys : champ(s) introuvable(s) dans la référence : "
+                f"{', '.join(missing_ref)}. Disponibles : {', '.join(df_ref.columns)}"
+            )
+        missing_tgt = [c for c in tgt_cols if c not in df_tgt.columns]
+        if missing_tgt:
+            raise ConfigError(
+                f"join.keys : champ(s) introuvable(s) dans la cible : "
+                f"{', '.join(missing_tgt)}. Disponibles : {', '.join(df_tgt.columns)}"
+            )
+
+        def _key_part(v) -> str:
+            if v is None or (isinstance(v, float) and v != v):
+                return ""
+            s = str(v).strip()
+            return "" if s in ("nan", "NaT", "None", "<NA>") else s
+
         def make_key(row, cols):
-            return "\u00a7".join(str(row[c]).strip() if c in row.index else "" for c in cols)
+            return "§".join(_key_part(row.get(c) if hasattr(row, "get") else (row[c] if c in row.index else None)) for c in cols)
 
         ref_map = {}
         for _, row in df_ref.iterrows():
