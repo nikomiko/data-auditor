@@ -52,14 +52,14 @@ REM ── 4. Script de lancement ───────────────�
 echo.
 echo [*] Creation du script de lancement...
 
-set LAUNCH=%APP_DIR%run.bat
+set LAUNCH=%APP_DIR%dataAuditorServer.bat
 (
 echo @echo off
 echo set APP_DIR=%%~dp0
 echo call "%%APP_DIR%%.venv\Scripts\activate.bat"
 echo echo.
 echo echo   DataAuditor
-echo echo   ^-^> http://localhost:5000
+echo echo   Browse to http://localhost:5000
 echo echo   Ctrl+C pour arreter
 echo echo.
 echo cd /d "%%APP_DIR%%"
@@ -75,9 +75,9 @@ echo =================================================
 echo   Installation terminee.
 echo.
 echo   Lancer l'application :
-echo     run.bat
+echo     dataAuditorServer.bat
 echo.
-echo   Ou manuellement :
+echo   Ou manuellement avec les deux commandes suivantes 
 echo     .venv\Scripts\activate
 echo     python server.py
 echo =================================================
