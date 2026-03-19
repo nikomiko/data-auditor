@@ -17,6 +17,15 @@ def _clean_name(s: str) -> str:
     return s.replace("\ufeff", "").replace("\xa0", " ").replace("\u200b", "").strip()
 
 
+def _fix_encoding_artifact(s: str) -> str:
+    """Tente de corriger un nom décodé avec le mauvais encodage.
+    Cas : bytes UTF-8 interprétés comme latin-1 → réencode latin-1, décode UTF-8."""
+    try:
+        return s.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return s
+
+
 def _encoding_candidates(declared: str) -> list[str]:
     """Retourne l'encodage déclaré + fallbacks dans l'ordre d'essai.
     utf-8-sig est toujours essayé en premier pour gérer le BOM automatiquement."""
@@ -162,6 +171,11 @@ def _parse_text(data: bytes, cfg: dict, encoding: str) -> pd.DataFrame:
         for name in wanted:
             name_clean = _clean_name(name)
             matches = [i for i, h in enumerate(hdr_cells) if h == name_clean]
+            if not matches:
+                # Tentative de correction d'artefact d'encodage (ex : bytes UTF-8 lus en latin-1)
+                name_fixed = _fix_encoding_artifact(name_clean)
+                if name_fixed != name_clean:
+                    matches = [i for i, h in enumerate(hdr_cells) if h == name_fixed]
             if not matches:
                 available = ", ".join(hdr_cells)
                 raise ConfigError(
