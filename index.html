@@ -84,9 +84,12 @@ header{height:50px;background:var(--s1);border-bottom:1px solid var(--border);di
 .config-view{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
 .config-topbar{display:flex;align-items:center;gap:.5rem;padding:.6rem 1.25rem;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0}
 .config-topbar .section-title{margin:0}
-.config-yaml-area{display:none;flex-direction:column;overflow:hidden}
-.config-yaml-area.show{display:flex;height:180px;flex-shrink:0}
-textarea#yaml{flex:1;background:#f8fff8;border:none;border-top:1px solid var(--border);color:#1e4620;font-family:var(--mono);font-size:.7rem;line-height:1.65;padding:.75rem 1.1rem;resize:none;outline:none;width:100%}
+
+/* ── Modal YAML ── */
+.yaml-modal{background:var(--s1);border-radius:8px;width:min(820px,96vw);height:82vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.18)}
+.yaml-modal-header{display:flex;align-items:center;padding:.6rem 1rem;border-bottom:1px solid var(--border);gap:.5rem;flex-shrink:0}
+.yaml-modal-title{font-size:.82rem;font-weight:600;flex:1;color:var(--text)}
+textarea#yaml{flex:1;background:#f8fff8;border:none;color:#1e4620;font-family:var(--mono);font-size:.75rem;line-height:1.7;padding:.85rem 1.1rem;resize:none;outline:none;width:100%;min-height:0}
 
 /* ── Results step (step 3) ── */
 .results-topbar{display:flex;align-items:center;gap:.75rem;padding:.5rem 1.25rem;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0}
@@ -319,7 +322,7 @@ td{padding:.5rem .85rem;vertical-align:middle}
 <header>
   <div class="logo">data<em>/</em>auditor
     <span class="logo-tag">server</span>
-    <span class="logo-ver">v2.2.0</span>
+    <span class="logo-ver">v3.0.0</span>
   </div>
   <div class="wf-steps" id="wf-steps">
     <button class="wf-chev opt active" id="wfs-0" onclick="goWFStep(0)"><span class="wf-chev-num">⓪</span><span class="wf-chev-lbl">Config</span></button>
@@ -481,11 +484,7 @@ td{padding:.5rem .85rem;vertical-align:middle}
         <span id="cfg-tgt-pill" style="font-family:var(--mono);font-size:.65rem;color:var(--ob);background:var(--ob-bg);border:1px solid var(--ob-bd);border-radius:3px;padding:.1rem .4rem"></span>
         <div style="flex:1"></div>
         <button class="btn-xs" onclick="loadYamlFile()">📂 Charger YAML</button>
-        <button class="btn-xs" id="btn-save-yaml" onclick="saveYaml()" style="display:none">💾 Sauvegarder</button>
         <button class="btn-xs" id="btn-toggle-yaml" onclick="toggleYamlEditor()">‹/› YAML</button>
-      </div>
-      <div class="config-yaml-area" id="yaml-area">
-        <textarea id="yaml" spellcheck="false" placeholder="YAML généré automatiquement…"></textarea>
       </div>
       <div id="wfv-5-body" class="wizard-body"></div>
       <div class="wfv-footer">
@@ -540,11 +539,15 @@ td{padding:.5rem .85rem;vertical-align:middle}
 
       <div class="filter-bar" id="filter-bar">
         <div class="filter-group">
-          <span class="filter-group-label">Type</span>
+          <span class="filter-group-label">Orphelins</span>
           <button class="chip ca on" data-kind="type" data-t="ORPHELIN_A" onclick="toggleChip(this)">Orphelin A <span class="chip-c" id="c-oa">0</span></button>
           <button class="chip cb on" data-kind="type" data-t="ORPHELIN_B" onclick="toggleChip(this)">Orphelin B <span class="chip-c" id="c-ob">0</span></button>
-          <button class="chip cd on" data-kind="type" data-t="KO"         onclick="toggleChip(this)">KO         <span class="chip-c" id="c-dv">0</span></button>
-          <button class="chip co"   data-kind="type" data-t="OK"          onclick="toggleChip(this)">OK         <span class="chip-c" id="c-ok">0</span></button>
+        </div>
+        <div class="filter-sep" id="sep-ruletype" style="display:none"></div>
+        <div class="filter-group" id="grp-ruletype" style="display:none">
+          <span class="filter-group-label">Contrôles</span>
+          <button class="chip co on" data-kind="ruletype" data-t="coherence"   id="chip-coh" onclick="toggleChip(this)">Cohérence   <span class="chip-c" id="c-coh">0</span></button>
+          <button class="chip ca on" data-kind="ruletype" data-t="incoherence" id="chip-inc" onclick="toggleChip(this)">Incohérence <span class="chip-c" id="c-inc">0</span></button>
         </div>
         <div id="filter-dynamic"></div>
       </div>
@@ -581,7 +584,7 @@ let currentToken   = null;
 let _ctxKey        = null;
 let refLabel       = '';
 let tgtLabel       = '';
-let activeFilters  = new Set(['ORPHELIN_A','ORPHELIN_B','KO']);
+let activeFilters  = new Set(['ORPHELIN_A','ORPHELIN_B']);  // KO filtré par rule uniquement
 let activeRuleFilters = null;
 let yamlFilename   = 'config.yaml';
 let yamlOriginal   = '';
@@ -1042,60 +1045,100 @@ function listenSSE(token) {
 
 // ── Ajout d'une ligne au tableau ──────────────────────────
 function appendRow(r) {
-  if (!activeFilters.has(r.type_ecart)) return;
-  if (activeRuleFilters && r.rule_name && !activeRuleFilters.has(r.rule_name)) return;
+  // Orphelins filtrés par type ; KO/DIVERGENT filtrés uniquement par règle
+  if (r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') {
+    if (!activeFilters.has(r.type_ecart)) return;
+  }
+  if (activeRuleFilters !== null && r.rule_name && !activeRuleFilters.has(r.rule_name)) return;
   const tbody = document.getElementById('tbody');
   const tr    = document.createElement('tr');
   tr.innerHTML = `
     <td class="tk">${esc(r.join_key)}</td>
     <td><span class="badge badge-${r.type_ecart}">${r.type_ecart}</span></td>
-    <td>${r.rule_name ? `<button class="rule-chip" onclick="filterToRule(${JSON.stringify(r.rule_name)})">${esc(r.rule_name)}</button>` : ''}</td>
+    <td>${r.rule_name ? `<button class="rule-chip">${esc(r.rule_name)}</button>` : ''}</td>
     <td class="tv r" title="${esc(r.valeur_reference)}">${esc(r.valeur_reference)}</td>
     <td class="tv t" title="${esc(r.valeur_cible)}">${esc(r.valeur_cible)}</td>
-    <td class="td-eye"><button class="eye-btn" title="Voir le détail" onclick="openCtxModal(${JSON.stringify(r.join_key)})"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></td>`;
+    <td class="td-eye"><button class="eye-btn" title="Voir le détail"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></td>`;
+  // Listeners via closure — évite le problème des guillemets dans les attributs onclick HTML
+  const ruleBtn = tr.querySelector('.rule-chip');
+  if (ruleBtn) {
+    // Solo style : appliqué ici car rebuildTable() recrée les lignes après filterToRule()
+    if (activeRuleFilters && activeRuleFilters.size === 1 && activeRuleFilters.has(r.rule_name))
+      ruleBtn.classList.add('solo');
+    ruleBtn.addEventListener('click', () => filterToRule(r.rule_name));
+  }
+  tr.querySelector('.eye-btn').addEventListener('click', () => openCtxModal(r.join_key));
   tbody.appendChild(tr);
 }
 
 function updateLiveCounts() {
-  const counts = { ORPHELIN_A:0, ORPHELIN_B:0, KO:0, DIVERGENT:0, OK:0 };
-  allResults.forEach(r => { if (r.type_ecart in counts) counts[r.type_ecart]++; });
-  document.getElementById('c-oa').textContent = counts.ORPHELIN_A;
-  document.getElementById('c-ob').textContent = counts.ORPHELIN_B;
-  document.getElementById('c-dv').textContent = counts.KO + counts.DIVERGENT;
-  document.getElementById('c-ok').textContent = counts.OK;
+  // Pendant le streaming, on n'a pas encore lastConfig.rules → on compte juste les orphelins
+  let oa = 0, ob = 0;
+  allResults.forEach(r => {
+    if (r.type_ecart === 'ORPHELIN_A') oa++;
+    else if (r.type_ecart === 'ORPHELIN_B') ob++;
+  });
+  document.getElementById('c-oa').textContent = oa;
+  document.getElementById('c-ob').textContent = ob;
+  // Counts cohérence/incohérence mis à jour par updateChipCounts après summary
 }
 
 function updateChipCounts() {
-  const counts = { ORPHELIN_A:0, ORPHELIN_B:0, KO:0, DIVERGENT:0, OK:0 };
-  allResults.forEach(r => { if (r.type_ecart in counts) counts[r.type_ecart]++; });
-  document.getElementById('c-oa').textContent = counts.ORPHELIN_A;
-  document.getElementById('c-ob').textContent = counts.ORPHELIN_B;
-  document.getElementById('c-dv').textContent = counts.KO + counts.DIVERGENT;
-  document.getElementById('c-ok').textContent = counts.OK;
+  const counts = { ORPHELIN_A:0, ORPHELIN_B:0 };
+  const ruleTypeCounts = { coherence:0, incoherence:0 };
+  const ruleTypeMap = {};
+  (lastConfig?.rules || []).forEach(r => { ruleTypeMap[r.name] = r.rule_type || 'coherence'; });
+  allResults.forEach(r => {
+    if (r.type_ecart === 'ORPHELIN_A') counts.ORPHELIN_A++;
+    else if (r.type_ecart === 'ORPHELIN_B') counts.ORPHELIN_B++;
+    else if (r.type_ecart === 'KO' || r.type_ecart === 'DIVERGENT') {
+      const rt = r.rule_name ? (ruleTypeMap[r.rule_name] || 'coherence') : 'coherence';
+      ruleTypeCounts[rt]++;
+    }
+  });
+  document.getElementById('c-oa').textContent  = counts.ORPHELIN_A;
+  document.getElementById('c-ob').textContent  = counts.ORPHELIN_B;
+  document.getElementById('c-coh').textContent = ruleTypeCounts.coherence;
+  document.getElementById('c-inc').textContent = ruleTypeCounts.incoherence;
 }
 
 function buildRuleFilterBar(summary, config) {
   const dyn   = document.getElementById('filter-dynamic');
   dyn.innerHTML = '';
   const rules = config?.rules || [];
+
+  // Afficher / masquer les chips groupe cohérence / incohérence
+  const hasCoh = rules.some(r => (r.rule_type || 'coherence') === 'coherence');
+  const hasInc = rules.some(r => r.rule_type === 'incoherence');
+  const showGroup = hasCoh || hasInc;
+  document.getElementById('sep-ruletype').style.display  = showGroup ? '' : 'none';
+  document.getElementById('grp-ruletype').style.display  = showGroup ? '' : 'none';
+  document.getElementById('chip-coh').style.display      = hasCoh ? '' : 'none';
+  document.getElementById('chip-inc').style.display      = hasInc ? '' : 'none';
+
   if (!rules.length) { activeRuleFilters = null; return; }
 
   activeRuleFilters = new Set(rules.map(r => r.name));
+
+  if (!rules.length) return;
   const sep = document.createElement('div');
   sep.className = 'filter-sep';
   dyn.appendChild(sep);
 
   const grp = document.createElement('div');
   grp.className = 'filter-group';
-  grp.innerHTML = '<span class="filter-group-label">Rules</span>';
+  grp.innerHTML = '<span class="filter-group-label">Règles</span>';
 
   rules.forEach(rule => {
+    const ruleType = rule.rule_type || 'coherence';
     const ko  = summary.rule_stats?.[rule.name] || 0;
     const btn = document.createElement('button');
-    btn.className = 'chip cr on';
-    btn.dataset.kind = 'rule';
-    btn.dataset.t    = rule.name;
-    btn.onclick = function() { toggleChip(this); };
+    // Vert pour cohérence, rouge pour incohérence
+    btn.className = ruleType === 'incoherence' ? 'chip ca on' : 'chip co on';
+    btn.dataset.kind     = 'rule';
+    btn.dataset.t        = rule.name;
+    btn.dataset.ruleType = ruleType;
+    btn.addEventListener('click', function() { toggleChip(this); });
     btn.innerHTML = `${esc(rule.name)} <span class="chip-c">${ko}</span>`;
     grp.appendChild(btn);
   });
@@ -1113,11 +1156,42 @@ function toggleChip(btn) {
 
   if (kind === 'type') {
     if (isOn) activeFilters.delete(t); else activeFilters.add(t);
+
+  } else if (kind === 'ruletype') {
+    // Active/désactive toutes les règles du type cohérence ou incohérence
+    if (!activeRuleFilters) {
+      activeRuleFilters = new Set((lastConfig?.rules || []).map(r => r.name));
+    }
+    (lastConfig?.rules || []).forEach(r => {
+      if ((r.rule_type || 'coherence') === t) {
+        if (isOn) activeRuleFilters.delete(r.name);
+        else      activeRuleFilters.add(r.name);
+      }
+    });
+    // Sync pills individuelles du même type
+    document.querySelectorAll(`#filter-dynamic .chip[data-kind="rule"][data-rule-type="${t}"]`).forEach(p => {
+      p.classList.toggle('on', !isOn);
+    });
+
   } else if (kind === 'rule') {
-    if (!activeRuleFilters) activeRuleFilters = new Set();
+    if (!activeRuleFilters) {
+      activeRuleFilters = new Set((lastConfig?.rules || []).map(r => r.name));
+    }
     if (isOn) activeRuleFilters.delete(t); else activeRuleFilters.add(t);
+    // Sync chip groupe : on si au moins une règle du même type est active
+    _syncRuletypeChips();
   }
   rebuildTable();
+}
+
+function _syncRuletypeChips() {
+  ['coherence','incoherence'].forEach(rt => {
+    const rulesOfType = (lastConfig?.rules || []).filter(r => (r.rule_type||'coherence') === rt).map(r => r.name);
+    if (!rulesOfType.length) return;
+    const anyOn = rulesOfType.some(n => !activeRuleFilters || activeRuleFilters.has(n));
+    const chip = document.getElementById(rt === 'coherence' ? 'chip-coh' : 'chip-inc');
+    if (chip) chip.classList.toggle('on', anyOn);
+  });
 }
 
 function filterToRule(name) {
@@ -1129,15 +1203,13 @@ function filterToRule(name) {
   } else {
     activeRuleFilters = new Set([name]);
   }
-  // Sync visuels chips règles
+  // Sync visuels chips règles et chips groupe
   document.querySelectorAll('#filter-dynamic .chip[data-kind="rule"]').forEach(btn => {
     const on = !activeRuleFilters || activeRuleFilters.has(btn.dataset.t);
     btn.classList.toggle('on', on);
   });
-  // Mettre en évidence le bouton solo dans le tableau
-  document.querySelectorAll('.rule-chip').forEach(btn => {
-    btn.classList.toggle('solo', !isSolo && btn.textContent.trim() === name);
-  });
+  _syncRuletypeChips();
+  // rebuildTable recrée les lignes — appendRow applique le style solo directement
   rebuildTable();
 }
 
@@ -1148,8 +1220,8 @@ function rebuildTable() {
   let shown = 0;
   for (const r of allResults) {
     if (shown >= max) break;
-    if (!activeFilters.has(r.type_ecart)) continue;
-    if (activeRuleFilters && r.rule_name && !activeRuleFilters.has(r.rule_name)) continue;
+    if ((r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') && !activeFilters.has(r.type_ecart)) continue;
+    if (activeRuleFilters !== null && r.rule_name && !activeRuleFilters.has(r.rule_name)) continue;
     appendRow(r);
     shown++;
   }
@@ -1448,7 +1520,9 @@ function closePreview(e) {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closePreview();
+  if (e.key !== 'Escape') return;
+  if (document.getElementById('yaml-modal').style.display !== 'none') { closeYamlModal(); return; }
+  closePreview();
 });
 
 function loadExample() {
@@ -1763,14 +1837,18 @@ function wizBuildYaml() {
 //  WIZARD — Actions
 // ═══════════════════════════════════════════════════════════
 function toggleYamlEditor() {
-  const area = document.getElementById('yaml-area');
-  const showing = area.classList.toggle('show');
-  if (showing) {
-    _saveCurrentWFStep();
-    document.getElementById('yaml').value = wizBuildYaml();
-    yamlOriginal = document.getElementById('yaml').value;
-    updateSaveBtn();
-  }
+  const modal = document.getElementById('yaml-modal');
+  if (modal.style.display !== 'none') { closeYamlModal(); return; }
+  _saveCurrentWFStep();
+  document.getElementById('yaml').value = wizBuildYaml();
+  yamlOriginal = document.getElementById('yaml').value;
+  updateSaveBtn();
+  modal.style.display = 'flex';
+}
+
+function closeYamlModal(e) {
+  if (e && e.target !== document.getElementById('yaml-modal')) return;
+  document.getElementById('yaml-modal').style.display = 'none';
 }
 
 function applyWizard() {
@@ -2553,6 +2631,18 @@ document.addEventListener('keydown', e => {
   </div>
 </div>
 
+<!-- ── Modal YAML ── -->
+<div class="modal-backdrop" id="yaml-modal" style="display:none" onclick="closeYamlModal(event)">
+  <div class="yaml-modal" onclick="event.stopPropagation()">
+    <div class="yaml-modal-header">
+      <span class="yaml-modal-title">Configuration YAML</span>
+      <button class="btn-xs" onclick="loadYamlFile()">📂 Charger</button>
+      <button class="btn-xs" id="btn-save-yaml" onclick="saveYaml()" style="display:none">💾 Sauvegarder</button>
+      <button class="modal-close" onclick="closeYamlModal()">✕</button>
+    </div>
+    <textarea id="yaml" spellcheck="false" placeholder="YAML généré automatiquement…"></textarea>
+  </div>
+</div>
 
 </body>
 </html>
