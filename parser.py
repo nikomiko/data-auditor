@@ -6,8 +6,15 @@ Fonctions avancées : record_filter, max_columns.
 import io
 import csv
 import json
+import unicodedata
 import pandas as pd
 from config_loader import ConfigError
+
+
+def _clean_name(s: str) -> str:
+    """Normalise un nom de colonne : NFC, strip BOM et espaces non-standard."""
+    s = unicodedata.normalize("NFC", s)
+    return s.replace("\ufeff", "").replace("\xa0", " ").replace("\u200b", "").strip()
 
 
 def _encoding_candidates(declared: str) -> list[str]:
@@ -147,18 +154,16 @@ def _parse_text(data: bytes, cfg: dict, encoding: str) -> pd.DataFrame:
     if has_hdr:
         fields    = cfg.get("fields", [])
         wanted    = [f["name"] for f in fields]
-        # Header sans limite de colonnes
-        hdr_cells = _split_line(lines[0], delimiter, None)
-        # Nombre total de colonnes dans le header
+        # Header sans limite de colonnes — normaliser les noms (BOM, NFC, espaces)
+        hdr_cells = [_clean_name(h) for h in _split_line(lines[0], delimiter, None)]
         n_hdr     = len(hdr_cells)
         limit     = max_cols if max_cols else n_hdr
         col_idx   = {}
         for name in wanted:
-            name_stripped = name.strip()
-            # Chercher avec strip sur les en-têtes aussi
-            matches = [i for i, h in enumerate(hdr_cells) if h.strip() == name_stripped]
+            name_clean = _clean_name(name)
+            matches = [i for i, h in enumerate(hdr_cells) if h == name_clean]
             if not matches:
-                available = ", ".join(h.strip() for h in hdr_cells)
+                available = ", ".join(hdr_cells)
                 raise ConfigError(
                     f"Colonne introuvable : \"{name}\". "
                     f"Colonnes disponibles : {available}"
