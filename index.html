@@ -322,6 +322,7 @@ td{padding:.5rem .85rem;vertical-align:middle}
 .wizard-step{display:none}.wizard-step.active{display:block}
 .wizard-footer{display:flex;align-items:center;gap:.5rem;padding:.75rem 1.25rem;border-top:1px solid var(--border);background:var(--s1)}
 .wiz-section{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:1rem 1.25rem;margin-bottom:1rem}
+.wiz-section-narrow{width:80%;max-width:1000px;margin-left:auto;margin-right:auto}
 .wiz-section-title{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem}
 .wiz-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.5rem .75rem;margin-bottom:.5rem}
 .wiz-field{display:flex;flex-direction:column;gap:.2rem}
@@ -362,7 +363,7 @@ td{padding:.5rem .85rem;vertical-align:middle}
 .join-stat{display:flex;align-items:baseline;gap:.3rem}
 .join-stat .n{font-family:var(--mono);font-weight:600;font-size:1rem}
 .join-stat.m .n{color:var(--ok)}.join-stat.a .n{color:var(--oa)}.join-stat.b .n{color:var(--ob)}
-.rule-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);margin-bottom:.6rem;overflow:hidden;width:80%;max-width:1000px}
+.rule-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);margin-bottom:.6rem;overflow:hidden;width:80%;max-width:1000px;margin-left:auto;margin-right:auto}
 .rule-card-hdr{display:flex;flex-direction:column;background:var(--s2);border-bottom:1px solid var(--border)}
 .rule-card-name{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem .35rem;border-bottom:1px solid var(--border)}
 .rule-card-name input{flex:1;background:transparent;border:none;font-size:.88rem;font-weight:600;color:var(--text);font-family:var(--sans);outline:none;padding:0}
@@ -2881,7 +2882,7 @@ function wizRenderFilters() {
   </tr>`).join('');
 
   document.getElementById('wfv-5-body').innerHTML = `
-    <div class="wiz-section">
+    <div class="wiz-section wiz-section-narrow">
       <div class="wiz-section-title">Filtres</div>
       <table class="col-table">
         <thead><tr><th>Champ</th><th>Source</th><th>Valeurs (virgule)</th><th></th></tr></thead>
@@ -2889,14 +2890,14 @@ function wizRenderFilters() {
       </table>
       <button class="btn-wiz-add" onclick="wizAddFilter()">+ Filtre</button>
     </div>
-    <div class="wiz-section">
+    <div class="wiz-section wiz-section-narrow">
       <div class="wiz-section-title">Rapport</div>
       <div class="wiz-grid">
         ${wizField('Max lignes prévisualisées', wizInput('w-rp-mdp', WS.report.max_diff_preview, '500'))}
       </div>
       ${wizToggleRow('w-rp-sm', 'Afficher les lignes conformes (show_matching)', WS.report.show_matching)}
     </div>
-    <div class="wiz-section">
+    <div class="wiz-section wiz-section-narrow">
       <div class="wiz-section-title">Méta</div>
       <div class="wiz-grid">
         ${wizField("Nom de l'audit", wizInput('w-meta-name', WS.meta.name, 'Audit …'))}
