@@ -79,6 +79,8 @@ header{height:50px;background:var(--s1);border-bottom:1px solid var(--border);di
 .wf-chev:disabled{opacity:.45;cursor:not-allowed}
 .wf-chev.active{background:#fbbf24;color:#78350f;font-weight:600}
 .wf-chev.done{background:#16a34a;color:#fff}
+.wf-chev.reset{background:#fee2e2;color:#991b1b;flex:0 0 auto}
+.wf-chev.reset:hover{background:#fca5a5;color:#7f1d1d}
 .wf-chev-num{font-size:.95rem;font-weight:700;line-height:1;flex-shrink:0}
 .wf-chev-lbl{font-size:.68rem;font-weight:500;overflow:hidden;text-overflow:ellipsis}
 .wf-chev.opt .wf-chev-lbl::after{content:' (opt.)';font-size:.58rem;opacity:.7}
