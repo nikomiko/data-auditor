@@ -65,8 +65,8 @@ def _values_differ(v_ref, v_tgt, tolerance, normalize, operator="=") -> bool:
     norm = normalize or "none"
 
     if operator == "<>":
-        # DIVERGENT si les valeurs sont ÉGALES (on attend qu'elles diffèrent)
-        return not _values_differ(v_ref, v_tgt, tolerance, normalize, "=")
+        # Se déclenche quand A ≠ B (la condition <> est vraie = valeurs différentes = incohérence)
+        return _values_differ(v_ref, v_tgt, tolerance, normalize, "=")
 
     if operator in (">", "<"):
         if is_null(v_ref) or is_null(v_tgt):
