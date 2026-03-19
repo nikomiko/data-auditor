@@ -693,6 +693,7 @@ document.getElementById('f-ref').addEventListener('change', e => {
   autoDetectColumns('reference', f).then(() => {
     if (wfCurrentStep === 1) onEnterRef();
   });
+  sessionSave();
 });
 
 document.getElementById('f-tgt').addEventListener('change', e => {
@@ -712,6 +713,7 @@ document.getElementById('f-tgt').addEventListener('change', e => {
   autoDetectColumns('target', f).then(() => {
     if (wfCurrentStep === 2) onEnterTgt();
   });
+  sessionSave();
 });
 
 function handleDrop(event, which) {
@@ -776,6 +778,7 @@ function applyYamlContent(content, filename) {
     else if (wfCurrentStep === 3) wizRenderJoin();
     else if (wfCurrentStep === 4) wizRenderRules();
     else if (wfCurrentStep === 5) wizRenderFilters();
+    sessionSave();
   } catch(_) {}
 }
 
@@ -988,6 +991,7 @@ async function runAudit() {
   if (!fileRef)  { showErr('Chargez le fichier de référence (Source A).'); return; }
   if (!fileTgt)  { showErr('Chargez le fichier cible (Source B).'); return; }
   if (!yamlText) { showErr('La configuration YAML est vide.'); return; }
+  sessionSave();
 
   const RUN_BTN_HTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Lancer l\'audit';
   const btn = document.getElementById('btn-run');
@@ -2963,6 +2967,51 @@ function _renderCtxPanels(data) {
     if (center) center.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, 50);
 }
+
+// ═══════════════════════════════════════════════════════════
+//  PERSISTANCE SESSION (localStorage)
+// ═══════════════════════════════════════════════════════════
+const LS_KEY = 'da_session_v1';
+
+function sessionSave() {
+  try {
+    const yaml = document.getElementById('yaml')?.value || '';
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      yaml,
+      yamlFilename,
+      refName: fileRef?.name  || '',
+      tgtName: fileTgt?.name  || '',
+    }));
+  } catch(_) {}
+}
+
+function sessionRestore() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw);
+
+    // Restaurer le YAML et appliquer la config au wizard
+    if (s.yaml && s.yaml.trim()) {
+      document.getElementById('yaml').value = s.yaml;
+      yamlFilename = s.yamlFilename || 'config.yaml';
+      applyYamlContent(s.yaml, yamlFilename);
+    }
+
+    // Afficher les noms de fichiers comme indications dans les drop-zones
+    if (s.refName) {
+      document.getElementById('dz-ref-label').textContent = s.refName;
+      document.getElementById('dz-ref-sub').textContent   = 'Dernier fichier utilisé — cliquez pour recharger';
+    }
+    if (s.tgtName) {
+      document.getElementById('dz-tgt-label').textContent = s.tgtName;
+      document.getElementById('dz-tgt-sub').textContent   = 'Dernier fichier utilisé — cliquez pour recharger';
+    }
+  } catch(_) {}
+}
+
+// Appel au chargement de la page
+document.addEventListener('DOMContentLoaded', sessionRestore);
 
 // Navigation clavier dans la modal
 document.addEventListener('keydown', e => {
