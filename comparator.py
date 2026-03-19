@@ -257,38 +257,23 @@ def compare_with_progress(
             rule_ko = (logic == "OR" and n_fail > 0) or \
                       (logic == "AND" and n_fail > 0)
 
-            if rule_type == "incoherence":
-                # Règle d'incohérence : on s'attend à trouver une différence
-                if rule_ko:
-                    # Différence constatée = attendue → OK
-                    if show_ok:
-                        row_diffs.append({
-                            "join_key": key, "type_ecart": "OK",
-                            "rule_name": rule_name,
-                            "champ": "", "valeur_reference": "", "valeur_cible": "",
-                            "detail": f'Règle "{rule_name}" : incohérence confirmée'
-                        })
+            # rule_type (coherence|incoherence) ne modifie pas la logique KO/OK :
+            # la règle se déclenche → KO ; ne se déclenche pas → OK.
+            # Il change uniquement le libellé du détail affiché.
+            if rule_ko:
+                row_diffs.extend(field_diffs)
+                rule_ko_keys[rule_name].add(key)
+            elif show_ok:
+                if rule_type == "incoherence":
+                    ok_detail = f'Règle "{rule_name}" : aucune incohérence détectée'
                 else:
-                    # Pas de différence alors qu'on en attendait → KO
-                    row_diffs.append({
-                        "join_key": key, "type_ecart": "KO",
-                        "rule_name": rule_name,
-                        "champ": "", "valeur_reference": "", "valeur_cible": "",
-                        "detail": f'Règle "{rule_name}" : incohérence attendue non détectée'
-                    })
-                    rule_ko_keys[rule_name].add(key)
-            else:
-                # Règle de cohérence : on s'attend à ce que les valeurs concordent
-                if rule_ko:
-                    row_diffs.extend(field_diffs)
-                    rule_ko_keys[rule_name].add(key)
-                elif show_ok:
-                    row_diffs.append({
-                        "join_key": key, "type_ecart": "OK",
-                        "rule_name": rule_name,
-                        "champ": "", "valeur_reference": "", "valeur_cible": "",
-                        "detail": f'Règle "{rule_name}" : conforme'
-                    })
+                    ok_detail = f'Règle "{rule_name}" : conforme'
+                row_diffs.append({
+                    "join_key": key, "type_ecart": "OK",
+                    "rule_name": rule_name,
+                    "champ": "", "valeur_reference": "", "valeur_cible": "",
+                    "detail": ok_detail
+                })
 
         # ── Emit ───────────────────────────────────────────────
         if row_diffs:
