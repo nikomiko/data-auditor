@@ -364,4 +364,6 @@ td{padding:.5rem .85rem;vertical-align:middle}
 .rule-card-body{padding:.6rem .75rem}
 .btn-wiz-add{background:none;border:1px dashed var(--border);color:var(--muted);font-size:.72rem;padding:.3rem .8rem;border-radius:var(--r);cursor:pointer;width:100%;text-align:center;transition:all .15s;margin-top:.4rem;font-family:var(--sans)}
 .btn-wiz-add:hover{border-color:var(--acc);color:var(--acc)}
+.btn-reset{height:var(--btn-h);padding:0 1.25rem;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:var(--r);font-family:var(--sans);font-size:.85rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:.5rem;transition:all .2s}
+.btn-reset:hover{background:#fca5a5;border-color:#f87171;color:#7f1d1d}
 .wiz-info{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;background:var(--acc-dim);color:var(--acc);border-radius:50%;font-size:.58rem;font-weight:700;font-style:normal;cursor:help;vertical-align:middle;border:1px solid #93c5fd;flex-shrink:0}

@@ -174,3 +174,63 @@ function sessionRestore() {
     }
   } catch(_) {}
 }
+
+function resetAll() {
+  if (!confirm('Réinitialiser toute la configuration et les fichiers chargés ?')) return;
+
+  // État
+  fileRef = null; fileTgt = null;
+  allResults = []; lastSummary = {}; lastConfig = {}; currentToken = null;
+  refLabel = ''; tgtLabel = '';
+  filterText = ''; sortCol = null; sortDir = 1;
+  wfUnlocked = 1; wfCurrentStep = 0;
+  activeFilters = new Set(['ORPHELIN_A','ORPHELIN_B']);
+  activeRuleFilters = null;
+
+  // WizardState
+  wizSrcDefault();
+
+  // YAML
+  const yamlEl = document.getElementById('yaml');
+  if (yamlEl) yamlEl.value = '';
+  yamlFilename = 'config.yaml'; yamlOriginal = ''; yamlFileHandle = null;
+
+  // Drop zone référence
+  document.getElementById('dz-ref').classList.remove('loaded');
+  document.getElementById('dz-ref-label').textContent = 'Glissez votre fichier ici';
+  document.getElementById('dz-ref-sub').textContent   = 'ou cliquez pour parcourir — CSV, TXT, DAT, JSON, XLSX';
+  document.getElementById('eye-ref').style.display    = 'none';
+  document.getElementById('val-ref').style.display    = 'none';
+  document.getElementById('val-badge-ref').style.display = 'none';
+  document.getElementById('btn-ref-next').disabled    = true;
+  document.getElementById('cfg-ref-pill').textContent = '';
+  document.getElementById('f-ref').value = '';
+
+  // Drop zone cible
+  document.getElementById('dz-tgt').classList.remove('loaded');
+  document.getElementById('dz-tgt-label').textContent = 'Glissez votre fichier ici';
+  document.getElementById('dz-tgt-sub').textContent   = 'ou cliquez pour parcourir — CSV, TXT, DAT, JSON, XLSX';
+  document.getElementById('eye-tgt').style.display    = 'none';
+  document.getElementById('val-tgt').style.display    = 'none';
+  document.getElementById('val-badge-tgt').style.display = 'none';
+  document.getElementById('btn-tgt-next').disabled    = true;
+  document.getElementById('cfg-tgt-pill').textContent = '';
+  document.getElementById('f-tgt').value = '';
+
+  // Drop zone YAML
+  document.getElementById('dz-yaml').classList.remove('loaded');
+  document.getElementById('dz-yaml-label').textContent = 'Glissez votre fichier YAML ici';
+  document.getElementById('dz-yaml-sub').textContent   = 'ou cliquez pour parcourir — .yaml, .yml';
+  const yamlSum = document.getElementById('yaml-loaded-summary');
+  if (yamlSum) yamlSum.style.display = 'none';
+
+  // Labels sources
+  document.getElementById('inp-ref-label').value = '';
+  document.getElementById('inp-tgt-label').value = '';
+  updateSourceLabels();
+
+  // Session locale
+  try { localStorage.removeItem(LS_KEY); } catch(_) {}
+
+  goWFStep(0);
+}
