@@ -10,6 +10,21 @@ import pandas as pd
 from config_loader import ConfigError
 
 
+def _encoding_candidates(declared: str) -> list[str]:
+    """Retourne l'encodage déclaré + fallbacks dans l'ordre d'essai.
+    utf-8-sig est toujours essayé en premier pour gérer le BOM automatiquement."""
+    enc = declared.lower().replace("-", "").replace("_", "")
+    candidates = [declared]
+    # Ajouter utf-8-sig si utf-8 déclaré (gère le BOM Excel)
+    if enc in ("utf8", "utf8sig"):
+        candidates = ["utf-8-sig", "utf-8"] + [c for c in candidates if c not in ("utf-8-sig", "utf-8")]
+    # Fallbacks universels
+    for fb in ("utf-8-sig", "utf-8", "windows-1252", "latin-1"):
+        if fb not in candidates:
+            candidates.append(fb)
+    return candidates
+
+
 def parse_file(file_bytes: bytes, src_cfg: dict) -> pd.DataFrame:
     fmt      = src_cfg.get("format", "csv").lower()
     encoding = src_cfg.get("encoding", "utf-8")
@@ -27,7 +42,15 @@ def parse_file(file_bytes: bytes, src_cfg: dict) -> pd.DataFrame:
 
 # ── JSON ──────────────────────────────────────────────────────
 def _parse_json(data: bytes, encoding: str) -> pd.DataFrame:
-    obj = json.loads(data.decode(encoding))
+    for enc in _encoding_candidates(encoding):
+        try:
+            text = data.decode(enc).lstrip("\ufeff")
+            break
+        except (UnicodeDecodeError, LookupError):
+            continue
+    else:
+        text = data.decode("latin-1")
+    obj = json.loads(text)
     if isinstance(obj, list):
         return pd.DataFrame(obj)
     for key in ("records", "data", "items", "rows"):
@@ -59,7 +82,20 @@ def _parse_xlsx(data: bytes, cfg: dict) -> pd.DataFrame:
 
 # ── Texte délimité / fixed-width ──────────────────────────────
 def _parse_text(data: bytes, cfg: dict, encoding: str) -> pd.DataFrame:
-    text      = data.decode(encoding)
+    # Tenter le décodage avec l'encodage déclaré, puis fallbacks courants
+    for enc in _encoding_candidates(encoding):
+        try:
+            text = data.decode(enc)
+            break
+        except (UnicodeDecodeError, LookupError):
+            continue
+    else:
+        raise ConfigError(
+            f"Impossible de décoder le fichier (encodage déclaré : {encoding}). "
+            "Essayez utf-8, utf-8-sig, latin-1 ou windows-1252."
+        )
+    # Supprimer le BOM quelle que soit l'encodage déclaré
+    text = text.lstrip("\ufeff")
     delimiter = cfg.get("delimiter", ",")
     has_hdr   = cfg.get("has_header", True)
     skip_rows = cfg.get("skip_rows", 0)

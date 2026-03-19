@@ -1,8 +1,18 @@
 """
 normalizer.py — Normalisation des valeurs selon les types déclarés.
 """
+import unicodedata
 import pandas as pd
 from config_loader import ConfigError, get_field_map
+
+
+def _clean_str(s: str) -> str:
+    """Normalisation Unicode NFC + remplacement des espaces non-standard."""
+    s = unicodedata.normalize("NFC", s)
+    # Remplacer les variantes d'espaces (non-breakable, fine, em, etc.)
+    s = s.replace("\xa0", " ").replace("\u202f", " ").replace("\u2009", " ") \
+         .replace("\u200b", "").replace("\ufeff", "")
+    return s.strip()
 
 
 def normalize_dataframe(df: pd.DataFrame, src_cfg: dict) -> pd.DataFrame:
@@ -13,7 +23,7 @@ def normalize_dataframe(df: pd.DataFrame, src_cfg: dict) -> pd.DataFrame:
         ftype = fdef.get("type", "string")
         try:
             if ftype == "string":
-                df[col] = df[col].astype(str).str.strip()
+                df[col] = df[col].astype(str).map(_clean_str)
             elif ftype == "date":
                 fmt = fdef.get("date_format", "%Y-%m-%d")
                 df[col] = pd.to_datetime(
