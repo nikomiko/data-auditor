@@ -187,9 +187,6 @@ function resetAll() {
   activeFilters = new Set(['ORPHELIN_A','ORPHELIN_B']);
   activeRuleFilters = null;
 
-  // WizardState
-  wizSrcDefault();
-
   // YAML
   const yamlEl = document.getElementById('yaml');
   if (yamlEl) yamlEl.value = '';
@@ -232,5 +229,18 @@ function resetAll() {
   // Session locale
   try { localStorage.removeItem(LS_KEY); } catch(_) {}
 
+  // goWFStep appelle _saveCurrentWFStep() qui relirait le DOM → on force wfCurrentStep à 0
+  // avant pour court-circuiter la sauvegarde, puis on réinitialise WS après le navigate
+  wfCurrentStep = 0;
   goWFStep(0);
+
+  // Réinitialiser WS APRÈS goWFStep (qui peut relire le DOM via _saveCurrentWFStep)
+  wizSrcDefault();
+
+  // Vider le rendu des étapes source pour ne pas afficher de contenu résiduel
+  const src1 = document.getElementById('wfv-1-src');
+  const src2 = document.getElementById('wfv-2-src');
+  const placeholder = '<p style="color:var(--muted);font-size:.78rem;text-align:center;padding:2rem">Chargez un fichier ou configurez la source manuellement ci-dessous une fois le fichier chargé.</p>';
+  if (src1) src1.innerHTML = placeholder;
+  if (src2) src2.innerHTML = placeholder;
 }
