@@ -942,7 +942,15 @@ async function autoDetectColumns(srcKey, file) {
   if (!src.has_header) return;
   if (src.fixed_width) return;
   try {
-    const slice = await file.slice(0, 32768).text();
+    const buf  = await file.slice(0, 32768).arrayBuffer();
+    const enc  = src.encoding || 'utf-8';
+    // utf-8-sig : décodé comme utf-8 (TextDecoder gère le BOM automatiquement)
+    const decoderEnc = enc === 'utf-8-sig' ? 'utf-8' : enc;
+    let slice;
+    try { slice = new TextDecoder(decoderEnc, { fatal: false }).decode(buf); }
+    catch(_) { slice = new TextDecoder('utf-8', { fatal: false }).decode(buf); }
+    // Supprimer le BOM éventuel
+    if (slice.charCodeAt(0) === 0xFEFF) slice = slice.slice(1);
     const lines = slice.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
     const skip  = parseInt(src.skip_rows) || 0;
     const header = lines[skip];
@@ -2413,7 +2421,7 @@ function wizRenderSource(stepEl, srcKey, label) {
       <div class="wiz-grid">
         ${wizField('Format', wizSelect('w-fmt-'+srcKey, [['csv','CSV'],['txt','TXT'],['dat','DAT'],['json','JSON'],['xlsx','XLSX']], s.format))}
         ${wizField('Label', wizInput('w-lbl-'+srcKey, s.label, 'ex: Stock WMS'))}
-        ${wizField('Encodage', wizInput('w-enc-'+srcKey, s.encoding, 'utf-8'))}
+        ${wizField('Encodage', wizSelect('w-enc-'+srcKey, [['utf-8','UTF-8'],['utf-8-sig','UTF-8 avec BOM'],['windows-1252','Windows-1252 (ANSI)'],['latin-1','Latin-1 / ISO-8859-1']], s.encoding||'utf-8'))}
         ${noDelim ? '' : wizField('Délimiteur', wizInput('w-del-'+srcKey, s.delimiter, ';'))}
         ${wizField('Skip rows', wizInput('w-sk-'+srcKey, s.skip_rows, '0'))}
         ${wizField('Max colonnes', wizInput('w-mc-'+srcKey, s.max_columns, 'optionnel'))}
@@ -2463,6 +2471,14 @@ function wizRenderSource(stepEl, srcKey, label) {
   if (fmtEl) fmtEl.addEventListener('change', () => {
     wizReadSourceForm(srcKey);
     wizRenderSource(stepEl, srcKey, label);
+  });
+
+  // Binding encodage change → re-parse le fichier pour rafraîchir les colonnes
+  const encEl = document.getElementById('w-enc-'+srcKey);
+  if (encEl) encEl.addEventListener('change', () => {
+    wizReadSourceForm(srcKey);
+    const file = srcKey === 'reference' ? fileRef : fileTgt;
+    if (file) autoDetectColumns(srcKey, file).then(() => wizRenderSource(stepEl, srcKey, label));
   });
 }
 
