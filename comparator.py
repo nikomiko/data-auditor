@@ -70,22 +70,22 @@ def _values_differ(v_ref, v_tgt, tolerance, normalize, operator="=") -> bool:
 
     if operator in (">", "<"):
         if is_null(v_ref) or is_null(v_tgt):
-            return True
+            return False
         try:
             a, b = float(str(v_ref)), float(str(v_tgt))
-            return not (a > b if operator == ">" else a < b)
+            return a > b if operator == ">" else a < b
         except (ValueError, TypeError):
-            return True
+            return False
 
     if operator == "contains":
         if is_null(v_ref) or is_null(v_tgt):
-            return True
-        return str(apply_comparison_norm(v_tgt, norm)) not in str(apply_comparison_norm(v_ref, norm))
+            return False
+        return str(apply_comparison_norm(v_tgt, norm)) in str(apply_comparison_norm(v_ref, norm))
 
     if operator == "not_contains":
         if is_null(v_ref) or is_null(v_tgt):
             return False
-        return str(apply_comparison_norm(v_tgt, norm)) in str(apply_comparison_norm(v_ref, norm))
+        return str(apply_comparison_norm(v_tgt, norm)) not in str(apply_comparison_norm(v_ref, norm))
 
     # operator "=" (défaut)
     if is_null(v_ref) and is_null(v_tgt):
