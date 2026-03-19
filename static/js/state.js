@@ -72,6 +72,54 @@ function goWFStep(n) {
   else if (n === 3) wizRenderJoin();
   else if (n === 4) wizRenderRules();
   else if (n === 5) wizRenderFilters();
+  updateGlobalNav(n);
+}
+
+function updateGlobalNav(n) {
+  const prev    = document.getElementById('gnav-prev');
+  const next    = document.getElementById('gnav-next');
+  const run     = document.getElementById('gnav-run');
+  const navBar  = document.getElementById('global-nav-bar');
+  const yamlBar = document.getElementById('global-yaml-bar');
+  if (!prev) return;
+
+  // Masquer sur Historique (step 7)
+  navBar.style.display  = (n === 7) ? 'none' : '';
+  yamlBar.style.display = (n === 7) ? 'none' : '';
+
+  // Bouton Précédent : invisible à l'étape 0
+  prev.style.visibility = (n === 0) ? 'hidden' : '';
+
+  // Bouton Suivant vs Lancer l'audit
+  if (n === 5) {
+    next.style.display = 'none';
+    run.style.display  = '';
+  } else if (n >= 6) {
+    next.style.display = 'none';
+    run.style.display  = 'none';
+  } else {
+    next.style.display = '';
+    run.style.display  = 'none';
+    // Disabled si fichier non chargé (étapes 1 et 2)
+    if (n === 1)      next.disabled = !fileRef;
+    else if (n === 2) next.disabled = !fileTgt;
+    else              next.disabled = false;
+  }
+}
+
+function globalPrev() {
+  const n = wfCurrentStep;
+  if (n <= 0) return;
+  goWFStep(n - 1);
+}
+
+function globalNext() {
+  const n = wfCurrentStep;
+  if (n === 0)      goWFStep(1);
+  else if (n === 1) { if (fileRef)  goWFStep(2); }
+  else if (n === 2) { if (fileTgt) goWFStep(3); }
+  else if (n === 3) saveStepAndGo(4);
+  else if (n === 4) saveStepAndGo(5);
 }
 
 function _saveCurrentWFStep() {
@@ -199,7 +247,6 @@ function resetAll() {
   document.getElementById('eye-ref').style.display    = 'none';
   document.getElementById('val-ref').style.display    = 'none';
   document.getElementById('val-badge-ref').style.display = 'none';
-  document.getElementById('btn-ref-next').disabled    = true;
   document.getElementById('cfg-ref-pill').textContent = '';
   document.getElementById('f-ref').value = '';
 
@@ -210,7 +257,6 @@ function resetAll() {
   document.getElementById('eye-tgt').style.display    = 'none';
   document.getElementById('val-tgt').style.display    = 'none';
   document.getElementById('val-badge-tgt').style.display = 'none';
-  document.getElementById('btn-tgt-next').disabled    = true;
   document.getElementById('cfg-tgt-pill').textContent = '';
   document.getElementById('f-tgt').value = '';
 
@@ -233,6 +279,7 @@ function resetAll() {
   // avant pour court-circuiter la sauvegarde, puis on réinitialise WS après le navigate
   wfCurrentStep = 0;
   goWFStep(0);
+  updateGlobalNav(0);
 
   // Réinitialiser WS APRÈS goWFStep (qui peut relire le DOM via _saveCurrentWFStep)
   wizSrcDefault();

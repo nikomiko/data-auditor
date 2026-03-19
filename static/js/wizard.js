@@ -291,6 +291,25 @@ function toggleYamlEditor() {
 
 function closeYamlModal(e) {
   if (e && e.target !== document.getElementById('yaml-modal')) return;
+  // Sync YAML textarea → wizard state si le contenu a changé
+  const yamlEl = document.getElementById('yaml');
+  const content = yamlEl.value;
+  if (content !== yamlOriginal) {
+    try {
+      const parsed = jsyaml.load(content);
+      if (parsed && typeof parsed === 'object') {
+        wizLoadFromYaml(parsed);
+        // Re-render l'étape courante
+        if (wfCurrentStep === 1) onEnterRef();
+        else if (wfCurrentStep === 2) onEnterTgt();
+        else if (wfCurrentStep === 3) wizRenderJoin();
+        else if (wfCurrentStep === 4) wizRenderRules();
+        else if (wfCurrentStep === 5) wizRenderFilters();
+      }
+      yamlOriginal = content;
+      updateSaveBtn();
+    } catch(_) {}
+  }
   document.getElementById('yaml-modal').style.display = 'none';
 }
 
@@ -342,14 +361,18 @@ function WIZ_LABELS() {
 }
 
 function wizShowErr(msg) {
-  // Find the error div in the currently active step footer
-  const e = document.querySelector('.wf-view.active .wiz-err') ||
-            document.getElementById('wiz-err-3') ||
-            document.getElementById('wiz-err-5');
+  const e = document.getElementById('gnav-wiz-err');
   if (!e) return;
-  e.textContent = msg; e.classList.add('show');
-  setTimeout(() => e.classList.remove('show'), 3500);
+  e.textContent = msg;
+  if (msg) {
+    e.classList.add('show');
+    setTimeout(() => e.classList.remove('show'), 3500);
+  } else {
+    e.classList.remove('show');
+  }
 }
+
+function wizClearErr() { wizShowErr(''); }
 
 function wizValidateStep(step) {
   // step = wfCurrentStep (1=ref, 2=tgt, 3=join, 4=rules)
@@ -441,8 +464,8 @@ function wizRenderSource(stepEl, srcKey, label) {
       </div>
       <table class="col-table" id="ctbl-${srcKey}">
         <thead><tr>${s.fixed_width
-          ? '<th>Nom</th><th>Position</th><th>Largeur</th><th>Type</th><th>Date fmt</th><th></th>'
-          : '<th>Nom</th><th>Type</th><th>Date fmt</th><th></th>'
+          ? '<th>Nom</th><th>Position</th><th>Largeur</th><th>Type</th><th title="Format Python strftime. Exemples&#10;%d/%m/%Y → 31/12/2024&#10;%Y-%m-%d → 2024-12-31&#10;%Y%m%d → 20241231&#10;%d/%m/%Y %H:%M:%S → date+heure&#10;Codes : %Y=année %m=mois %d=jour %H=heure %M=minute %S=seconde">Date fmt ⓘ</th><th></th>'
+          : '<th>Nom</th><th>Type</th><th title="Format Python strftime. Exemples&#10;%d/%m/%Y → 31/12/2024&#10;%Y-%m-%d → 2024-12-31&#10;%Y%m%d → 20241231&#10;%d/%m/%Y %H:%M:%S → date+heure&#10;Codes : %Y=année %m=mois %d=jour %H=heure %M=minute %S=seconde">Date fmt ⓘ</th><th></th>'
         }</tr></thead>
         <tbody id="ctbody-${srcKey}">
           ${wizColRows(srcKey, s)}
@@ -536,27 +559,38 @@ function wizRenderSource(stepEl, srcKey, label) {
 
 function wizColRows(srcKey, s) {
   const list = s.fixed_width ? s.column_positions : s.fields;
+  const typeOpts = [['string','string'],['integer','integer'],['decimal','decimal'],['date','date'],['boolean','boolean']];
   return list.map((f, i) => {
-    const typeOpts = [['string','string'],['integer','integer'],['decimal','decimal'],['date','date'],['boolean','boolean']];
-    const dfHtml = f.type === 'date' ? wizInput(`w-df-${srcKey}-${i}`, f.date_format, '%Y-%m-%d') : `<span style="color:var(--border)">—</span>`;
+    const type = f.type || 'string';
+    const typeSelHtml = `<select class="wiz-select" id="w-ct-${srcKey}-${i}" onchange="wizToggleDateFmt('${srcKey}',${i},this.value)">`
+      + typeOpts.map(([v,l]) => `<option value="${v}"${v===type?' selected':''}>${l}</option>`).join('')
+      + `</select>`;
+    const dfHtml = `<div id="w-df-wrap-${srcKey}-${i}" style="${type !== 'date' ? 'display:none' : ''}">`
+      + wizInput(`w-df-${srcKey}-${i}`, f.date_format || '', '%Y-%m-%d')
+      + `</div>`;
     if (s.fixed_width) {
       return `<tr>
         <td>${wizInput(`w-cn-${srcKey}-${i}`, f.name, 'nom')}</td>
         <td>${wizInput(`w-cp-${srcKey}-${i}`, f.position, '0')}</td>
         <td>${wizInput(`w-cw-${srcKey}-${i}`, f.width, '1')}</td>
-        <td>${wizSelect(`w-ct-${srcKey}-${i}`, typeOpts, f.type||'string')}</td>
-        <td id="w-df-wrap-${srcKey}-${i}">${dfHtml}</td>
+        <td>${typeSelHtml}</td>
+        <td>${dfHtml}</td>
         <td><button class="btn-icon" onclick="wizRemoveCol('${srcKey}',${i})" title="Supprimer">✕</button></td>
       </tr>`;
     } else {
       return `<tr>
         <td>${wizInput(`w-cn-${srcKey}-${i}`, f.name, 'nom')}</td>
-        <td>${wizSelect(`w-ct-${srcKey}-${i}`, typeOpts, f.type||'string')}</td>
-        <td id="w-df-wrap-${srcKey}-${i}">${dfHtml}</td>
+        <td>${typeSelHtml}</td>
+        <td>${dfHtml}</td>
         <td><button class="btn-icon" onclick="wizRemoveCol('${srcKey}',${i})" title="Supprimer">✕</button></td>
       </tr>`;
     }
   }).join('');
+}
+
+function wizToggleDateFmt(srcKey, i, type) {
+  const wrap = document.getElementById(`w-df-wrap-${srcKey}-${i}`);
+  if (wrap) wrap.style.display = type === 'date' ? '' : 'none';
 }
 
 function wizPivotRows(srcKey, s) {
@@ -572,7 +606,11 @@ function wizPivotRows(srcKey, s) {
 function wizAddCol(srcKey) {
   wizReadSourceForm(srcKey);
   const s = WS.sources[srcKey];
-  if (s.fixed_width) s.column_positions.push({name:'', position:0, width:1, type:'string', date_format:''});
+  if (s.fixed_width) {
+    const prev = s.column_positions[s.column_positions.length - 1];
+    const nextPos = prev ? (Number(prev.position) + Number(prev.width)) : 0;
+    s.column_positions.push({name:'', position:nextPos, width:1, type:'string', date_format:''});
+  }
   else s.fields.push({name:'', type:'string', date_format:''});
   const tbody = document.getElementById('ctbody-'+srcKey);
   if (tbody) tbody.innerHTML = wizColRows(srcKey, s);

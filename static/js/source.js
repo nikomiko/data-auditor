@@ -36,6 +36,7 @@ async function loadYamlFile() {
 function applyYamlContent(content, filename) {
   document.getElementById('yaml').value = content;
   yamlOriginal = content;
+  _updateConfigName();
   updateSaveBtn();
   try {
     const parsed = jsyaml.load(content);
@@ -80,6 +81,7 @@ async function handleDropYaml(event) {
 
 function updateSaveBtn() {
   const btn   = document.getElementById('btn-save-yaml');
+  if (!btn) return;
   const dirty = document.getElementById('yaml').value !== yamlOriginal;
   btn.style.display     = yamlOriginal ? '' : 'none';
   btn.style.borderColor = dirty ? 'var(--acc)' : '';
@@ -87,6 +89,13 @@ function updateSaveBtn() {
   btn.title = yamlFileHandle
     ? (dirty ? `Sauvegarder dans ${yamlFilename}` : `${yamlFilename} — à jour`)
     : `Télécharger ${yamlFilename}`;
+  _updateConfigName();
+}
+
+function _updateConfigName() {
+  const el = document.getElementById('yaml-config-name');
+  if (!el) return;
+  el.textContent = (yamlFilename && yamlFilename !== 'config.yaml') ? yamlFilename : '';
 }
 
 async function saveYaml() {
@@ -114,6 +123,65 @@ async function saveYaml() {
   a.href     = url;
   a.download = yamlFilename;
   a.click();
+  URL.revokeObjectURL(url);
+  yamlOriginal = content;
+  updateSaveBtn();
+}
+
+// Save depuis la barre globale — build depuis wizard, écrase le handle existant ou télécharge
+async function saveConfig() {
+  _saveCurrentWFStep();
+  const content = wizBuildYaml();
+  document.getElementById('yaml').value = content;
+  yamlOriginal = content;
+  if (yamlFileHandle) {
+    try {
+      const writable = await yamlFileHandle.createWritable();
+      await writable.write(content);
+      await writable.close();
+      _updateConfigName();
+      updateSaveBtn();
+      return;
+    } catch(e) { console.warn('Write failed, fallback download:', e); }
+  }
+  const blob = new Blob([content], { type: 'text/yaml;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = yamlFilename; a.click();
+  URL.revokeObjectURL(url);
+  updateSaveBtn();
+}
+
+// Save As — build depuis wizard, demande un nouvel emplacement
+async function saveAsConfig() {
+  _saveCurrentWFStep();
+  const content = wizBuildYaml();
+  document.getElementById('yaml').value = content;
+  if ('showSaveFilePicker' in window) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: yamlFilename,
+        types: [{ description: 'YAML', accept: { 'text/yaml': ['.yaml', '.yml'] } }]
+      });
+      yamlFileHandle = handle;
+      yamlFilename   = handle.name;
+      const writable = await handle.createWritable();
+      await writable.write(content);
+      await writable.close();
+      yamlOriginal = content;
+      _updateConfigName();
+      updateSaveBtn();
+      return;
+    } catch(e) {
+      if (e.name === 'AbortError') return;
+      console.warn('showSaveFilePicker failed, fallback download:', e);
+    }
+  }
+  // Fallback : téléchargement
+  const blob = new Blob([content], { type: 'text/yaml;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = yamlFilename; a.click();
   URL.revokeObjectURL(url);
   yamlOriginal = content;
   updateSaveBtn();

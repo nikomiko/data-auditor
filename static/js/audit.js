@@ -13,7 +13,7 @@ async function runAudit() {
   sessionSave();
 
   const RUN_BTN_HTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Lancer l\'audit';
-  const btn = document.getElementById('btn-run');
+  const btn = document.getElementById('gnav-run');
   btn.disabled = true;
   btn.innerHTML = '<div class="spin"></div> Envoi…';
 
@@ -142,8 +142,8 @@ function listenSSE(token) {
     } else if (ev.event === 'error') {
       showErr(ev.message);
       showProgress(false);
-      document.getElementById('btn-run').disabled = false;
-      document.getElementById('btn-run').innerHTML =
+      document.getElementById('gnav-run').disabled = false;
+      document.getElementById('gnav-run').innerHTML =
         '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Lancer l\'audit';
       es.close();
     }

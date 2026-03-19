@@ -81,8 +81,8 @@ header{height:50px;background:var(--s1);border-bottom:1px solid var(--border);di
 .wf-chev.done{background:#16a34a;color:#fff}
 .wf-chev.reset{background:#fee2e2;color:#991b1b;flex:0 0 auto}
 .wf-chev.reset:hover{background:#fca5a5;color:#7f1d1d}
-.wf-chev-num{font-size:.95rem;font-weight:700;line-height:1;flex-shrink:0}
-.wf-chev-lbl{font-size:.68rem;font-weight:500;overflow:hidden;text-overflow:ellipsis}
+.wf-chev-num{font-size:1.1rem;font-weight:700;line-height:1;flex-shrink:0}
+.wf-chev-lbl{font-size:.80rem;font-weight:500;overflow:hidden;text-overflow:ellipsis}
 .wf-chev.opt .wf-chev-lbl::after{content:' (opt.)';font-size:.58rem;opacity:.7}
 
 /* ── Layout ── */
@@ -104,6 +104,10 @@ header{height:50px;background:var(--s1);border-bottom:1px solid var(--border);di
 .file-drop-zone.loaded{border-color:var(--ok);border-style:solid;background:var(--ok-bg)}
 .file-drop-zone svg{opacity:.3;transition:opacity .2s}
 .file-drop-zone:hover svg,.file-drop-zone.loaded svg{opacity:.7}
+/* Compact drop zone inside file-step-top (steps ①②) */
+.file-step-top .file-drop-zone{flex-direction:row;justify-content:flex-start;height:calc(var(--btn-h) * 2);padding:0 1rem;gap:.75rem;width:100%;max-width:min(480px,90%);text-align:left;align-items:center}
+.file-step-top .file-drop-zone svg{width:22px;height:22px;flex-shrink:0}
+.file-drop-text{display:flex;flex-direction:column;gap:.1rem;min-width:0}
 .file-drop-label{font-size:.9rem;color:var(--dim);font-weight:500}
 .file-drop-sub{font-size:.75rem;color:var(--muted)}
 .file-drop-name{font-family:var(--mono);font-size:.8rem;color:var(--ok);font-weight:600}
@@ -142,6 +146,8 @@ textarea#yaml::placeholder{color:var(--muted)}
 .btn-nav-sec{background:var(--s2);color:var(--text);border:1px solid var(--border)}
 .btn-nav-sec:hover{border-color:var(--acc);color:var(--acc);background:var(--s2)}
 .wfv-topbar{display:flex;align-items:center;gap:.75rem;padding:.75rem 1.25rem;border-bottom:1px solid var(--border);background:var(--s1);flex-shrink:0}
+.global-nav-bar{display:flex;align-items:center;gap:.75rem;padding:.5rem 1.25rem;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0;position:sticky;top:50px;z-index:90}
+.global-yaml-bar{display:flex;align-items:center;gap:.75rem;padding:.4rem 1.25rem;background:var(--bg);border-bottom:1px solid var(--border);flex-shrink:0}
 
 /* ── Results panel ── */
 

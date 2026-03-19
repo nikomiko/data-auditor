@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DataAuditor v2</title>
+<title>DataAuditor</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <link rel="stylesheet" href="/static/style.css">
@@ -13,7 +13,7 @@
 <header>
   <div class="logo">data<em>/</em>auditor
     <span class="logo-tag">server</span>
-    <span class="logo-ver">v3.0.2</span>
+    <span class="logo-ver">v3.1.0</span>
   </div>
   <div class="wf-steps" id="wf-steps">
     <button class="wf-chev reset" onclick="resetAll()" title="Réinitialiser toute la configuration"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.36"/></svg><span class="wf-chev-lbl">Reset</span></button>
@@ -28,6 +28,35 @@
   <button class="tab-btn" id="tab-history" onclick="goWFStep(7); loadHistory()">Historique</button>
   <button class="btn-help" onclick="openHelp()" title="Manuel utilisateur">?</button>
 </header>
+
+<!-- Barre de navigation globale -->
+<div class="global-nav-bar" id="global-nav-bar">
+  <button class="btn-nav btn-nav-sec" id="gnav-prev" onclick="globalPrev()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+    Précédent
+  </button>
+  <div class="wiz-err" id="gnav-wiz-err"></div>
+  <div style="flex:1"></div>
+  <button class="btn-nav" id="gnav-next" onclick="globalNext()">
+    Suivant
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+  </button>
+  <button class="btn-run" id="gnav-run" onclick="runAudit()" style="display:none;width:auto">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    Lancer l'audit
+  </button>
+</div>
+
+<!-- Barre YAML globale -->
+<div class="global-yaml-bar" id="global-yaml-bar">
+  <button class="btn-xs" id="btn-save-config" onclick="saveConfig()" title="Enregistrer la configuration">💾 Save</button>
+  <button class="btn-xs" onclick="saveAsConfig()" title="Enregistrer sous…">Save As…</button>
+  <button class="btn-xs" id="btn-toggle-yaml" onclick="toggleYamlEditor()">‹/› Voir YAML</button>
+  <span id="yaml-config-name" style="font-family:var(--mono);font-size:.65rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px"></span>
+  <div style="flex:1"></div>
+  <span id="cfg-ref-pill" style="font-family:var(--mono);font-size:.65rem;color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-bd);border-radius:3px;padding:.1rem .4rem"></span>
+  <span id="cfg-tgt-pill" style="font-family:var(--mono);font-size:.65rem;color:var(--ob);background:var(--ob-bg);border:1px solid var(--ob-bd);border-radius:3px;padding:.1rem .4rem"></span>
+</div>
 
 <div class="layout">
 
@@ -69,8 +98,10 @@
              ondragleave="this.classList.remove('hover')"
              ondrop="handleDrop(event,'ref')">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-          <div class="file-drop-label" id="dz-ref-label">Glissez votre fichier ici</div>
-          <div class="file-drop-sub" id="dz-ref-sub">ou cliquez pour parcourir — CSV, TXT, DAT, JSON, XLSX</div>
+          <div class="file-drop-text">
+            <div class="file-drop-label" id="dz-ref-label">Glissez votre fichier ici</div>
+            <div class="file-drop-sub" id="dz-ref-sub">ou cliquez pour parcourir — CSV, TXT, DAT, JSON, XLSX</div>
+          </div>
           <input type="file" id="f-ref" accept=".csv,.txt,.dat,.json,.xlsx" style="display:none">
         </div>
       </div>
@@ -84,11 +115,6 @@
           Vérifier les colonnes
         </button>
         <span id="val-badge-ref" style="display:none"></span>
-        <div style="flex:1"></div>
-        <button class="btn-nav" onclick="goWFStep(0)">← Config</button>
-        <button class="btn-nav" id="btn-ref-next" onclick="goWFStep(2)" disabled>
-          Suivant → <span id="nav-lbl-tgt">Cible</span>
-        </button>
       </div>
       <div class="file-step-cfg" id="wfv-1-src">
         <p style="color:var(--muted);font-size:.78rem;text-align:center;padding:2rem">Chargez un fichier ou configurez la source manuellement ci-dessous une fois le fichier chargé.</p>
@@ -111,8 +137,10 @@
              ondragleave="this.classList.remove('hover')"
              ondrop="handleDrop(event,'tgt')">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-          <div class="file-drop-label" id="dz-tgt-label">Glissez votre fichier ici</div>
-          <div class="file-drop-sub" id="dz-tgt-sub">ou cliquez pour parcourir — CSV, TXT, DAT, JSON, XLSX</div>
+          <div class="file-drop-text">
+            <div class="file-drop-label" id="dz-tgt-label">Glissez votre fichier ici</div>
+            <div class="file-drop-sub" id="dz-tgt-sub">ou cliquez pour parcourir — CSV, TXT, DAT, JSON, XLSX</div>
+          </div>
           <input type="file" id="f-tgt" accept=".csv,.txt,.dat,.json,.xlsx" style="display:none">
         </div>
       </div>
@@ -126,11 +154,6 @@
           Vérifier les colonnes
         </button>
         <span id="val-badge-tgt" style="display:none"></span>
-        <div style="flex:1"></div>
-        <button class="btn-nav" onclick="goWFStep(1)">← <span id="nav-lbl-ref">Référence</span></button>
-        <button class="btn-nav" id="btn-tgt-next" onclick="goWFStep(3)" disabled>
-          Suivant → Jointure
-        </button>
       </div>
       <div class="file-step-cfg" id="wfv-2-src">
         <p style="color:var(--muted);font-size:.78rem;text-align:center;padding:2rem">Chargez un fichier ou configurez la source manuellement ci-dessous une fois le fichier chargé.</p>
@@ -141,12 +164,6 @@
   <!-- ③ Jointure -->
   <div class="wf-view" id="wfv-3">
     <div class="config-view">
-      <div class="wfv-topbar">
-        <button class="btn-nav" onclick="goWFStep(2)">← <span id="nav-lbl-tgt2">Cible</span></button>
-        <div style="flex:1"></div>
-        <div class="wiz-err" id="wiz-err-3"></div>
-        <button class="btn-nav" onclick="saveStepAndGo(4)">Suivant : Règles →</button>
-      </div>
       <div id="wfv-3-body" class="wizard-body"></div>
     </div>
   </div>
@@ -154,12 +171,6 @@
   <!-- ④ Règles -->
   <div class="wf-view" id="wfv-4">
     <div class="config-view">
-      <div class="wfv-topbar">
-        <button class="btn-nav" onclick="goWFStep(3)">← Jointure</button>
-        <div style="flex:1"></div>
-        <div class="wiz-err" id="wiz-err-4"></div>
-        <button class="btn-nav" onclick="saveStepAndGo(5)">Suivant : Filtres &amp; Rapport →</button>
-      </div>
       <div id="wfv-4-body" class="wizard-body"></div>
     </div>
   </div>
@@ -167,23 +178,6 @@
   <!-- ⑤ Filtres & Rapport -->
   <div class="wf-view" id="wfv-5">
     <div class="config-view">
-      <div class="config-topbar">
-        <span class="section-title">Configuration</span>
-        <span id="cfg-ref-pill" style="font-family:var(--mono);font-size:.65rem;color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-bd);border-radius:3px;padding:.1rem .4rem"></span>
-        <span id="cfg-tgt-pill" style="font-family:var(--mono);font-size:.65rem;color:var(--ob);background:var(--ob-bg);border:1px solid var(--ob-bd);border-radius:3px;padding:.1rem .4rem"></span>
-        <div style="flex:1"></div>
-        <button class="btn-xs" onclick="loadYamlFile()">📂 Charger YAML</button>
-        <button class="btn-xs" id="btn-toggle-yaml" onclick="toggleYamlEditor()">‹/› YAML</button>
-      </div>
-      <div class="wfv-topbar">
-        <button class="btn-nav" onclick="goWFStep(4)">← Règles</button>
-        <div style="flex:1"></div>
-        <div class="wiz-err" id="wiz-err-5"></div>
-        <button class="btn-run" id="btn-run" onclick="runAudit()" style="width:auto">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          Lancer l'audit
-        </button>
-      </div>
       <div id="wfv-5-body" class="wizard-body"></div>
     </div>
   </div>
@@ -294,8 +288,8 @@ document.getElementById('f-ref').addEventListener('change', e => {
   document.getElementById('eye-ref').style.display    = isBinary(f) ? 'none' : '';
   document.getElementById('val-ref').style.display    = isBinary(f) ? 'none' : '';
   document.getElementById('val-badge-ref').style.display = 'none';
-  document.getElementById('btn-ref-next').disabled    = false;
   document.getElementById('cfg-ref-pill').textContent = f.name;
+  updateGlobalNav(wfCurrentStep);
   if (wfUnlocked < 2) { wfUnlocked = 2; updateWFSteps(); }
   autoDetectColumns('reference', f).then(() => {
     if (wfCurrentStep === 1) onEnterRef();
@@ -314,8 +308,8 @@ document.getElementById('f-tgt').addEventListener('change', e => {
   document.getElementById('eye-tgt').style.display    = isBinary(f) ? 'none' : '';
   document.getElementById('val-tgt').style.display    = isBinary(f) ? 'none' : '';
   document.getElementById('val-badge-tgt').style.display = 'none';
-  document.getElementById('btn-tgt-next').disabled    = false;
   document.getElementById('cfg-tgt-pill').textContent = f.name;
+  updateGlobalNav(wfCurrentStep);
   if (wfUnlocked < 3) { wfUnlocked = 3; updateWFSteps(); }
   autoDetectColumns('target', f).then(() => {
     if (wfCurrentStep === 2) onEnterTgt();

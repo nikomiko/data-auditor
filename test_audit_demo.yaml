@@ -4,7 +4,7 @@ meta:
 sources:
   reference:
     format: dat
-    label: Stock WMS — positionnel
+    label: Stock WMS
     encoding: utf-8
     delimiter: ;
     has_header: false
