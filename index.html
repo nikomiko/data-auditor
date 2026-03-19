@@ -40,63 +40,62 @@ header{height:50px;background:var(--s1);border-bottom:1px solid var(--border);di
 .tab-btn:hover{background:var(--s2);color:var(--text)}
 .tab-btn.active{background:var(--acc-dim);color:var(--acc)}
 
+/* ── Workflow steps (header) ── */
+.wf-steps{display:flex;align-items:center;gap:.2rem;flex:1;justify-content:center}
+.wf-step-btn{background:none;border:1px solid var(--border);color:var(--muted);font-size:.75rem;padding:.3rem .9rem;border-radius:var(--r);cursor:pointer;font-family:var(--sans);transition:all .15s;white-space:nowrap}
+.wf-step-btn:disabled{cursor:default;opacity:.35}
+.wf-step-btn.active{background:var(--acc-dim);border-color:var(--acc);color:var(--acc);font-weight:600}
+.wf-step-btn.done{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok)}
+.wf-sep{color:var(--border);font-size:.75rem;padding:0 .1rem}
+
 /* ── Layout ── */
-.layout{display:flex;flex-direction:column;flex:1;min-height:0;height:calc(100vh - 50px)}
+.layout{display:flex;flex-direction:column;flex:1;min-height:0;height:calc(100vh - 50px);overflow:hidden}
 
-/* ── Config panel ── */
-.config-panel{width:100%;height:300px;min-height:80px;max-height:calc(100vh - 160px);background:var(--s1);border-bottom:1px solid var(--border);display:flex;flex-direction:row;overflow:hidden;flex-shrink:0;transition:height .3s cubic-bezier(.4,0,.2,1);position:relative}
-.config-panel.collapsed{height:44px!important;min-height:44px}
-.config-panel.collapsed .left-content{opacity:0;pointer-events:none}
-.left-content{display:flex;flex-direction:row;flex:1;overflow:hidden;transition:opacity .2s;padding-top:44px}
+/* ── Workflow views ── */
+.wf-view{display:none;flex-direction:column;flex:1;overflow:hidden;min-height:0}
+.wf-view.active{display:flex}
 
-.resize-handle{position:absolute;bottom:0;left:0;right:0;height:6px;cursor:ns-resize;z-index:20;display:flex;align-items:center;justify-content:center}
-.resize-handle::after{content:'';width:40px;height:3px;border-radius:2px;background:var(--border);transition:background .15s}
-.resize-handle:hover::after{background:var(--acc)}
-.config-panel.collapsed .resize-handle{display:none}
+/* ── File step (steps 0 & 1) ── */
+.file-step{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.5rem;padding:2rem}
+.file-drop-zone{border:2px dashed var(--border);border-radius:12px;width:min(480px,90%);padding:3rem 2rem;display:flex;flex-direction:column;align-items:center;gap:1rem;cursor:pointer;transition:all .2s;background:var(--s1);text-align:center}
+.file-drop-zone:hover{border-color:var(--acc);background:var(--acc-dim)}
+.file-drop-zone.loaded{border-color:var(--ok);border-style:solid;background:var(--ok-bg)}
+.file-drop-zone svg{opacity:.3;transition:opacity .2s}
+.file-drop-zone:hover svg,.file-drop-zone.loaded svg{opacity:.7}
+.file-drop-label{font-size:.9rem;color:var(--dim);font-weight:500}
+.file-drop-sub{font-size:.75rem;color:var(--muted)}
+.file-drop-name{font-family:var(--mono);font-size:.8rem;color:var(--ok);font-weight:600}
+.file-step-nav{display:flex;gap:.75rem;align-items:center}
+.file-step-title{font-size:1.1rem;font-weight:600;color:var(--text)}
+.file-step-badge{font-family:var(--mono);font-size:.65rem;padding:.15rem .5rem;border-radius:4px;font-weight:600}
+.file-step-badge.A{background:var(--oa-bg);color:var(--oa);border:1px solid var(--oa-bd)}
+.file-step-badge.B{background:var(--ob-bg);color:var(--ob);border:1px solid var(--ob-bd)}
 
-.panel-titlebar{position:absolute;top:0;left:0;right:0;height:44px;display:flex;align-items:center;padding:0 1rem;gap:.75rem;background:var(--s1);border-bottom:1px solid var(--border);z-index:10;cursor:pointer;user-select:none}
-.panel-titlebar:hover{background:var(--s2)}
-.panel-title{font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);flex:1}
-.panel-pills{display:flex;gap:.4rem;align-items:center}
-.panel-pill{font-family:var(--mono);font-size:.62rem;padding:.1rem .45rem;border-radius:3px;border:1px solid var(--border);color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.panel-pill.ok{border-color:var(--ok-bd);color:var(--ok);background:var(--ok-bg)}
-.collapse-btn{background:none;border:1px solid var(--border);color:var(--muted);width:22px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;flex-shrink:0}
-.collapse-btn:hover{border-color:var(--acc);color:var(--acc)}
-.collapse-btn svg{transition:transform .3s}
-.config-panel.collapsed .collapse-btn svg{transform:rotate(180deg)}
+/* ── Config step (step 2) ── */
+.config-view{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
+.config-topbar{display:flex;align-items:center;gap:.5rem;padding:.6rem 1.25rem;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0}
+.config-topbar .section-title{margin:0}
+.config-yaml-area{display:none;flex-direction:column;overflow:hidden}
+.config-yaml-area.show{display:flex;height:180px;flex-shrink:0}
+textarea#yaml{flex:1;background:#f8fff8;border:none;border-top:1px solid var(--border);color:#1e4620;font-family:var(--mono);font-size:.7rem;line-height:1.65;padding:.75rem 1.1rem;resize:none;outline:none;width:100%}
 
-.col-files{width:220px;min-width:180px;border-right:1px solid var(--border);display:flex;flex-direction:column;padding:.75rem 1rem;gap:.5rem;overflow:hidden}
-.col-yaml{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
-.col-run{width:130px;min-width:110px;border-left:1px solid var(--border);display:flex;flex-direction:column;padding:.75rem;gap:.5rem;justify-content:flex-end}
+/* ── Results step (step 3) ── */
+.results-topbar{display:flex;align-items:center;gap:.75rem;padding:.5rem 1.25rem;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0}
 
-.section-title{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:.5rem}
+.section-title{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
 
-/* Drop zones */
-.dz{border:1.5px dashed var(--border);border-radius:var(--r);padding:.55rem .8rem;cursor:pointer;display:flex;align-items:center;gap:.5rem;font-size:.75rem;color:var(--muted);background:var(--bg);transition:all .15s;margin-bottom:.4rem}
-.dz:last-of-type{margin-bottom:0}
-.dz:hover{border-color:var(--acc);color:var(--acc);background:var(--acc-dim)}
-.dz.ok{border-color:var(--ok);color:var(--ok);border-style:solid}
-.dz input{display:none}
-.dz-name{font-family:var(--mono);font-size:.66rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-.dz-badge{font-size:.6rem;font-weight:600;padding:.1rem .4rem;border-radius:3px;font-family:var(--mono);flex-shrink:0}
-.dz-badge.A{background:var(--oa-bg);color:var(--oa);border:1px solid var(--oa-bd)}
-.dz-badge.B{background:var(--ob-bg);color:var(--ob);border:1px solid var(--ob-bd)}
-
-.yaml-hdr{display:flex;align-items:center;padding:.65rem 1.1rem .4rem;gap:.4rem}
-.yaml-hdr .section-title{margin:0;flex:1}
 .btn-xs{background:none;border:1px solid var(--border);color:var(--muted);font-size:.68rem;padding:.25rem .6rem;border-radius:var(--r);cursor:pointer;font-family:var(--sans);transition:all .15s}
 .btn-xs:hover{border-color:var(--acc);color:var(--acc)}
-textarea#yaml{flex:1;background:var(--bg);border:none;border-top:1px solid var(--border);color:#1e4620;font-family:var(--mono);font-size:.7rem;line-height:1.65;padding:.75rem 1.1rem;resize:none;outline:none;width:100%}
 textarea#yaml::placeholder{color:var(--muted)}
 
-.btn-run{width:100%;padding:.65rem;background:var(--acc);color:#fff;border:none;border-radius:var(--r);font-family:var(--sans);font-size:.85rem;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.5rem}
-.btn-run:hover{background:#6fa3ff}
+.btn-run{width:100%;padding:.65rem;background:#15803d;color:#fff;border:none;border-radius:var(--r);font-family:var(--sans);font-size:.85rem;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.5rem}
+.btn-run:hover{background:#16a34a}
 .btn-run:disabled{opacity:.35;cursor:not-allowed}
+.btn-nav{padding:.55rem 1.25rem;background:var(--acc);color:#fff;border:none;border-radius:var(--r);font-family:var(--sans);font-size:.85rem;font-weight:600;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;justify-content:center;gap:.5rem;white-space:nowrap}
+.btn-nav:hover{background:#1d4ed8}
+.btn-nav:disabled{opacity:.35;cursor:not-allowed}
 
 /* ── Results panel ── */
-.right{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
-.view{display:none;flex-direction:column;flex:1;overflow:hidden}
-.view.active{display:flex}
 
 /* Empty */
 .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.75rem;color:var(--muted);text-align:center;padding:2rem}
@@ -163,7 +162,7 @@ td{padding:.5rem .85rem;vertical-align:middle}
 .badge{display:inline-block;padding:.18rem .5rem;border-radius:4px;font-size:.64rem;font-weight:600;font-family:var(--mono);white-space:nowrap}
 .badge-ORPHELIN_A{background:var(--oa-bg);color:var(--oa);border:1px solid var(--oa-bd)}
 .badge-ORPHELIN_B{background:var(--ob-bg);color:var(--ob);border:1px solid var(--ob-bd)}
-.badge-DIVERGENT{background:var(--dv-bg);color:var(--dv);border:1px solid var(--dv-bd)}
+.badge-DIVERGENT,.badge-KO{background:var(--dv-bg);color:var(--dv);border:1px solid var(--dv-bd)}
 .badge-OK{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-bd)}
 .trunc{padding:.6rem 1.25rem;background:var(--s1);border-top:1px solid var(--border);font-size:.72rem;color:var(--muted);text-align:center}
 
@@ -205,6 +204,38 @@ td{padding:.5rem .85rem;vertical-align:middle}
 .preview-table td{padding:.35rem .75rem;border-bottom:1px solid var(--border);white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis;color:var(--dim)}
 .preview-raw{padding:.75rem 1rem;font-family:var(--mono);font-size:.68rem;line-height:1.7;color:#1e4620;white-space:pre;overflow:auto}
 .preview-na{padding:2rem;text-align:center;color:var(--muted);font-size:.8rem;font-style:italic}
+
+/* ── Modal revue côte à côte ── */
+.ctx-modal{background:var(--s1);border-radius:10px;width:98vw;height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.ctx-modal-header{padding:.6rem 1rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;gap:1rem}
+.ctx-modal-header code{font-family:var(--mono);font-size:.8rem;background:var(--s2);padding:.15rem .5rem;border-radius:4px;color:var(--acc)}
+.ctx-panels{display:flex;flex:1;overflow:hidden}
+.ctx-panel{flex:1;display:flex;flex-direction:column;border-right:1px solid var(--border);min-width:0}
+.ctx-panel:last-child{border-right:none}
+.ctx-panel-title{padding:.35rem .75rem;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);background:var(--s2);border-bottom:1px solid var(--border);flex-shrink:0}
+.ctx-rows{overflow-y:auto;flex:1;padding:.5rem}
+.ctx-record{border:1px solid var(--border);border-radius:6px;margin-bottom:.5rem;overflow:hidden}
+.ctx-record.is-center{border-color:var(--acc);box-shadow:0 0 0 2px rgba(59,130,246,.12)}
+.ctx-record-key{padding:.25rem .6rem;font-family:var(--mono);font-size:.68rem;background:var(--s2);border-bottom:1px solid var(--border);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctx-record.is-center .ctx-record-key{background:#eff6ff;color:var(--acc);font-weight:600}
+.ctx-record table{width:100%;border-collapse:collapse;font-size:.73rem}
+.ctx-record table tr td{padding:.2rem .5rem;border-bottom:1px solid var(--border);vertical-align:top;word-break:break-all}
+.ctx-record table tr:last-child td{border-bottom:none}
+.ctx-record table tr td:first-child{color:var(--muted);font-family:var(--mono);font-size:.66rem;width:38%;font-weight:500;white-space:nowrap;word-break:normal}
+.ctx-record table tr.ctx-diff td{background:#fef9c3;color:#713f12}
+.ctx-record table tr.ctx-diff td:first-child{background:#fef08a;color:#854d0e;font-weight:700}
+.ctx-absent{padding:.5rem .6rem;color:var(--muted);font-size:.72rem;font-style:italic}
+.ctx-nav-btn{background:none;border:1px solid var(--border);border-radius:4px;padding:.2rem .5rem;font-size:.72rem;cursor:pointer;color:var(--dim)}
+.ctx-nav-btn:hover{border-color:var(--acc);color:var(--acc)}
+.eye-btn{background:none;border:none;cursor:pointer;color:var(--muted);padding:.15rem .3rem;border-radius:3px;line-height:1;display:flex;align-items:center}
+.eye-btn:hover{color:var(--acc);background:var(--acc-dim)}
+.td-eye{width:28px;text-align:center;padding:0 .2rem}
+.source-name-input{font-size:.82rem;font-weight:500;border:none;border-bottom:1.5px solid var(--border);background:transparent;color:var(--text);padding:.15rem .1rem;width:220px;outline:none;font-family:var(--sans);transition:border-color .15s}
+.source-name-input:focus{border-bottom-color:var(--acc)}
+.source-name-input::placeholder{color:var(--muted);font-weight:400}
+.rule-chip{background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;border-radius:4px;padding:.15rem .5rem;font-family:var(--mono);font-size:.68rem;font-weight:600;white-space:nowrap;cursor:pointer;transition:background .12s}
+.rule-chip:hover{background:#ddd6fe}
+.rule-chip.solo{background:#5b21b6;color:#fff;border-color:#4c1d95}
 
 /* btn-icon inline */
 .btn-icon{background:none;border:none;color:var(--muted);cursor:pointer;padding:.2rem .3rem;border-radius:3px;transition:all .15s;vertical-align:middle;flex-shrink:0}
@@ -248,10 +279,16 @@ td{padding:.5rem .85rem;vertical-align:middle}
 .join-stat .n{font-family:var(--mono);font-weight:600;font-size:1rem}
 .join-stat.m .n{color:var(--ok)}.join-stat.a .n{color:var(--oa)}.join-stat.b .n{color:var(--ob)}
 .rule-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);margin-bottom:.6rem;overflow:hidden}
-.rule-card-hdr{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;background:var(--s2);border-bottom:1px solid var(--border)}
+.rule-card-hdr{display:flex;flex-direction:column;background:var(--s2);border-bottom:1px solid var(--border)}
+.rule-card-name{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem .35rem;border-bottom:1px solid var(--border)}
+.rule-card-name input{flex:1;background:transparent;border:none;font-size:.88rem;font-weight:600;color:var(--text);font-family:var(--sans);outline:none;padding:0}
+.rule-card-name input::placeholder{color:var(--muted);font-weight:400;font-style:italic}
+.rule-card-name input:focus{color:#5b21b6}
+.rule-card-actions{display:flex;align-items:center;gap:.4rem;padding:.3rem .75rem}
 .rule-card-body{padding:.6rem .75rem}
 .btn-wiz-add{background:none;border:1px dashed var(--border);color:var(--muted);font-size:.72rem;padding:.3rem .8rem;border-radius:var(--r);cursor:pointer;width:100%;text-align:center;transition:all .15s;margin-top:.4rem;font-family:var(--sans)}
 .btn-wiz-add:hover{border-color:var(--acc);color:var(--acc)}
+.wiz-info{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;background:var(--acc-dim);color:var(--acc);border-radius:50%;font-size:.58rem;font-weight:700;font-style:normal;cursor:help;vertical-align:middle;border:1px solid #93c5fd;flex-shrink:0}
 </style>
 </head>
 <body>
@@ -261,151 +298,198 @@ td{padding:.5rem .85rem;vertical-align:middle}
     <span class="logo-tag">server</span>
     <span class="logo-ver">v2.2.0</span>
   </div>
-  <div class="hdr-tabs">
-    <button class="tab-btn active" onclick="showView('audit')">Audit</button>
-    <button class="tab-btn" onclick="showView('history'); loadHistory()">Historique</button>
+  <div class="wf-steps" id="wf-steps">
+    <button class="wf-step-btn active" id="wfs-0" onclick="goWFStep(0)">① <span id="lbl-ref">Référence</span></button>
+    <span class="wf-sep">›</span>
+    <button class="wf-step-btn" id="wfs-1" onclick="goWFStep(1)" disabled>② <span id="lbl-tgt">Cible</span></button>
+    <span class="wf-sep">›</span>
+    <button class="wf-step-btn" id="wfs-2" onclick="goWFStep(2)" disabled>③ Configuration</button>
+    <span class="wf-sep">›</span>
+    <button class="wf-step-btn" id="wfs-3" onclick="goWFStep(3)" disabled>④ Résultats</button>
   </div>
+  <button class="tab-btn" id="tab-history" onclick="goWFStep(4); loadHistory()">Historique</button>
 </header>
 
 <div class="layout">
 
-  <!-- ── Config panel ── -->
-  <div class="config-panel" id="config-panel">
-    <div class="panel-titlebar" onclick="togglePanel()">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h6M3 15h6"/></svg>
-      <span class="panel-title">Configuration</span>
-      <div class="panel-pills">
-        <span class="panel-pill" id="pill-ref">Source A…</span>
-        <span class="panel-pill" id="pill-tgt">Source B…</span>
+  <!-- ① Référence -->
+  <div class="wf-view active" id="wfv-0">
+    <div class="file-step">
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+        <span class="file-step-badge A">A</span>
+        <span class="file-step-title">Fichier de référence</span>
+        <input class="source-name-input" id="inp-ref-label" placeholder="Nommer la source (ex : Stock WMS)"
+               value="" oninput="refLabel=this.value.trim();updateSourceLabels()">
       </div>
-      <button class="collapse-btn" title="Réduire / agrandir">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+      <div class="file-drop-zone" id="dz-ref" onclick="document.getElementById('f-ref').click()"
+           ondragover="event.preventDefault();this.classList.add('hover')"
+           ondragleave="this.classList.remove('hover')"
+           ondrop="handleDrop(event,'ref')">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        <div class="file-drop-label" id="dz-ref-label">Glissez votre fichier ici</div>
+        <div class="file-drop-sub" id="dz-ref-sub">ou cliquez pour parcourir — CSV, TXT, DAT, JSON, XLSX</div>
+        <input type="file" id="f-ref" accept=".csv,.txt,.dat,.json,.xlsx" style="display:none">
+      </div>
+      <div class="file-step-nav">
+        <button class="btn-icon" id="eye-ref" style="display:none" title="Prévisualiser" onclick="previewFile('ref', event)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Prévisualiser
+        </button>
+        <button class="btn-nav" id="btn-ref-next" onclick="goWFStep(1)" disabled>
+          Suivant → <span id="nav-lbl-tgt">Cible</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② Cible -->
+  <div class="wf-view" id="wfv-1">
+    <div class="file-step">
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+        <span class="file-step-badge B">B</span>
+        <span class="file-step-title">Fichier cible</span>
+        <input class="source-name-input" id="inp-tgt-label" placeholder="Nommer la source (ex : Export ERP)"
+               value="" oninput="tgtLabel=this.value.trim();updateSourceLabels()">
+      </div>
+      <div class="file-drop-zone" id="dz-tgt" onclick="document.getElementById('f-tgt').click()"
+           ondragover="event.preventDefault();this.classList.add('hover')"
+           ondragleave="this.classList.remove('hover')"
+           ondrop="handleDrop(event,'tgt')">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        <div class="file-drop-label" id="dz-tgt-label">Glissez votre fichier ici</div>
+        <div class="file-drop-sub" id="dz-tgt-sub">ou cliquez pour parcourir — CSV, TXT, DAT, JSON, XLSX</div>
+        <input type="file" id="f-tgt" accept=".csv,.txt,.dat,.json,.xlsx" style="display:none">
+      </div>
+      <div class="file-step-nav">
+        <button class="btn-nav" id="btn-tgt-back" onclick="goWFStep(0)">← <span id="nav-lbl-ref">Référence</span></button>
+        <button class="btn-icon" id="eye-tgt" style="display:none" title="Prévisualiser" onclick="previewFile('tgt', event)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Prévisualiser
+        </button>
+        <button class="btn-nav" id="btn-tgt-next" onclick="goWFStep(2)" disabled>
+          Suivant → Configuration
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ Configuration -->
+  <div class="wf-view" id="wfv-2">
+    <div class="config-view">
+      <!-- Topbar avec actions YAML + fichiers chargés -->
+      <div class="config-topbar">
+        <span class="section-title">Configuration</span>
+        <span id="cfg-ref-pill" style="font-family:var(--mono);font-size:.65rem;color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-bd);border-radius:3px;padding:.1rem .4rem"></span>
+        <span id="cfg-tgt-pill" style="font-family:var(--mono);font-size:.65rem;color:var(--ob);background:var(--ob-bg);border:1px solid var(--ob-bd);border-radius:3px;padding:.1rem .4rem"></span>
+        <div style="flex:1"></div>
+        <button class="btn-xs" onclick="loadYamlFile()">📂 Charger YAML</button>
+        <button class="btn-xs" id="btn-save-yaml" onclick="saveYaml()" style="display:none">💾 Sauvegarder</button>
+        <button class="btn-xs" id="btn-toggle-yaml" onclick="toggleYamlEditor()">‹/› YAML</button>
+        <input type="file" id="f-yaml" accept=".yaml,.yml" style="display:none">
+      </div>
+      <!-- Éditeur YAML (masqué par défaut) -->
+      <div class="config-yaml-area" id="yaml-area">
+        <textarea id="yaml" spellcheck="false" placeholder="YAML généré automatiquement…"></textarea>
+      </div>
+      <!-- Wizard inline -->
+      <div style="display:flex;align-items:center;gap:.5rem;padding:.5rem 1.25rem;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0">
+        <div class="wizard-stepper" id="wizard-stepper">
+          <button class="wstep active" data-step="0" onclick="wizardGoStep(0)">① <span id="wlbl-ref">Source A</span></button>
+          <button class="wstep" data-step="1" onclick="wizardGoStep(1)" disabled>② <span id="wlbl-tgt">Source B</span></button>
+          <button class="wstep" data-step="2" onclick="wizardGoStep(2)" disabled>③ Jointure</button>
+          <button class="wstep" data-step="3" onclick="wizardGoStep(3)" disabled>④ Règles</button>
+          <button class="wstep" data-step="4" onclick="wizardGoStep(4)" disabled>⑤ Filtres & Rapport</button>
+        </div>
+      </div>
+      <div class="wiz-err" id="wiz-err" style="margin:.5rem 1.25rem"></div>
+      <div class="wizard-body" id="wizard-body">
+        <div class="wizard-step active" id="wstep-0"></div>
+        <div class="wizard-step" id="wstep-1"></div>
+        <div class="wizard-step" id="wstep-2"></div>
+        <div class="wizard-step" id="wstep-3"></div>
+        <div class="wizard-step" id="wstep-4"></div>
+      </div>
+      <div class="wizard-footer">
+        <button class="btn-nav" onclick="goWFStep(1)">← Cible</button>
+        <button class="btn-nav" id="wbtn-prev" onclick="wizardPrev()" style="display:none">← Étape préc.</button>
+        <div style="flex:1"></div>
+        <button class="btn-nav" id="wbtn-next" onclick="wizardNext()">Étape suiv. →</button>
+        <button class="btn-run" id="btn-run" onclick="runAudit()" style="width:auto;padding:.55rem 1.5rem;margin-left:.5rem">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Lancer l'audit
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ Résultats -->
+  <div class="wf-view" id="wfv-3">
+    <div class="results-topbar">
+      <button class="btn-xs" onclick="goWFStep(2)">← Reconfigurer</button>
+      <div style="flex:1"></div>
+      <button class="btn-exp" id="btn-csv" onclick="exportReport('csv')" disabled>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV
+      </button>
+      <button class="btn-exp" id="btn-html" onclick="exportReport('html')" disabled>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>HTML
       </button>
     </div>
 
-    <div class="left-content">
-      <div class="col-files">
-        <div class="section-title" style="display:flex;align-items:center;gap:.4rem">Fichiers <button class="btn-icon" onclick="openWizard()" title="Assistant de configuration"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button></div>
-        <div class="dz" id="dz-ref" onclick="document.getElementById('f-ref').click()">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          <span class="dz-name" id="n-ref">Référence…</span>
-          <span class="dz-badge A">A</span>
-          <input type="file" id="f-ref" accept=".csv,.txt,.dat,.json,.xlsx">
-          <button class="btn-icon" id="eye-ref" style="display:none" title="Prévisualiser" onclick="previewFile('ref', event)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          </button>
-        </div>
-        <div class="dz" id="dz-tgt" onclick="document.getElementById('f-tgt').click()">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          <span class="dz-name" id="n-tgt">Cible…</span>
-          <span class="dz-badge B">B</span>
-          <input type="file" id="f-tgt" accept=".csv,.txt,.dat,.json,.xlsx">
-          <button class="btn-icon" id="eye-tgt" style="display:none" title="Prévisualiser" onclick="previewFile('tgt', event)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          </button>
-        </div>
-      </div>
+    <div class="err-box" id="err"></div>
 
-      <div class="col-yaml">
-        <div class="yaml-hdr">
-          <div class="section-title">Configuration YAML</div>
-          <button class="btn-xs" onclick="loadExample()">Exemple</button>
-          <button class="btn-xs" onclick="loadYamlFile()">📂 Charger</button>
-          <button class="btn-xs" id="btn-save-yaml" onclick="saveYaml()" style="display:none" title="Sauvegarder le YAML">💾 Sauvegarder</button>
-          <button class="btn-xs" onclick="document.getElementById('yaml').value=''">Vider</button>
-          <input type="file" id="f-yaml" accept=".yaml,.yml" style="display:none">
-        </div>
-        <textarea id="yaml" spellcheck="false" placeholder="Collez votre YAML ici…&#10;Ou cliquez sur Exemple / Charger."></textarea>
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-header">
+        <span class="progress-label" id="prog-label">Initialisation…</span>
+        <span class="progress-pct" id="prog-pct">—</span>
+        <span class="progress-counts" id="prog-counts"></span>
       </div>
-
-      <div class="col-run">
-        <button class="btn-run" id="btn-run" onclick="runAudit()">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          Lancer
-        </button>
-        <button class="btn-xs" onclick="togglePanel()" style="text-align:center">Réduire</button>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill indeterminate" id="prog-bar"></div>
       </div>
+      <div class="progress-step" id="prog-step"></div>
     </div>
-    <div class="resize-handle" id="resize-handle"></div>
+
+    <div id="results-area" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div class="summary-bar">
+        <div class="stats">
+          <div class="stat t"><span class="stat-n" id="s-ref">—</span><span class="stat-l">réf.</span></div>
+          <div class="stat t"><span class="stat-n" id="s-tgt">—</span><span class="stat-l">cible</span></div>
+          <div class="stat a"><span class="stat-n" id="s-oa">0</span><span class="stat-l">orphelins A</span></div>
+          <div class="stat b"><span class="stat-n" id="s-ob">0</span><span class="stat-l">orphelins B</span></div>
+          <div class="stat d"><span class="stat-n" id="s-dv">0</span><span class="stat-l">KO</span></div>
+        </div>
+      </div>
+
+      <div class="filter-bar" id="filter-bar">
+        <div class="filter-group">
+          <span class="filter-group-label">Type</span>
+          <button class="chip ca on" data-kind="type" data-t="ORPHELIN_A" onclick="toggleChip(this)">Orphelin A <span class="chip-c" id="c-oa">0</span></button>
+          <button class="chip cb on" data-kind="type" data-t="ORPHELIN_B" onclick="toggleChip(this)">Orphelin B <span class="chip-c" id="c-ob">0</span></button>
+          <button class="chip cd on" data-kind="type" data-t="KO"         onclick="toggleChip(this)">KO         <span class="chip-c" id="c-dv">0</span></button>
+          <button class="chip co"   data-kind="type" data-t="OK"          onclick="toggleChip(this)">OK         <span class="chip-c" id="c-ok">0</span></button>
+        </div>
+        <div id="filter-dynamic"></div>
+      </div>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr><th>Clé</th><th>Type</th><th>Règle</th><th>Valeur réf.</th><th>Valeur cible</th><th></th></tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="trunc" id="trunc" style="display:none"></div>
+    </div>
   </div>
 
-  <!-- ── Results ── -->
-  <div class="right">
-
-    <!-- VIEW: audit -->
-    <div class="view active" id="view-audit">
-
-      <div class="empty" id="empty">
-        <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><circle cx="12" cy="12" r="10"/><path d="M9 9h.01M15 9h.01M8 14s1.5 2 4 2 4-2 4-2"/></svg>
-        <h2>Aucun audit lancé</h2>
-        <p>Chargez vos fichiers, configurez le YAML et lancez l'audit.</p>
-      </div>
-
-      <div class="err-box" id="err"></div>
-
-      <!-- Barre de progression -->
-      <div class="progress-wrap" id="progress-wrap">
-        <div class="progress-header">
-          <span class="progress-label" id="prog-label">Initialisation…</span>
-          <span class="progress-pct" id="prog-pct">—</span>
-          <span class="progress-counts" id="prog-counts"></span>
-        </div>
-        <div class="progress-bar-track">
-          <div class="progress-bar-fill indeterminate" id="prog-bar"></div>
-        </div>
-        <div class="progress-step" id="prog-step"></div>
-      </div>
-
-      <div id="results-area" style="display:none;flex-direction:column;flex:1;overflow:hidden">
-        <div class="summary-bar">
-          <div class="stats">
-            <div class="stat t"><span class="stat-n" id="s-ref">—</span><span class="stat-l">réf.</span></div>
-            <div class="stat t"><span class="stat-n" id="s-tgt">—</span><span class="stat-l">cible</span></div>
-            <div class="stat a"><span class="stat-n" id="s-oa">0</span><span class="stat-l">orphelins A</span></div>
-            <div class="stat b"><span class="stat-n" id="s-ob">0</span><span class="stat-l">orphelins B</span></div>
-            <div class="stat d"><span class="stat-n" id="s-dv">0</span><span class="stat-l">divergents</span></div>
-          </div>
-          <div class="export-row">
-            <button class="btn-exp" id="btn-csv" onclick="exportReport('csv')" disabled>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV
-            </button>
-            <button class="btn-exp" id="btn-html" onclick="exportReport('html')" disabled>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>HTML
-            </button>
-          </div>
-        </div>
-
-        <div class="filter-bar" id="filter-bar">
-          <div class="filter-group">
-            <span class="filter-group-label">Type</span>
-            <button class="chip ca on" data-kind="type" data-t="ORPHELIN_A" onclick="toggleChip(this)">Orphelin A <span class="chip-c" id="c-oa">0</span></button>
-            <button class="chip cb on" data-kind="type" data-t="ORPHELIN_B" onclick="toggleChip(this)">Orphelin B <span class="chip-c" id="c-ob">0</span></button>
-            <button class="chip cd on" data-kind="type" data-t="DIVERGENT"  onclick="toggleChip(this)">Divergent  <span class="chip-c" id="c-dv">0</span></button>
-            <button class="chip co"   data-kind="type" data-t="OK"          onclick="toggleChip(this)">OK         <span class="chip-c" id="c-ok">0</span></button>
-          </div>
-          <div id="filter-dynamic"></div>
-        </div>
-
-        <div class="tbl-wrap">
-          <table>
-            <thead>
-              <tr><th>Clé</th><th>Type</th><th>Rule</th><th>Champ</th><th>Valeur réf.</th><th>Valeur cible</th><th>Détail</th></tr>
-            </thead>
-            <tbody id="tbody"></tbody>
-          </table>
-        </div>
-        <div class="trunc" id="trunc" style="display:none"></div>
-      </div>
+  <!-- ⑤ Historique -->
+  <div class="wf-view" id="wfv-4">
+    <div class="history-list" id="history-list">
+      <div class="hist-empty">Chargement…</div>
     </div>
-
-    <!-- VIEW: history -->
-    <div class="view" id="view-history">
-      <div class="history-list" id="history-list">
-        <div class="hist-empty">Chargement…</div>
-      </div>
-    </div>
-
   </div>
+
 </div>
 
 <script>
@@ -416,11 +500,15 @@ let allResults     = [];
 let lastSummary    = {};
 let lastConfig     = {};
 let currentToken   = null;
-let activeFilters  = new Set(['ORPHELIN_A','ORPHELIN_B','DIVERGENT']);
+let _ctxKey        = null;
+let refLabel       = '';
+let tgtLabel       = '';
+let activeFilters  = new Set(['ORPHELIN_A','ORPHELIN_B','KO']);
 let activeRuleFilters = null;
 let yamlFilename   = 'config.yaml';
 let yamlOriginal   = '';
 let yamlFileHandle = null;  // File System Access API handle (Chrome/Edge)
+let wfUnlocked = 0; // index de la dernière étape débloquée (0=ref, 1=tgt, 2=config, 3=results)
 
 // ═══════════════════════════════════════════════════════════
 //  FILES
@@ -434,25 +522,46 @@ function isBinary(file) {
 }
 
 document.getElementById('f-ref').addEventListener('change', e => {
-  fileRef = e.target.files[0];
-  if (fileRef) {
-    document.getElementById('n-ref').textContent = fileRef.name;
-    document.getElementById('dz-ref').classList.add('ok');
-    const p = document.getElementById('pill-ref');
-    p.textContent = fileRef.name; p.classList.add('ok');
-    document.getElementById('eye-ref').style.display = isBinary(fileRef) ? 'none' : '';
-  }
+  const f = e.target.files[0];
+  if (!f) return;
+  fileRef = f;
+  const dz  = document.getElementById('dz-ref');
+  dz.classList.add('loaded');
+  document.getElementById('dz-ref-label').textContent = f.name;
+  document.getElementById('dz-ref-sub').textContent   = (f.size/1024).toFixed(1) + ' Ko';
+  document.getElementById('eye-ref').style.display    = isBinary(f) ? 'none' : '';
+  document.getElementById('btn-ref-next').disabled    = false;
+  document.getElementById('cfg-ref-pill').textContent = f.name;
+  if (wfUnlocked < 1) { wfUnlocked = 1; updateWFSteps(); }
 });
+
 document.getElementById('f-tgt').addEventListener('change', e => {
-  fileTgt = e.target.files[0];
-  if (fileTgt) {
-    document.getElementById('n-tgt').textContent = fileTgt.name;
-    document.getElementById('dz-tgt').classList.add('ok');
-    const p = document.getElementById('pill-tgt');
-    p.textContent = fileTgt.name; p.classList.add('ok');
-    document.getElementById('eye-tgt').style.display = isBinary(fileTgt) ? 'none' : '';
-  }
+  const f = e.target.files[0];
+  if (!f) return;
+  fileTgt = f;
+  const dz  = document.getElementById('dz-tgt');
+  dz.classList.add('loaded');
+  document.getElementById('dz-tgt-label').textContent = f.name;
+  document.getElementById('dz-tgt-sub').textContent   = (f.size/1024).toFixed(1) + ' Ko';
+  document.getElementById('eye-tgt').style.display    = isBinary(f) ? 'none' : '';
+  document.getElementById('btn-tgt-next').disabled    = false;
+  document.getElementById('cfg-tgt-pill').textContent = f.name;
+  if (wfUnlocked < 2) { wfUnlocked = 2; updateWFSteps(); }
 });
+
+function handleDrop(event, which) {
+  event.preventDefault();
+  const dz = event.currentTarget;
+  dz.classList.remove('hover');
+  const f = event.dataTransfer.files[0];
+  if (!f) return;
+  const input = document.getElementById('f-' + which);
+  // Simuler un changement de fichier
+  const dt = new DataTransfer();
+  dt.items.add(f);
+  input.files = dt.files;
+  input.dispatchEvent(new Event('change'));
+}
 
 // Chargement fichier YAML — File System Access API si dispo, sinon <input> fallback
 async function loadYamlFile() {
@@ -469,6 +578,8 @@ async function loadYamlFile() {
       document.getElementById('yaml').value = content;
       yamlOriginal = content;
       updateSaveBtn();
+      // Préremplir le wizard
+      try { wizLoadFromYaml(jsyaml.load(content)); wizRenderStep(WS._step || 0); } catch(_) {}
     } catch(e) {
       if (e.name !== 'AbortError') console.error(e);
     }
@@ -485,9 +596,12 @@ document.getElementById('f-yaml').addEventListener('change', e => {
   yamlFilename   = f.name;
   const reader   = new FileReader();
   reader.onload  = ev => {
-    document.getElementById('yaml').value = ev.target.result;
-    yamlOriginal = ev.target.result;
+    const content = ev.target.result;
+    document.getElementById('yaml').value = content;
+    yamlOriginal = content;
     updateSaveBtn();
+    // Préremplir le wizard
+    try { wizLoadFromYaml(jsyaml.load(content)); wizRenderStep(WS._step || 0); } catch(_) {}
   };
   reader.readAsText(f, 'utf-8');
   e.target.value = '';
@@ -537,44 +651,66 @@ async function saveYaml() {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  TABS + PANEL
+//  WORKFLOW NAVIGATION
 // ═══════════════════════════════════════════════════════════
-function showView(name) {
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('view-' + name).classList.add('active');
-  document.querySelector(`[onclick*="'${name}'"]`).classList.add('active');
+function updateSourceLabels() {
+  const rL = refLabel || 'Référence';
+  const tL = tgtLabel || 'Cible';
+  // Stepper principal
+  const e = id => document.getElementById(id);
+  if (e('lbl-ref'))      e('lbl-ref').textContent      = rL;
+  if (e('lbl-tgt'))      e('lbl-tgt').textContent      = tL;
+  // Boutons navigation fichiers
+  if (e('nav-lbl-tgt'))  e('nav-lbl-tgt').textContent  = tL;
+  if (e('nav-lbl-ref'))  e('nav-lbl-ref').textContent  = rL;
+  // Wizard stepper
+  if (e('wlbl-ref'))     e('wlbl-ref').textContent     = rL;
+  if (e('wlbl-tgt'))     e('wlbl-tgt').textContent     = tL;
+  // Modal revue
+  if (e('ctx-title-ref')) e('ctx-title-ref').textContent = rL;
+  if (e('ctx-title-tgt')) e('ctx-title-tgt').textContent = tL;
+  // Sync dans WizardState (pré-remplissage du champ label)
+  if (!WS.sources.reference.label) WS.sources.reference.label = refLabel;
+  if (!WS.sources.target.label)    WS.sources.target.label    = tgtLabel;
 }
 
-function togglePanel(forceCollapse) {
-  const p = document.getElementById('config-panel');
-  const c = forceCollapse !== undefined ? forceCollapse : !p.classList.contains('collapsed');
-  p.classList.toggle('collapsed', c);
+function goWFStep(n) {
+  // N'autorise que les étapes débloquées
+  if (n > wfUnlocked && n < 4) return;
+  document.querySelectorAll('.wf-view').forEach((el, i) => el.classList.toggle('active', i === n));
+  updateWFSteps(n);
+  // Initialiser le wizard à l'étape config
+  if (n === 2) {
+    if (WS._step === undefined) WS._step = 0;
+    WS._visited = WS._visited || new Set([0]);
+    // Pré-remplir les labels dans WizardState
+    if (refLabel && !WS.sources.reference.label) WS.sources.reference.label = refLabel;
+    if (tgtLabel && !WS.sources.target.label)    WS.sources.target.label    = tgtLabel;
+    wizRenderStep(WS._step);
+  }
 }
 
-// Resize drag
-(function() {
-  const handle = document.getElementById('resize-handle');
-  const panel  = document.getElementById('config-panel');
-  let dragging = false, startY = 0, startH = 0;
-  handle.addEventListener('mousedown', e => {
-    dragging = true; startY = e.clientY; startH = panel.offsetHeight;
-    document.body.style.cursor = 'ns-resize';
-    document.body.style.userSelect = 'none';
-    e.preventDefault();
+function updateWFSteps(activeStep) {
+  const btns = [
+    document.getElementById('wfs-0'),
+    document.getElementById('wfs-1'),
+    document.getElementById('wfs-2'),
+    document.getElementById('wfs-3'),
+  ];
+  // Déterminer l'étape active depuis le DOM si pas fournie
+  if (activeStep === undefined) {
+    activeStep = [...document.querySelectorAll('.wf-view')].findIndex(el => el.classList.contains('active'));
+  }
+  btns.forEach((btn, i) => {
+    if (!btn) return;
+    btn.classList.toggle('active', i === activeStep);
+    btn.classList.toggle('done', i < activeStep && i <= wfUnlocked);
+    btn.disabled = i > wfUnlocked;
   });
-  document.addEventListener('mousemove', e => {
-    if (!dragging) return;
-    const newH = Math.max(80, Math.min(startH + e.clientY - startY, window.innerHeight - 160));
-    panel.style.height = newH + 'px';
-  });
-  document.addEventListener('mouseup', () => {
-    if (!dragging) return;
-    dragging = false;
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-  });
-})();
+  // Tab history
+  const tabHist = document.getElementById('tab-history');
+  if (tabHist) tabHist.classList.toggle('active', activeStep === 4);
+}
 
 // ═══════════════════════════════════════════════════════════
 //  PROGRESSION
@@ -610,17 +746,19 @@ function updateProgress(ev) {
 // ═══════════════════════════════════════════════════════════
 async function runAudit() {
   hideErr();
+  // S'assurer que le YAML est à jour depuis le wizard
+  wizSaveCurrentStep();
+  document.getElementById('yaml').value = wizBuildYaml();
   const yamlText = document.getElementById('yaml').value.trim();
   if (!fileRef)  { showErr('Chargez le fichier de référence (Source A).'); return; }
   if (!fileTgt)  { showErr('Chargez le fichier cible (Source B).'); return; }
   if (!yamlText) { showErr('La configuration YAML est vide.'); return; }
 
-  const RUN_BTN_HTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Lancer';
+  const RUN_BTN_HTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Lancer l\'audit';
   const btn = document.getElementById('btn-run');
   btn.disabled = true;
   btn.innerHTML = '<div class="spin"></div> Envoi…';
 
-  document.getElementById('empty').style.display = 'none';
   document.getElementById('results-area').style.display = 'none';
   document.getElementById('trunc').style.display = 'none';
   allResults = [];
@@ -644,7 +782,6 @@ async function runAudit() {
     currentToken = data.token;
     showProgress(true);
     updateProgress({ pct: 0, done: 0, total: 0, step: 'Démarrage…' });
-    togglePanel(true);
 
     // Afficher le tableau de suite (rempli au fil des events)
     document.getElementById('results-area').style.display = 'flex';
@@ -652,13 +789,14 @@ async function runAudit() {
     document.getElementById('btn-html').disabled = true;
 
     listenSSE(currentToken);
+    goWFStep(3);
 
-    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Lancer';
+    btn.innerHTML = RUN_BTN_HTML;
     btn.disabled = false;
 
   } catch(e) {
     showErr('Erreur réseau : ' + e.message);
-    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Lancer';
+    btn.innerHTML = RUN_BTN_HTML;
     btn.disabled = false;
   }
 }
@@ -713,6 +851,10 @@ function listenSSE(token) {
       document.getElementById('btn-csv').disabled  = false;
       document.getElementById('btn-html').disabled = false;
 
+      // Débloquer l'étape résultats
+      wfUnlocked = 3;
+      updateWFSteps();
+
       // Avertissement si troncature
       const max = config?.report?.max_diff_preview || 500;
       if (ev.total_results > max) {
@@ -725,10 +867,10 @@ function listenSSE(token) {
     } else if (ev.event === 'error') {
       showErr(ev.message);
       showProgress(false);
-      togglePanel(false);   // rouvrir le volet pour corriger
+      goWFStep(2);   // retourner à la config pour corriger
       document.getElementById('btn-run').disabled = false;
       document.getElementById('btn-run').innerHTML =
-        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Lancer';
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Lancer l\'audit';
       es.close();
     }
   };
@@ -747,29 +889,28 @@ function appendRow(r) {
   tr.innerHTML = `
     <td class="tk">${esc(r.join_key)}</td>
     <td><span class="badge badge-${r.type_ecart}">${r.type_ecart}</span></td>
-    <td class="tf" style="color:#7c3aed;font-size:.65rem">${esc(r.rule_name)}</td>
-    <td class="tf">${esc(r.champ)}</td>
+    <td>${r.rule_name ? `<button class="rule-chip" onclick="filterToRule(${JSON.stringify(r.rule_name)})">${esc(r.rule_name)}</button>` : ''}</td>
     <td class="tv r" title="${esc(r.valeur_reference)}">${esc(r.valeur_reference)}</td>
     <td class="tv t" title="${esc(r.valeur_cible)}">${esc(r.valeur_cible)}</td>
-    <td class="td-det">${esc(r.detail)}</td>`;
+    <td class="td-eye"><button class="eye-btn" title="Voir le détail" onclick="openCtxModal(${JSON.stringify(r.join_key)})"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></td>`;
   tbody.appendChild(tr);
 }
 
 function updateLiveCounts() {
-  const counts = { ORPHELIN_A:0, ORPHELIN_B:0, DIVERGENT:0, OK:0 };
+  const counts = { ORPHELIN_A:0, ORPHELIN_B:0, KO:0, DIVERGENT:0, OK:0 };
   allResults.forEach(r => { if (r.type_ecart in counts) counts[r.type_ecart]++; });
   document.getElementById('c-oa').textContent = counts.ORPHELIN_A;
   document.getElementById('c-ob').textContent = counts.ORPHELIN_B;
-  document.getElementById('c-dv').textContent = counts.DIVERGENT;
+  document.getElementById('c-dv').textContent = counts.KO + counts.DIVERGENT;
   document.getElementById('c-ok').textContent = counts.OK;
 }
 
 function updateChipCounts() {
-  const counts = { ORPHELIN_A:0, ORPHELIN_B:0, DIVERGENT:0, OK:0 };
+  const counts = { ORPHELIN_A:0, ORPHELIN_B:0, KO:0, DIVERGENT:0, OK:0 };
   allResults.forEach(r => { if (r.type_ecart in counts) counts[r.type_ecart]++; });
   document.getElementById('c-oa').textContent = counts.ORPHELIN_A;
   document.getElementById('c-ob').textContent = counts.ORPHELIN_B;
-  document.getElementById('c-dv').textContent = counts.DIVERGENT;
+  document.getElementById('c-dv').textContent = counts.KO + counts.DIVERGENT;
   document.getElementById('c-ok').textContent = counts.OK;
 }
 
@@ -816,6 +957,27 @@ function toggleChip(btn) {
     if (!activeRuleFilters) activeRuleFilters = new Set();
     if (isOn) activeRuleFilters.delete(t); else activeRuleFilters.add(t);
   }
+  rebuildTable();
+}
+
+function filterToRule(name) {
+  // Solo : si déjà seule règle active → tout réactiver, sinon → isoler
+  const isSolo = activeRuleFilters && activeRuleFilters.size === 1 && activeRuleFilters.has(name);
+  if (isSolo) {
+    const rules = lastConfig?.rules || [];
+    activeRuleFilters = rules.length ? new Set(rules.map(r => r.name)) : null;
+  } else {
+    activeRuleFilters = new Set([name]);
+  }
+  // Sync visuels chips règles
+  document.querySelectorAll('#filter-dynamic .chip[data-kind="rule"]').forEach(btn => {
+    const on = !activeRuleFilters || activeRuleFilters.has(btn.dataset.t);
+    btn.classList.toggle('on', on);
+  });
+  // Mettre en évidence le bouton solo dans le tableau
+  document.querySelectorAll('.rule-chip').forEach(btn => {
+    btn.classList.toggle('solo', !isSolo && btn.textContent.trim() === name);
+  });
   rebuildTable();
 }
 
@@ -866,7 +1028,8 @@ async function loadHistory() {
 async function loadHistoryEntry(filename) {
   try {
     const data = await fetch(`/api/history/${filename}`).then(r => r.json());
-    showView('audit');
+    wfUnlocked = 3;
+    goWFStep(3);
     allResults  = data.results || [];
     lastSummary = data.summary || {};
     lastConfig  = data.config  || {};
@@ -880,7 +1043,6 @@ async function loadHistoryEntry(filename) {
     updateChipCounts();
     rebuildTable();
     showProgress(false);
-    document.getElementById('empty').style.display         = 'none';
     document.getElementById('results-area').style.display  = 'flex';
     document.getElementById('btn-csv').disabled  = true;
     document.getElementById('btn-html').disabled = true;
@@ -1095,6 +1257,20 @@ function wizLoadFromYaml(parsed) {
   const m = parsed.meta || {};
   WS.meta.name    = m.name    || '';
   WS.meta.version = m.version || '';
+  // Sync labels depuis les labels sources du YAML
+  const rLabelYaml = ((parsed.sources||{}).reference||{}).label || '';
+  const tLabelYaml = ((parsed.sources||{}).target||{}).label    || '';
+  if (rLabelYaml) {
+    refLabel = rLabelYaml;
+    const inp = document.getElementById('inp-ref-label');
+    if (inp) inp.value = rLabelYaml;
+  }
+  if (tLabelYaml) {
+    tgtLabel = tLabelYaml;
+    const inp = document.getElementById('inp-tgt-label');
+    if (inp) inp.value = tLabelYaml;
+  }
+  if (rLabelYaml || tLabelYaml) updateSourceLabels();
   // sources
   ['reference','target'].forEach(k => {
     const src = (parsed.sources || {})[k];
@@ -1140,22 +1316,36 @@ function wizLoadFromYaml(parsed) {
   }));
   // rules
   WS.rules = (parsed.rules||[]).map(r => ({
-    name: r.name||'', logic: r.logic||'AND',
+    name: r.name||'', logic: r.logic||'AND', rule_type: r.rule_type||'coherence',
     fields: (r.fields||[]).map(f => {
       if (f.source_data) {
-        return { mode:'advanced',
-          src_data_field: (f.source_data||{}).field||'',
-          src_data_norm:  (f.source_data||{}).normalize||'none',
-          tgt_data_field: (f.target_data||{}).field||'',
-          tgt_data_value: (f.target_data||{}).value !== undefined ? String(f.target_data.value) : '',
-          tgt_data_tol:   (f.target_data||{}).tolerance||'' };
+        const sd = f.source_data || {};
+        const td = f.target_data || {};
+        return {
+          field_a:   sd.value !== undefined ? '__fixed__' : (sd.field||''),
+          value_a:   sd.value !== undefined ? String(sd.value) : '',
+          operator:  f.operator||'=',
+          field_b:   td.value !== undefined ? '__fixed__' : (td.field||''),
+          value_b:   td.value !== undefined ? String(td.value) : '',
+          tolerance: td.tolerance !== undefined ? String(td.tolerance) : '',
+          normalize: sd.normalize||'none'
+        };
       } else if (f.target_value !== undefined) {
-        return { mode:'fixed', source_field: f.source_field||'', target_value: String(f.target_value) };
+        return {
+          field_a:  f.source_field||'', value_a:'',
+          operator: f.operator||'=',
+          field_b:  '__fixed__', value_b: String(f.target_value),
+          tolerance: f.tolerance !== undefined ? String(f.tolerance) : '',
+          normalize: f.normalize||'none'
+        };
       } else {
-        return { mode:'compare',
-          source_field: f.source_field||'', target_field: f.target_field||f.source_field||'',
-          tolerance: f.tolerance !== undefined ? f.tolerance : '',
-          normalize: f.normalize||'none' };
+        return {
+          field_a:  f.source_field||'', value_a:'',
+          operator: f.operator||'=',
+          field_b:  f.target_field||f.source_field||'', value_b:'',
+          tolerance: f.tolerance !== undefined ? String(f.tolerance) : '',
+          normalize: f.normalize||'none'
+        };
       }
     })
   }));
@@ -1218,7 +1408,8 @@ function wizBuildYaml() {
         anchor_fields:  s.unpivot.anchor_fields.filter(Boolean),
         location_field: s.unpivot.location_field || 'location_key',
         value_field:    s.unpivot.value_field    || 'pivot_value',
-        pivot_fields:   s.unpivot.pivot_fields.filter(p => p.source && p.location)
+        pivot_fields:   s.unpivot.pivot_fields.filter(p => p.source)
+                           .map(p => ({ source: p.source, location: p.location || p.source }))
       };
     }
     obj.sources[k] = sr;
@@ -1241,20 +1432,35 @@ function wizBuildYaml() {
     obj.rules = WS.rules.map(r => ({
       name: r.name,
       logic: r.logic || 'AND',
+      rule_type: r.rule_type || 'coherence',
       fields: r.fields.map(f => {
-        if (f.mode === 'advanced') {
-          const o = { source_data: { field: f.src_data_field } };
-          if (f.src_data_norm && f.src_data_norm !== 'none') o.source_data.normalize = f.src_data_norm;
-          o.target_data = {};
-          if (f.tgt_data_field) o.target_data.field = f.tgt_data_field;
-          else if (f.tgt_data_value !== '') o.target_data.value = f.tgt_data_value;
-          if (f.tgt_data_tol !== '') o.target_data.tolerance = Number(f.tgt_data_tol);
+        const aFixed = f.field_a === '__fixed__';
+        const bFixed = f.field_b === '__fixed__';
+        const op = f.operator || '=';
+        if (!aFixed && bFixed) {
+          // source_field + target_value (syntax courte)
+          const o = { source_field: f.field_a };
+          if (f.value_b !== '' && f.value_b !== undefined) o.target_value = f.value_b;
+          if (op !== '=') o.operator = op;
+          if (f.tolerance !== '' && f.tolerance !== undefined) o.tolerance = Number(f.tolerance);
+          if (f.normalize && f.normalize !== 'none') o.normalize = f.normalize;
           return o;
-        } else if (f.mode === 'fixed') {
-          return { source_field: f.source_field, target_value: f.target_value };
+        } else if (aFixed) {
+          // source_data / target_data
+          const sd = {};
+          if (aFixed) sd.value = f.value_a; else sd.field = f.field_a;
+          if (f.normalize && f.normalize !== 'none') sd.normalize = f.normalize;
+          const td = {};
+          if (bFixed) td.value = f.value_b; else td.field = f.field_b;
+          if (f.tolerance !== '' && f.tolerance !== undefined) td.tolerance = Number(f.tolerance);
+          const o = { source_data: sd, target_data: td };
+          if (op !== '=') o.operator = op;
+          return o;
         } else {
-          const o = { source_field: f.source_field };
-          if (f.target_field && f.target_field !== f.source_field) o.target_field = f.target_field;
+          // Normal : source_field + target_field
+          const o = { source_field: f.field_a };
+          if (f.field_b && f.field_b !== f.field_a) o.target_field = f.field_b;
+          if (op !== '=') o.operator = op;
           if (f.tolerance !== '' && f.tolerance !== undefined) o.tolerance = Number(f.tolerance);
           if (f.normalize && f.normalize !== 'none') o.normalize = f.normalize;
           return o;
@@ -1271,48 +1477,34 @@ function wizBuildYaml() {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  WIZARD — Ouverture / fermeture
+//  WIZARD — Actions
 // ═══════════════════════════════════════════════════════════
-function openWizard() {
-  // Réinitialiser
-  WS.sources.reference = wizSrcDefault();
-  WS.sources.target    = wizSrcDefault();
-  WS.join.keys   = [];
-  WS.rules       = [];
-  WS.filters     = [];
-  WS.report      = { show_matching:false, max_diff_preview:500 };
-  WS.meta        = { name:'', version:'' };
-  WS._step       = 0;
-  WS._visited    = new Set([0]);
-
-  // Charger depuis YAML existant si valide
-  const yamlText = document.getElementById('yaml').value.trim();
-  if (yamlText) {
-    try { wizLoadFromYaml(jsyaml.load(yamlText)); } catch(_) {}
+function toggleYamlEditor() {
+  const area = document.getElementById('yaml-area');
+  const showing = area.classList.toggle('show');
+  if (showing) {
+    // Synchroniser le YAML avec l'état du wizard
+    wizSaveCurrentStep();
+    document.getElementById('yaml').value = wizBuildYaml();
+    yamlOriginal = document.getElementById('yaml').value;
+    updateSaveBtn();
   }
-  wizRenderStep(0);
-  document.getElementById('wizard-modal').classList.add('show');
-}
-
-function closeWizard() {
-  document.getElementById('wizard-modal').classList.remove('show');
-}
-function closeWizardBackdrop(e) {
-  if (e.target === document.getElementById('wizard-modal')) closeWizard();
 }
 
 function applyWizard() {
+  wizSaveCurrentStep();
   const yaml = wizBuildYaml();
   document.getElementById('yaml').value = yaml;
-  yamlOriginal = '';  // marquer comme modifié
+  yamlOriginal = yaml;
   updateSaveBtn();
-  closeWizard();
 }
 
 // ═══════════════════════════════════════════════════════════
 //  WIZARD — Navigation
 // ═══════════════════════════════════════════════════════════
-const WIZ_LABELS = ['① Source A','② Source B','③ Jointure','④ Règles','⑤ Filtres & Rapport'];
+function WIZ_LABELS() {
+  return ['① ' + (refLabel||'Source A'), '② ' + (tgtLabel||'Source B'), '③ Jointure', '④ Règles', '⑤ Filtres & Rapport'];
+}
 
 function wizShowErr(msg) {
   const e = document.getElementById('wiz-err');
@@ -1369,11 +1561,13 @@ function wizNext() {
     wizRenderStep(WS._step);
   }
 }
+function wizardNext() { wizNext(); }
 
 function wizPrev() {
   wizSaveCurrentStep();
   if (WS._step > 0) { WS._step--; wizRenderStep(WS._step); }
 }
+function wizardPrev() { wizPrev(); }
 
 function wizardGoStep(n) {
   if (!WS._visited.has(n) && n > WS._step) return;
@@ -1398,7 +1592,6 @@ function wizRenderStep(step) {
   // Footer
   document.getElementById('wbtn-prev').style.display  = step > 0 ? '' : 'none';
   document.getElementById('wbtn-next').style.display  = step < 4 ? '' : 'none';
-  document.getElementById('wbtn-apply').style.display = step === 4 ? '' : 'none';
   // Render content
   const renders = [wizRenderSource0, wizRenderSource1, wizRenderJoin, wizRenderRules, wizRenderFilters];
   renders[step]();
@@ -1423,6 +1616,20 @@ function wizToggleRow(id, label, checked) {
 function wizFieldSelect(idPrefix, names, val) {
   const opts = `<option value="">—</option>` + names.map(n => `<option value="${n}"${n===val?' selected':''}>${n}</option>`).join('');
   return `<select class="wiz-select" id="${idPrefix}">${opts}</select>`;
+}
+
+function wizFieldSelect2(id, names, val, fixedInputId) {
+  const fixed = val === '__fixed__';
+  const opts = `<option value=""${!fixed && !names.includes(val) ? ' selected' : ''}>— choisir —</option>`
+    + `<option value="__fixed__"${fixed?' selected':''}>Valeur fixe</option>`
+    + `<option disabled>──────────</option>`
+    + names.map(n => `<option value="${esc(n)}"${val===n?' selected':''}>${esc(n)}</option>`).join('');
+  return `<select class="wiz-select" id="${id}" onchange="toggleFixedInput('${fixedInputId}',this.value)">${opts}</select>`;
+}
+
+function toggleFixedInput(inputId, val) {
+  const el = document.getElementById(inputId);
+  if (el) el.style.display = val === '__fixed__' ? '' : 'none';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1451,15 +1658,20 @@ function wizRenderSource(stepEl, srcKey, label) {
 
   const unpivotFieldsHtml = s.unpivot_enabled ? `
     <div class="wiz-grid" style="margin-top:.5rem">
-      ${wizField('Anchor fields (virgule)', wizInput('w-ua-'+srcKey, s.unpivot.anchor_fields.join(', '), 'ex: SKU, depot'))}
-      ${wizField('Location field', wizInput('w-ul-'+srcKey, s.unpivot.location_field, 'location_key'))}
-      ${wizField('Value field', wizInput('w-uv-'+srcKey, s.unpivot.value_field, 'pivot_value'))}
+      ${wizField('Colonnes identité <i class="wiz-info" title="Colonnes conservées sur chaque ligne générée — les colonnes \'fixes\' de votre fichier large. Ex : SKU (chaque ligne SKU génère N lignes, une par dépôt)">i</i>', wizInput('w-ua-'+srcKey, s.unpivot.anchor_fields.join(', '), 'ex: SKU'))}
+      ${wizField('Nom du champ «clé» (dépivoté) <i class="wiz-info" title="Nom de la nouvelle colonne qui contiendra la clé de chaque entrée dépivotée. Ex : \'depot\' → chaque ligne générée aura une colonne depot avec la valeur depot_A, depot_B…">i</i>', wizInput('w-ul-'+srcKey, s.unpivot.location_field, 'ex: depot'))}
+      ${wizField('Nom du champ «valeur» (dépivoté) <i class="wiz-info" title="Nom de la nouvelle colonne qui contiendra la valeur dépivotée. Ex : \'qty\' → chaque ligne aura une colonne qty avec la valeur 100, 200…">i</i>', wizInput('w-uv-'+srcKey, s.unpivot.value_field, 'ex: qty'))}
     </div>
+    <div class="wiz-section-title" style="margin-top:.75rem;font-size:.72rem">Liste des clés</div>
     <table class="col-table">
-      <thead><tr><th>Colonne source</th><th>Location value</th><th></th></tr></thead>
+      <thead><tr>
+        <th>Colonne à utiliser <i class="wiz-info" title="Colonne de votre fichier large dont les valeurs seront dépivotées. Ex : qty_A, qty_B, qty_C">i</i></th>
+        <th>Clé (dépivoté) <i class="wiz-info" title="Valeur qui apparaîtra dans le champ «clé» pour cette colonne. Optionnel — par défaut = nom de la colonne sélectionnée.">i</i></th>
+        <th></th>
+      </tr></thead>
       <tbody id="ptbody-${srcKey}">${wizPivotRows(srcKey, s)}</tbody>
     </table>
-    <button class="btn-wiz-add" onclick="wizAddPivot('${srcKey}')">+ Entrée pivot</button>` : '';
+    <button class="btn-wiz-add" onclick="wizAddPivot('${srcKey}')">+ Ajouter une clé</button>` : '';
 
   stepEl.innerHTML = `
     <div class="wiz-section">
@@ -1496,15 +1708,20 @@ function wizRenderSource(stepEl, srcKey, label) {
     document.getElementById('unpivot-fields-'+srcKey).innerHTML =
       WS.sources[srcKey].unpivot_enabled ? `
         <div class="wiz-grid" style="margin-top:.5rem">
-          ${wizField('Anchor fields (virgule)', wizInput('w-ua-'+srcKey, WS.sources[srcKey].unpivot.anchor_fields.join(', '), ''))}
-          ${wizField('Location field', wizInput('w-ul-'+srcKey, WS.sources[srcKey].unpivot.location_field, 'location_key'))}
-          ${wizField('Value field', wizInput('w-uv-'+srcKey, WS.sources[srcKey].unpivot.value_field, 'pivot_value'))}
+          ${wizField('Colonnes identité <i class="wiz-info" title="Colonnes conservées sur chaque ligne générée — les colonnes \'fixes\' de votre fichier large. Ex : SKU">i</i>', wizInput('w-ua-'+srcKey, WS.sources[srcKey].unpivot.anchor_fields.join(', '), 'ex: SKU'))}
+          ${wizField('Nom du champ «clé» (dépivoté) <i class="wiz-info" title="Nom de la nouvelle colonne qui contiendra la clé de chaque entrée dépivotée. Ex : \'depot\'">i</i>', wizInput('w-ul-'+srcKey, WS.sources[srcKey].unpivot.location_field, 'ex: depot'))}
+          ${wizField('Nom du champ «valeur» (dépivoté) <i class="wiz-info" title="Nom de la nouvelle colonne qui contiendra la valeur dépivotée. Ex : \'qty\'">i</i>', wizInput('w-uv-'+srcKey, WS.sources[srcKey].unpivot.value_field, 'ex: qty'))}
         </div>
+        <div class="wiz-section-title" style="margin-top:.75rem;font-size:.72rem">Liste des clés</div>
         <table class="col-table">
-          <thead><tr><th>Colonne source</th><th>Location value</th><th></th></tr></thead>
+          <thead><tr>
+            <th>Colonne à utiliser <i class="wiz-info" title="Colonne de votre fichier large dont les valeurs seront dépivotées. Ex : qty_A">i</i></th>
+            <th>Clé (dépivoté) <i class="wiz-info" title="Valeur qui apparaîtra dans le champ «clé» pour cette colonne. Optionnel — par défaut = nom de la colonne.">i</i></th>
+            <th></th>
+          </tr></thead>
           <tbody id="ptbody-${srcKey}">${wizPivotRows(srcKey, WS.sources[srcKey])}</tbody>
         </table>
-        <button class="btn-wiz-add" onclick="wizAddPivot('${srcKey}')">+ Entrée pivot</button>` : '';
+        <button class="btn-wiz-add" onclick="wizAddPivot('${srcKey}')">+ Ajouter une clé</button>` : '';
   });
 
   // Binding format change
@@ -1541,9 +1758,11 @@ function wizColRows(srcKey, s) {
 }
 
 function wizPivotRows(srcKey, s) {
+  const colNames = (s.fixed_width ? s.column_positions : s.fields)
+    .map(f => f.name).filter(Boolean);
   return (s.unpivot.pivot_fields||[]).map((p, i) => `<tr>
-    <td>${wizInput(`w-ps-${srcKey}-${i}`, p.source, 'colonne source')}</td>
-    <td>${wizInput(`w-pl-${srcKey}-${i}`, p.location, 'valeur location')}</td>
+    <td>${wizFieldSelect(`w-ps-${srcKey}-${i}`, colNames, p.source)}</td>
+    <td><input class="wiz-input" id="w-pl-${srcKey}-${i}" value="${esc(p.location)}" placeholder="= ${esc(p.source||'nom colonne')}"></td>
     <td><button class="btn-icon" onclick="wizRemovePivot('${srcKey}',${i})" title="Supprimer">✕</button></td>
   </tr>`).join('');
 }
@@ -1637,10 +1856,12 @@ function wizReadSourceForm(srcKey) {
 }
 
 function wizRenderSource0() {
-  wizRenderSource(document.getElementById('wstep-0'), 'reference', 'Source A — Référence');
+  wizRenderSource(document.getElementById('wstep-0'), 'reference',
+    'Source A — ' + (refLabel || 'Référence'));
 }
 function wizRenderSource1() {
-  wizRenderSource(document.getElementById('wstep-1'), 'target', 'Source B — Cible');
+  wizRenderSource(document.getElementById('wstep-1'), 'target',
+    'Source B — ' + (tgtLabel || 'Cible'));
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1781,15 +2002,24 @@ function wizRenderRules() {
   const rulesHtml = WS.rules.map((r, ri) => `
     <div class="rule-card" id="rcard-${ri}">
       <div class="rule-card-hdr">
-        <input class="wiz-input" style="flex:1" id="w-rn-${ri}" value="${esc(r.name)}" placeholder="Nom de la règle">
-        ${wizSelect('w-rl-'+ri, [['AND','AND'],['OR','OR']], r.logic)}
-        <button class="btn-icon" onclick="wizMoveRule(${ri},-1)" title="Monter">↑</button>
-        <button class="btn-icon" onclick="wizMoveRule(${ri},1)"  title="Descendre">↓</button>
-        <button class="btn-icon" onclick="wizRemoveRule(${ri})" title="Supprimer règle">✕</button>
+        <div class="rule-card-name">
+          <span style="font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);white-space:nowrap;flex-shrink:0">Règle</span>
+          <input id="w-rn-${ri}" value="${esc(r.name)}" placeholder="Saisir le nom de la règle…">
+        </div>
+        <div class="rule-card-actions">
+          <span style="font-size:.65rem;color:var(--muted)">Logique</span>
+          ${wizSelect('w-rl-'+ri, [['AND','AND'],['OR','OR']], r.logic)}
+          <span style="font-size:.65rem;color:var(--muted);margin-left:.5rem">Type</span>
+          ${wizSelect('w-rt-'+ri, [['coherence','Cohérence'],['incoherence','Incohérence']], r.rule_type||'coherence')}
+          <div style="flex:1"></div>
+          <button class="btn-icon" onclick="wizMoveRule(${ri},-1)" title="Monter">↑</button>
+          <button class="btn-icon" onclick="wizMoveRule(${ri},1)"  title="Descendre">↓</button>
+          <button class="btn-icon" onclick="wizRemoveRule(${ri})" title="Supprimer">✕</button>
+        </div>
       </div>
       <div class="rule-card-body">
         <table class="col-table">
-          <thead><tr><th>Mode</th><th>Champ A</th><th>Champ/Valeur B</th><th>Tolérance</th><th>Normalize</th><th></th></tr></thead>
+          <thead><tr><th>Champ A</th><th>Opérateur</th><th>Champ B</th><th>Normalize</th><th>Tolérance</th><th></th></tr></thead>
           <tbody id="rfbody-${ri}">${wizRuleFieldRows(ri, r, refNames, tgtNames)}</tbody>
         </table>
         <button class="btn-wiz-add" onclick="wizAddRuleField(${ri})">+ Champ</button>
@@ -1805,27 +2035,32 @@ function wizRenderRules() {
 }
 
 function wizRuleFieldRows(ri, r, refNames, tgtNames) {
+  const opOpts = [['=','='],['<>','≠ (<>)'],['>','>'],['<','<'],['contains','contient'],['not_contains','ne contient pas']];
+  const normOpts = [['none','none'],['trim','trim'],['lowercase','lowercase'],['both','both']];
+
   return r.fields.map((f, fi) => {
-    const modeOpts = [['compare','Comparaison'],['fixed','Valeur fixe'],['advanced','Avancé']];
-    const normOpts = [['none','none'],['trim','trim'],['lowercase','lowercase'],['both','both']];
-    const mode = f.mode || 'compare';
-    let chpA = '', chpB = '';
-    if (mode === 'compare') {
-      chpA = wizFieldSelect(`w-rf-sa-${ri}-${fi}`, refNames, f.source_field);
-      chpB = wizFieldSelect(`w-rf-ta-${ri}-${fi}`, tgtNames, f.target_field);
-    } else if (mode === 'fixed') {
-      chpA = wizFieldSelect(`w-rf-sa-${ri}-${fi}`, refNames, f.source_field);
-      chpB = `<input class="wiz-input" id="w-rf-tv-${ri}-${fi}" value="${esc(String(f.target_value??''))}" placeholder="valeur fixe">`;
-    } else {
-      chpA = `<input class="wiz-input" id="w-rf-sa-${ri}-${fi}" value="${esc(f.src_data_field||'')}" placeholder="champ source">`;
-      chpB = `<input class="wiz-input" id="w-rf-ta-${ri}-${fi}" value="${esc(f.tgt_data_field||f.tgt_data_value||'')}" placeholder="champ ou valeur">`;
-    }
+    const fa  = f.field_a  !== undefined ? f.field_a  : '';
+    const fb  = f.field_b  !== undefined ? f.field_b  : '';
+    const va  = f.value_a  !== undefined ? String(f.value_a)  : '';
+    const vb  = f.value_b  !== undefined ? String(f.value_b)  : '';
+    const op  = f.operator || '=';
+    const tol = f.tolerance !== undefined ? String(f.tolerance) : '';
+    const norm = f.normalize || 'none';
+    const aFixed = fa === '__fixed__';
+    const bFixed = fb === '__fixed__';
+
+    const selA = wizFieldSelect2(`w-rf-fa-${ri}-${fi}`, refNames, fa, `w-rf-va-${ri}-${fi}`);
+    const inpA = `<input class="wiz-input" id="w-rf-va-${ri}-${fi}" value="${esc(va)}" placeholder="valeur" style="${aFixed?'':'display:none'};width:80px;margin-top:2px">`;
+
+    const selB = wizFieldSelect2(`w-rf-fb-${ri}-${fi}`, tgtNames, fb, `w-rf-vb-${ri}-${fi}`);
+    const inpB = `<input class="wiz-input" id="w-rf-vb-${ri}-${fi}" value="${esc(vb)}" placeholder="valeur" style="${bFixed?'':'display:none'};width:80px;margin-top:2px">`;
+
     return `<tr>
-      <td>${wizSelect(`w-rf-mode-${ri}-${fi}`, modeOpts, mode)}</td>
-      <td>${chpA}</td>
-      <td>${chpB}</td>
-      <td><input class="wiz-input" id="w-rf-tol-${ri}-${fi}" value="${esc(String(f.tolerance??''))}" placeholder="0.01" style="width:60px"></td>
-      <td>${mode === 'compare' ? wizSelect(`w-rf-norm-${ri}-${fi}`, normOpts, f.normalize||'none') : '<span style="color:var(--border)">—</span>'}</td>
+      <td><div style="display:flex;flex-direction:column;gap:2px">${selA}${inpA}</div></td>
+      <td>${wizSelect(`w-rf-op-${ri}-${fi}`, opOpts, op)}</td>
+      <td><div style="display:flex;flex-direction:column;gap:2px">${selB}${inpB}</div></td>
+      <td>${wizSelect(`w-rf-norm-${ri}-${fi}`, normOpts, norm)}</td>
+      <td><input class="wiz-input" id="w-rf-tol-${ri}-${fi}" value="${esc(tol)}" placeholder="0.01" style="width:60px"></td>
       <td><button class="btn-icon" onclick="wizRemoveRuleField(${ri},${fi})">✕</button></td>
     </tr>`;
   }).join('');
@@ -1835,36 +2070,32 @@ function wizReadRulesForm() {
   WS.rules.forEach((r, ri) => {
     const n = document.getElementById('w-rn-'+ri);
     const l = document.getElementById('w-rl-'+ri);
-    if (n) r.name  = n.value;
-    if (l) r.logic = l.value;
+    const t = document.getElementById('w-rt-'+ri);
+    if (n) r.name      = n.value;
+    if (l) r.logic     = l.value;
+    if (t) r.rule_type = t.value;
     r.fields.forEach((f, fi) => {
-      const mode = document.getElementById(`w-rf-mode-${ri}-${fi}`)?.value || f.mode;
-      f.mode = mode;
-      const sa = document.getElementById(`w-rf-sa-${ri}-${fi}`);
-      const ta = document.getElementById(`w-rf-ta-${ri}-${fi}`);
-      const tv = document.getElementById(`w-rf-tv-${ri}-${fi}`);
-      const tl = document.getElementById(`w-rf-tol-${ri}-${fi}`);
-      const tn = document.getElementById(`w-rf-norm-${ri}-${fi}`);
-      if (mode === 'compare') {
-        if (sa) f.source_field = sa.value;
-        if (ta) f.target_field = ta.value;
-        if (tl) f.tolerance    = tl.value;
-        if (tn) f.normalize    = tn.value;
-      } else if (mode === 'fixed') {
-        if (sa) f.source_field = sa.value;
-        if (tv) f.target_value = tv.value;
-      } else {
-        if (sa) f.src_data_field = sa.value;
-        if (ta) { const v = ta.value; f.tgt_data_field = v; f.tgt_data_value = v; }
-        if (tl) f.tgt_data_tol  = tl.value;
-      }
+      const fa  = document.getElementById(`w-rf-fa-${ri}-${fi}`);
+      const va  = document.getElementById(`w-rf-va-${ri}-${fi}`);
+      const op  = document.getElementById(`w-rf-op-${ri}-${fi}`);
+      const fb  = document.getElementById(`w-rf-fb-${ri}-${fi}`);
+      const vb  = document.getElementById(`w-rf-vb-${ri}-${fi}`);
+      const tol = document.getElementById(`w-rf-tol-${ri}-${fi}`);
+      const nm  = document.getElementById(`w-rf-norm-${ri}-${fi}`);
+      if (fa)  f.field_a   = fa.value;
+      if (va)  f.value_a   = va.value;
+      if (op)  f.operator  = op.value;
+      if (fb)  f.field_b   = fb.value;
+      if (vb)  f.value_b   = vb.value;
+      if (tol) f.tolerance = tol.value;
+      if (nm)  f.normalize = nm.value;
     });
   });
 }
 
 function wizAddRule() {
   wizReadRulesForm();
-  WS.rules.push({ name:'', logic:'AND', fields:[] });
+  WS.rules.push({ name:'', logic:'AND', rule_type:'coherence', fields:[] });
   wizRenderRules();
 }
 
@@ -1884,7 +2115,7 @@ function wizMoveRule(ri, dir) {
 
 function wizAddRuleField(ri) {
   wizReadRulesForm();
-  WS.rules[ri].fields.push({ mode:'compare', source_field:'', target_field:'', tolerance:'', normalize:'none' });
+  WS.rules[ri].fields.push({ field_a:'', value_a:'', operator:'=', field_b:'', value_b:'', tolerance:'', normalize:'none' });
   wizRenderRules();
 }
 
@@ -1960,6 +2191,80 @@ function wizReadFiltersForm() {
   if (mn)  WS.meta.name    = mn.value;
   if (mv)  WS.meta.version = mv.value;
 }
+
+// ═══════════════════════════════════════════════════════════
+//  REVUE CÔTE À CÔTE
+// ═══════════════════════════════════════════════════════════
+function openCtxModal(key) {
+  _ctxKey = key;
+  document.getElementById('ctx-center-key').textContent = key;
+  document.getElementById('ctx-modal').style.display = 'flex';
+  _loadCtx();
+}
+
+function closeCtxModal(e) {
+  if (e && e.target !== document.getElementById('ctx-modal')) return;
+  document.getElementById('ctx-modal').style.display = 'none';
+}
+
+function _ctxN() { return Number(document.getElementById('ctx-n').value) || 2; }
+
+async function _loadCtx() {
+  if (!_ctxKey) return;
+  const token = currentToken || '';
+  const url = `/api/context?token=${encodeURIComponent(token)}&key=${encodeURIComponent(_ctxKey)}&n=${_ctxN()}`;
+  try {
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (data.error) { console.warn('ctx:', data.error); return; }
+    _renderCtxPanels(data);
+  } catch(e) { console.error('ctx fetch error', e); }
+}
+
+function _renderCtxPanels(data) {
+  const diffSet = new Set(data.diff_fields || []);
+
+  function renderPanel(rows, panelId) {
+    const el = document.getElementById(panelId);
+    el.innerHTML = rows.map(row => {
+      const center = row.is_center;
+      const keyHtml = `<div class="ctx-record-key">${esc(row.key)}</div>`;
+      if (!row.data) {
+        return `<div class="ctx-record${center?' is-center':''}">${keyHtml}<div class="ctx-absent">Absent</div></div>`;
+      }
+      const fields = Object.entries(row.data).map(([k, v]) => {
+        const diff = center && diffSet.has(k);
+        return `<tr class="${diff?'ctx-diff':''}"><td>${esc(k)}</td><td>${esc(String(v??''))}</td></tr>`;
+      }).join('');
+      return `<div class="ctx-record${center?' is-center':''}">${keyHtml}<table>${fields}</table></div>`;
+    }).join('');
+  }
+
+  renderPanel(data.ref_rows, 'ctx-ref-rows');
+  renderPanel(data.tgt_rows, 'ctx-tgt-rows');
+
+  // Défilement synchrone
+  const refEl = document.getElementById('ctx-ref-rows');
+  const tgtEl = document.getElementById('ctx-tgt-rows');
+  let _sync = false;
+  refEl.onscroll = () => { if (_sync) return; _sync=true; tgtEl.scrollTop=refEl.scrollTop; _sync=false; };
+  tgtEl.onscroll = () => { if (_sync) return; _sync=true; refEl.scrollTop=tgtEl.scrollTop; _sync=false; };
+
+  // Centrer sur l'enregistrement central
+  setTimeout(() => {
+    const center = refEl.querySelector('.ctx-record.is-center');
+    if (center) center.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, 50);
+}
+
+// Navigation clavier dans la modal
+document.addEventListener('keydown', e => {
+  const modal = document.getElementById('ctx-modal');
+  if (modal.style.display === 'none') return;
+  if (e.key === 'Escape') { modal.style.display = 'none'; return; }
+  if (!_ctxKey || !currentToken) return;
+  // Pas de navigation inter-clés pour l'instant (réservé v+)
+});
 </script>
 <!-- ── Modal prévisualisation ── -->
 <div class="modal-backdrop" id="preview-modal" onclick="closePreview(event)">
@@ -1979,36 +2284,38 @@ function wizReadFiltersForm() {
   </div>
 </div>
 
-<!-- ── Modal Wizard Configuration ── -->
-<div class="modal-backdrop" id="wizard-modal" onclick="closeWizardBackdrop(event)">
-  <div class="modal wizard-modal" onclick="event.stopPropagation()">
-    <div class="modal-header">
-      <span class="modal-title" style="white-space:nowrap;margin-right:.5rem">Configuration</span>
-      <div class="wizard-stepper" id="wizard-stepper">
-        <button class="wstep active" data-step="0" onclick="wizardGoStep(0)">① Source A</button>
-        <button class="wstep" data-step="1" onclick="wizardGoStep(1)" disabled>② Source B</button>
-        <button class="wstep" data-step="2" onclick="wizardGoStep(2)" disabled>③ Jointure</button>
-        <button class="wstep" data-step="3" onclick="wizardGoStep(3)" disabled>④ Règles</button>
-        <button class="wstep" data-step="4" onclick="wizardGoStep(4)" disabled>⑤ Filtres & Rapport</button>
+<!-- ── Modal revue côte à côte ── -->
+<div class="modal-backdrop" id="ctx-modal" style="display:none" onclick="closeCtxModal(event)">
+  <div class="ctx-modal" onclick="event.stopPropagation()">
+    <div class="ctx-modal-header">
+      <div style="display:flex;align-items:center;gap:.6rem;min-width:0">
+        <span style="font-size:.72rem;font-weight:600;color:var(--muted);white-space:nowrap">Revue — clé&nbsp;:</span>
+        <code id="ctx-center-key" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></code>
       </div>
-      <button class="modal-close" onclick="closeWizard()" style="margin-left:.5rem">✕</button>
+      <div style="display:flex;align-items:center;gap:.75rem;flex-shrink:0">
+        <label style="font-size:.72rem;display:flex;align-items:center;gap:.35rem;color:var(--dim)">
+          Contexte
+          <input type="number" id="ctx-n" value="2" min="0" max="10"
+                 style="width:3rem;font-size:.72rem;padding:.15rem .3rem;border:1px solid var(--border);border-radius:4px;background:var(--s2);color:var(--text)"
+                 onchange="_loadCtx()">
+          enreg.
+        </label>
+        <button class="modal-close" onclick="document.getElementById('ctx-modal').style.display='none'">✕</button>
+      </div>
     </div>
-    <div class="wiz-err" id="wiz-err"></div>
-    <div class="modal-body wizard-body" id="wizard-body">
-      <div class="wizard-step active" id="wstep-0"></div>
-      <div class="wizard-step" id="wstep-1"></div>
-      <div class="wizard-step" id="wstep-2"></div>
-      <div class="wizard-step" id="wstep-3"></div>
-      <div class="wizard-step" id="wstep-4"></div>
-    </div>
-    <div class="wizard-footer">
-      <button class="btn-xs" id="wbtn-prev" onclick="wizardPrev()" style="display:none">← Précédent</button>
-      <div style="flex:1"></div>
-      <button class="btn-xs" id="wbtn-next" onclick="wizardNext()">Suivant →</button>
-      <button class="btn-xs" id="wbtn-apply" onclick="applyWizard()" style="display:none;background:var(--acc);color:#fff;border-color:var(--acc)">✓ Appliquer le YAML</button>
+    <div class="ctx-panels">
+      <div class="ctx-panel">
+        <div class="ctx-panel-title" id="ctx-title-ref">Référence</div>
+        <div class="ctx-rows" id="ctx-ref-rows"></div>
+      </div>
+      <div class="ctx-panel">
+        <div class="ctx-panel-title" id="ctx-title-tgt">Cible</div>
+        <div class="ctx-rows" id="ctx-tgt-rows"></div>
+      </div>
     </div>
   </div>
 </div>
+
 
 </body>
 </html>

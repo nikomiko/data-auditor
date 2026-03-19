@@ -1,181 +1,166 @@
 meta:
-  name: "Audit de démonstration — Positionnel vs CSV"
-  version: "1.0"
-
-# ════════════════════════════════════════════════════════════════
-# DÉMONSTRATION DE TOUTES LES CAPACITÉS DE L'OUTIL
-#
-# Source A : fichier positionnel (dat, fixed_width, record_filter)
-# Source B : fichier CSV délimité (;)
-#
-# Anomalies injectées dans les données de test :
-#   ORPHELIN_A  : SKU00006 présent dans A, absent de B
-#   ORPHELIN_B  : SKU99999 absent de A, présent dans B
-#   DIVERGENT   : SKU00016 — qty+10          → rule "Stock cohérent" KO
-#   DIVERGENT   : SKU00021 — qty=-999        → rule "Valeur positive" KO
-#   DIVERGENT   : SKU00026 — statut=99       → rule "Statut valide" KO
-#   OK          : SKU00031 — prix+0.03       → tolérance 0.05 → conforme
-#   DIVERGENT   : SKU00036 — prix+2.50       → rule "Prix cohérent" KO
-#   DIVERGENT   : SKU00041 — ean décalé      → rule "EAN identique" KO
-#   DIVERGENT   : SKU00046 — type=XXXXX      → rule "Type valide" KO (target_value)
-#   DIVERGENT   : SKU00051 — statut+qty      → rule "Contrôle AND" KO (2 champs)
-#   ORPHELIN_B  : SKU00056 — site=EXCLU      → hors filtre → absent de la comparaison
-# ════════════════════════════════════════════════════════════════
-
+  name: Audit de démonstration — Positionnel vs CSV
+  version: '1.0'
 sources:
-
-  # ── Source A : fichier positionnel dat ───────────────────────
-  # Format fixe 65 caractères par ligne, sans header
-  # record_filter : ne traiter que les lignes de type "1" (position 0)
   reference:
-    label: "Stock WMS — positionnel"
     format: dat
+    label: Stock WMS — positionnel
     encoding: utf-8
+    delimiter: ;
     has_header: false
-    fixed_width: true
-
-    # Filtrage : ne conserver que les lignes dont le 1er caractère est "1"
-    # (simule un fichier multi-type avec headers de lot en type "0")
     record_filter:
-      marker: "^1"
-
+      marker: ^1
+    fixed_width: true
     column_positions:
-      - { name: RecordType, position: 0,  width: 1  }
-      - { name: Site,       position: 1,  width: 3  }
-      - { name: Depot,      position: 4,  width: 3  }
-      - { name: SKU,        position: 7,  width: 10 }
-      - { name: EAN,        position: 17, width: 13 }
-      - { name: DateMvt,    position: 30, width: 8,  type: date, date_format: "%Y%m%d" }
-      - { name: Qty,        position: 38, width: 7,  type: integer }
-      - { name: Statut,     position: 45, width: 2  }
-      - { name: Classe,     position: 47, width: 1  }
-      - { name: Type,       position: 48, width: 4  }
-      - { name: Prix,       position: 52, width: 7,  type: decimal }
-      - { name: Poids,      position: 59, width: 6,  type: decimal }
-
-  # ── Source B : fichier CSV délimité ──────────────────────────
+      - name: RecordType
+        position: 0
+        width: 1
+      - name: Site
+        position: 1
+        width: 3
+      - name: Depot
+        position: 4
+        width: 3
+      - name: SKU
+        position: 7
+        width: 10
+      - name: EAN
+        position: 17
+        width: 13
+      - name: DateMvt
+        position: 30
+        width: 8
+        type: date
+        date_format: '%Y%m%d'
+      - name: Qty
+        position: 38
+        width: 7
+        type: integer
+      - name: Statut
+        position: 45
+        width: 2
+      - name: Classe
+        position: 47
+        width: 1
+      - name: Type
+        position: 48
+        width: 4
+      - name: Prix
+        position: 52
+        width: 7
+        type: decimal
+      - name: Poids
+        position: 59
+        width: 6
+        type: decimal
   target:
-    label: "Stock export CSV"
     format: csv
+    label: Stock export CSV
     encoding: utf-8
-    delimiter: ";"
+    delimiter: ;
     has_header: true
     fields:
-      - { name: sku,         type: string  }
-      - { name: site,        type: string  }
-      - { name: depot,       type: string  }
-      - { name: ean,         type: string  }
-      - { name: qty,         type: integer }
-      - { name: statut,      type: string  }
-      - { name: classe,      type: string  }
-      - { name: type,        type: string  }
-      - { name: date_mv_iso, type: date,   date_format: "%Y-%m-%d" }
-      - { name: prix,        type: decimal }
-      - { name: poids,       type: decimal }
-
-# ── Filtre avant comparaison ─────────────────────────────────
-# Ne comparer que les lignes dont le site est PARIS, LYON ou MARSE
-# SKU00056 (site=EXCLU) sera ignoré des deux côtés
+      - name: sku
+      - name: site
+      - name: depot
+      - name: ean
+      - name: qty
+        type: integer
+      - name: statut
+      - name: classe
+      - name: type
+      - name: date_mv_iso
+        type: date
+        date_format: '%Y-%m-%d'
+      - name: prix
+        type: decimal
+      - name: poids
+        type: decimal
+join:
+  keys:
+    - source_field: SKU
+      target_field: sku
 filters:
   - field: Site
     source: reference
-    values: ["PAR", "LYO", "MAR"]
+    values:
+      - PAR
+      - LYO
+      - MAR
   - field: site
     source: target
-    values: ["PAR", "LYO", "MAR"]
-
-# ── Jointure : SKU (clé métier unique) ───────────────────────
-join:
-  keys:
-    - { source_field: SKU, target_field: sku }
-
-# ════════════════════════════════════════════════════════════════
-#  RULES — démonstration de toutes les syntaxes
-# ════════════════════════════════════════════════════════════════
+    values:
+      - PAR
+      - LYO
+      - MAR
 rules:
-
-  # Rule 1 — champ unique, comparaison numérique avec tolérance
-  # Démontre : tolerance, source_field / target_field
-  - name: "Stock cohérent"
+  - name: Stock incohérent
     logic: AND
+    rule_type: coherence
     fields:
-      - { source_field: Qty, target_field: qty, tolerance: 0 }
-
-  # Rule 2 — comparaison à une valeur fixe (target_value)
-  # Démontre : target_value, valeur métier attendue
-  - name: "Type valide"
+      - source_field: Qty
+        target_field: qty
+        operator: <>
+        tolerance: 0
+  - name: Type valide
     logic: AND
+    rule_type: coherence
     fields:
       - source_field: Type
-        target_value: "ELEC"
-      # Note : vérifie que le type dans A est bien "ELEC"
-      # → tous les SKU non-ELEC seront KO (démonstration volontaire de masse)
-      # Pour un vrai audit, utiliser une règle par type ou OR
-
-  # Rule 3 — syntaxe longue source_data / target_data
-  # Démontre : source_data.field + normalize + target_data.value
-  - name: "Statut valide"
+        target_value: ELEC
+  - name: Statut valide
     logic: AND
+    rule_type: coherence
     fields:
-      - source_data:
-          field: Statut
-          normalize: trim
-        target_data:
-          value: "00"
-      # Vérifie que le statut dans A est "00" (actif)
-      # SKU00026 et SKU00051 ont statut "99" → KO
-
-  # Rule 4 — tolérance sur valeur décimale
-  # Démontre : tolerance sur decimal, SKU00031 (prix+0.03) reste OK
-  - name: "Prix cohérent"
+      - source_field: Statut
+        target_value: '00'
+        normalize: trim
+  - name: Prix cohérent
     logic: AND
+    rule_type: coherence
     fields:
       - source_field: Prix
         target_field: prix
-        tolerance: 0.05   # ±0.05 admis → SKU00031 OK, SKU00036 KO
-
-  # Rule 5 — comparaison string avec normalisation
-  # Démontre : normalize: both (trim + lowercase)
-  - name: "EAN identique"
+        tolerance: 0.05
+  - name: EAN identique
     logic: AND
+    rule_type: coherence
     fields:
       - source_field: EAN
         target_field: ean
         normalize: both
-
-  # Rule 6 — multi-champs en logique AND
-  # Démontre : plusieurs fields, AND = tous doivent passer
-  # SKU00051 a statut+qty KO → les 2 champs remontent
-  - name: "Contrôle intégrité AND"
+  - name: Contrôle intégrité AND
     logic: AND
+    rule_type: coherence
     fields:
-      - { source_field: Qty,    target_field: qty,    tolerance: 0 }
-      - { source_field: Statut, target_field: statut, normalize: trim }
-
-  # Rule 7 — logique OR
-  # Démontre : OR = au moins un champ KO suffit pour déclencher
-  # Utile pour détecter "au moins une anomalie parmi plusieurs indicateurs"
-  - name: "Alerte OR (poids OU classe)"
+      - source_field: Qty
+        target_field: qty
+        tolerance: 0
+      - source_field: Statut
+        target_field: statut
+        normalize: trim
+  - name: Alerte OR (poids OU classe)
     logic: OR
+    rule_type: coherence
     fields:
-      - { source_field: Poids,  target_field: poids,  tolerance: 0.10 }
-      - { source_field: Classe, target_field: classe, normalize: trim  }
-
-  # Rule 8 — comparaison de dates (formats différents A vs B)
-  # Démontre : type date, date_format différents entre sources
-  # A = YYYYMMDD → normalisé ISO, B = YYYY-MM-DD → normalisé ISO → comparables
-  - name: "Date mouvement identique"
+      - source_field: Poids
+        target_field: poids
+        tolerance: 0.1
+      - source_field: Classe
+        target_field: classe
+        normalize: trim
+  - name: Date mouvement identique
     logic: AND
+    rule_type: coherence
     fields:
-      - { source_field: DateMvt, target_field: date_mv_iso }
-
-# ── Champs ignorés (non comparés par les rules) ───────────────
-comparison:
-  ignore_fields:
-    - RecordType   # toujours "1" (filtre record)
-    - Site         # utilisé pour le filtre, pas pour la comparaison
-    - Depot        # non présent dans les rules
-
+      - source_field: DateMvt
+        target_field: date_mv_iso
+  - name: Stock à 0 à la source
+    logic: AND
+    rule_type: coherence
+    fields:
+      - source_field: Qty
+        target_value: '0'
 report:
-  show_matching: false   # passer à true pour voir aussi les lignes conformes
+  show_matching: false
   max_diff_preview: 500

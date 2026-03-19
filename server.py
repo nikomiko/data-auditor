@@ -132,6 +132,34 @@ def _run_audit(token: str, ref_bytes: bytes, tgt_bytes: bytes, config: dict):
                 sess["summary"] = summary
             _push(token, event)
 
+        # Index des lignes pour la revue côte à côte
+        join_keys_cfg = config.get("join", {}).get("keys", [])
+        ref_key_cols  = [k["source_field"] for k in join_keys_cfg]
+        tgt_key_cols  = [k["target_field"]  for k in join_keys_cfg]
+
+        def _make_key(row_dict, cols):
+            return "§".join(str(row_dict.get(c, "")).strip() for c in cols)
+
+        def _row_dict(row):
+            return {c: ('' if str(v) in ('nan', 'NaT', 'None', '<NA>') else str(v))
+                    for c, v in row.items()}
+
+        ref_rows_map = {}
+        for _, row in df_ref.iterrows():
+            k = _make_key(row.to_dict(), ref_key_cols)
+            if k not in ref_rows_map:
+                ref_rows_map[k] = _row_dict(row)
+
+        tgt_rows_map = {}
+        for _, row in df_tgt.iterrows():
+            k = _make_key(row.to_dict(), tgt_key_cols)
+            if k not in tgt_rows_map:
+                tgt_rows_map[k] = _row_dict(row)
+
+        sess["ref_rows_map"]    = ref_rows_map
+        sess["tgt_rows_map"]    = tgt_rows_map
+        sess["all_keys_sorted"] = sorted(set(ref_rows_map) | set(tgt_rows_map))
+
         # Historisation
         history_file = save_history(results, summary, config)
         _push(token, {"event": "done", "history_file": history_file,
@@ -312,6 +340,53 @@ def test_join():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 422
+
+
+# ─────────────────────────────────────────────────────────────
+#  GET /api/context  — enregistrements contextuels pour la revue
+# ─────────────────────────────────────────────────────────────
+@app.route("/api/context")
+def get_context():
+    token = request.args.get("token", "")
+    key   = request.args.get("key", "")
+    n     = min(int(request.args.get("n", "2")), 20)
+
+    with _sessions_lock:
+        sess = _sessions.get(token, {})
+        ref_rows_map    = sess.get("ref_rows_map", {})
+        tgt_rows_map    = sess.get("tgt_rows_map", {})
+        all_keys_sorted = sess.get("all_keys_sorted", [])
+        results         = sess.get("results", [])
+
+    # Champs différents pour la clé centrale (pour le surlignage)
+    diff_fields = set()
+    for r in results:
+        if r.get("join_key") == key and r.get("type_ecart") == "DIVERGENT":
+            champ = r.get("champ", "")
+            if champ:
+                # champ peut être "field", "field op field2" — on extrait les deux noms
+                parts = champ.split()
+                diff_fields.add(parts[0])
+                if len(parts) >= 3 and not parts[2].startswith('"'):
+                    diff_fields.add(parts[2])
+
+    try:
+        center_idx = all_keys_sorted.index(key)
+    except ValueError:
+        center_idx = 0
+
+    start    = max(0, center_idx - n)
+    end      = min(len(all_keys_sorted), center_idx + n + 1)
+    ctx_keys = all_keys_sorted[start:end]
+
+    return jsonify({
+        "center_key": key,
+        "ref_rows": [{"key": k, "data": ref_rows_map.get(k), "is_center": k == key}
+                     for k in ctx_keys],
+        "tgt_rows": [{"key": k, "data": tgt_rows_map.get(k), "is_center": k == key}
+                     for k in ctx_keys],
+        "diff_fields": list(diff_fields),
+    })
 
 
 # ─────────────────────────────────────────────────────────────
