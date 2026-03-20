@@ -737,10 +737,10 @@ function wizRenderJoin() {
       <button class="btn-wiz-add" onclick="wizAddJoinKey()">+ Ajouter une clé</button>
     </div>
     <div class="wiz-section">
-      <div class="wiz-section-title">Test de jointure</div>
+      <div class="wiz-section-title">Test de la clé</div>
       <button class="btn-xs" id="btn-test-join" onclick="wizTestJoin()"
         ${(!fileRef || !fileTgt) ? 'disabled title="Chargez les fichiers pour tester"' : ''}>
-        Tester la jointure
+        Tester la clé
       </button>
       ${(!fileRef || !fileTgt) ? '<span style="font-size:.72rem;color:var(--muted);margin-left:.5rem">⚠ Fichiers non chargés</span>' : ''}
       <div id="join-result"></div>
@@ -786,11 +786,21 @@ async function wizTestJoin() {
     const resp = await fetch('/api/test-join', { method:'POST', body:fd });
     const data = await resp.json();
     if (data.error) { res.innerHTML = `<div class="wiz-warn">${esc(data.error)}</div>`; return; }
-    const sampleHtml = data.sample.length ? `
-      <table class="col-table" style="margin-top:.5rem">
-        <thead><tr><th>Clé</th><th>Exemple</th></tr></thead>
-        <tbody>${data.sample.map(s=>`<tr><td class="tk">${esc(s.key)}</td><td style="font-size:.68rem;color:var(--muted)">${Object.values(s.ref).join(' § ')} ↔ ${Object.values(s.tgt).join(' § ')}</td></tr>`).join('')}</tbody>
-      </table>` : '';
+    const tgtKeySet = new Set(data.keys_tgt);
+    const refKeySet = new Set(data.keys_ref);
+    const labelA = esc(WS.sources.reference.label || 'Source A');
+    const labelB = esc(WS.sources.target.label    || 'Source B');
+    const keysHtml = `
+      <div class="key-preview-cols">
+        <div class="key-preview-col">
+          <div class="key-preview-head">${labelA} <span class="key-preview-count">${data.keys_ref.length} clé(s)</span></div>
+          ${data.keys_ref.map(k => '<div class="kp-item' + (tgtKeySet.has(k) ? '' : ' kp-only-a') + '">' + esc(k) + '</div>').join('')}
+        </div>
+        <div class="key-preview-col">
+          <div class="key-preview-head">${labelB} <span class="key-preview-count">${data.keys_tgt.length} clé(s)</span></div>
+          ${data.keys_tgt.map(k => '<div class="kp-item' + (refKeySet.has(k) ? '' : ' kp-only-b') + '">' + esc(k) + '</div>').join('')}
+        </div>
+      </div>`;
     res.innerHTML = `<div class="join-result">
       <div class="join-stats">
         <div class="join-stat m"><span class="n">${data.matched.toLocaleString('fr-FR')}</span><span>paires matchées</span></div>
@@ -799,13 +809,13 @@ async function wizTestJoin() {
         <div class="join-stat" style="color:var(--muted)"><span class="n" style="font-size:.85rem">${data.total_ref}</span><span>réf.</span></div>
         <div class="join-stat" style="color:var(--muted)"><span class="n" style="font-size:.85rem">${data.total_tgt}</span><span>cible</span></div>
       </div>
-      ${sampleHtml}
+      ${keysHtml}
     </div>`;
   } catch(e) {
     res.innerHTML = `<div class="wiz-warn">Erreur réseau : ${esc(e.message)}</div>`;
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Tester la jointure';
+    btn.textContent = 'Tester la clé';
   }
 }
 

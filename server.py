@@ -373,6 +373,8 @@ def test_join():
             "orphelins_a": len(set(ref_map) - set(tgt_map)),
             "orphelins_b": len(set(tgt_map) - set(ref_map)),
             "sample":      sample,
+            "keys_ref":    sorted(ref_map.keys())[:20],
+            "keys_tgt":    sorted(tgt_map.keys())[:20],
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 422
