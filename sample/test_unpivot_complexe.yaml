@@ -1,0 +1,102 @@
+meta:
+  name: "Audit stock WMS ↔ ERP — dépivotage complexe"
+  version: "1.0"
+
+# ════════════════════════════════════════════════════════════════
+# JEU DE TEST COMPLEXE — UNPIVOT (>100 lignes)
+#
+# Source référence : stock_ref_large.csv  — format LARGE
+#   30 articles × 5 dépôts = 30 lignes
+#   Colonnes : SKU | qty_PARIS | qty_LYON | qty_MARSEILLE | qty_BORDEAUX | qty_LILLE
+#
+# Source cible : stock_erp_long.csv  — format LONG
+#   150 lignes (après injection des anomalies)
+#   Colonnes : SKU | depot | qty
+#
+# Après dépivotage de la référence → 150 couples (SKU, depot)
+#
+# ── Anomalies injectées ────────────────────────────────────────
+#
+#   KO — Écart de quantité (10 cas) :
+#     ART003 / PARIS      ref=500   tgt=450   Δ=−50
+#     ART007 / LYON       ref=200   tgt=220   Δ=+20
+#     ART009 / BORDEAUX   ref=400   tgt=350   Δ=−50
+#     ART012 / MARSEILLE  ref=150   tgt=175   Δ=+25
+#     ART015 / BORDEAUX   ref=80    tgt=95    Δ=+15
+#     ART016 / LILLE      ref=120   tgt=140   Δ=+20
+#     ART018 / LILLE      ref=300   tgt=260   Δ=−40
+#     ART021 / PARIS      ref=90    tgt=110   Δ=+20
+#     ART024 / LYON       ref=600   tgt=575   Δ=−25
+#     ART027 / MARSEILLE  ref=45    tgt=60    Δ=+15
+#
+#   ORPHELIN_A — Présent dans référence, absent de cible (5 cas) :
+#     ART005 / BORDEAUX   (ligne manquante dans ERP)
+#     ART010 / LILLE      (ligne manquante dans ERP)
+#     ART020 / PARIS      (ligne manquante dans ERP)
+#     ART025 / LYON       (ligne manquante dans ERP)
+#     ART028 / MARSEILLE  (ligne manquante dans ERP)
+#
+#   ORPHELIN_B — Absent de référence, présent dans cible (5 cas) :
+#     ART031 / BORDEAUX   (article fantôme dans ERP)
+#     ART031 / LYON       (article fantôme dans ERP)
+#     ART031 / MARSEILLE  (article fantôme dans ERP)
+#     ART032 / BORDEAUX   (article fantôme dans ERP)
+#     ART032 / LILLE      (article fantôme dans ERP)
+#
+#   OK — Couples conformes : 130
+#
+#   Total résultats attendus (show_matching: true) : 150
+# ════════════════════════════════════════════════════════════════
+
+sources:
+
+  reference:
+    label: "Stock WMS (format large)"
+    format: csv
+    encoding: utf-8
+    delimiter: ","
+    has_header: true
+    fields:
+      - { name: SKU,           type: string  }
+      - { name: qty_PARIS,     type: integer }
+      - { name: qty_LYON,      type: integer }
+      - { name: qty_MARSEILLE, type: integer }
+      - { name: qty_BORDEAUX,  type: integer }
+      - { name: qty_LILLE,     type: integer }
+    unpivot:
+      anchor_fields: [SKU]
+      location_field: depot
+      value_field: qty
+      pivot_fields:
+        - { source: qty_PARIS,     location: PARIS     }
+        - { source: qty_LYON,      location: LYON      }
+        - { source: qty_MARSEILLE, location: MARSEILLE }
+        - { source: qty_BORDEAUX,  location: BORDEAUX  }
+        - { source: qty_LILLE,     location: LILLE     }
+
+  target:
+    label: "Stock ERP (format long)"
+    format: csv
+    encoding: utf-8
+    delimiter: ","
+    has_header: true
+    fields:
+      - { name: SKU,   type: string  }
+      - { name: depot, type: string  }
+      - { name: qty,   type: integer }
+
+join:
+  keys:
+    - { source_field: SKU,   target_field: SKU   }
+    - { source_field: depot, target_field: depot }
+
+rules:
+  - name: "Quantité exacte WMS ↔ ERP"
+    rule_type: incoherence
+    logic: AND
+    fields:
+      - { source_field: qty, target_field: qty, operator: differs }
+
+report:
+  show_matching: true
+  max_diff_preview: 200
