@@ -1,18 +1,31 @@
 // ═══════════════════════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════════════════════
-let allResults     = [];
+let allResults     = [];      // utilisé uniquement pour les entrées historique
 let lastSummary    = {};
 let lastConfig     = {};
 let currentToken   = null;
 let _ctxKey        = null;
 let refLabel       = '';
 let tgtLabel       = '';
-let activeFilters  = new Set(['ORPHELIN_A','ORPHELIN_B']);  // KO filtré par rule uniquement
+let activeFilters  = new Set(['ORPHELIN_A','ORPHELIN_B']);
 let activeRuleFilters = null;
 let filterText     = '';
 let sortCol        = null;   // 'key'|'type'|'rule'|'ref'|'tgt'
 let sortDir        = 1;      // 1=asc, -1=desc
+
+// Pagination serveur
+let _pageNum   = 1;
+let _pageSize  = 100;
+let _pageTot   = 0;
+let _pagePages = 1;
+
+// Colonnes supplémentaires
+let extraRefCols = [];
+let extraTgtCols = [];
+
+// Compteurs live pendant streaming SSE
+let _liveOA = 0, _liveOB = 0;
 let yamlFilename   = 'config.yaml';
 let yamlOriginal   = '';
 let yamlFileHandle = null;  // File System Access API handle (Chrome/Edge)
@@ -234,6 +247,9 @@ function resetAll() {
   wfUnlocked = 1; wfCurrentStep = 0;
   activeFilters = new Set(['ORPHELIN_A','ORPHELIN_B']);
   activeRuleFilters = null;
+  _pageNum = 1; _pageSize = 100; _pageTot = 0; _pagePages = 1;
+  extraRefCols = []; extraTgtCols = [];
+  _liveOA = 0; _liveOB = 0;
 
   // YAML
   const yamlEl = document.getElementById('yaml');

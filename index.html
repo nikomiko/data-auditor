@@ -242,6 +242,14 @@
         <div id="filter-dynamic"></div>
       </div>
 
+      <div id="col-picker" class="col-picker" style="display:none">
+        <div class="col-picker-header">
+          <span>Colonnes supplémentaires</span>
+          <button class="btn-xs" onclick="toggleColPicker()">Masquer ▲</button>
+        </div>
+        <div id="col-picker-body" class="col-picker-body"></div>
+      </div>
+
       <div class="tbl-wrap">
         <table>
           <thead>
@@ -251,12 +259,14 @@
             <th class="sortable" onclick="setSortCol('rule')">Règle<span class="sort-ic" id="si-rule">↕</span></th>
             <th class="sortable" onclick="setSortCol('ref')">Valeur réf.<span class="sort-ic" id="si-ref">↕</span></th>
             <th class="sortable" onclick="setSortCol('tgt')">Valeur cible<span class="sort-ic" id="si-tgt">↕</span></th>
-            <th></th>
+            <th id="th-eye"></th>
           </tr>
           </thead>
           <tbody id="tbody"></tbody>
         </table>
+        <div id="empty" style="display:none;padding:2rem;text-align:center;color:var(--muted);font-size:.82rem">Aucun résultat pour les filtres sélectionnés.</div>
       </div>
+      <div id="pagination-bar" class="pagination-bar" style="display:none"></div>
       <div class="trunc" id="trunc" style="display:none"></div>
     </div>
   </div>

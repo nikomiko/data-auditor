@@ -171,6 +171,8 @@ def _run_audit(token: str, ref_bytes: bytes, tgt_bytes: bytes, config: dict):
         sess["ref_rows_map"]    = ref_rows_map
         sess["tgt_rows_map"]    = tgt_rows_map
         sess["all_keys_sorted"] = sorted(set(ref_rows_map) | set(tgt_rows_map))
+        sess["ref_columns"]     = [c for c in df_ref.columns.tolist() if c not in ref_key_cols]
+        sess["tgt_columns"]     = [c for c in df_tgt.columns.tolist() if c not in tgt_key_cols]
 
         # Historisation
         history_file = save_history(results, summary, config)
@@ -252,6 +254,103 @@ def stream(token: str):
 
 def _sse(data: dict) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
+
+
+# ─────────────────────────────────────────────────────────────
+#  GET /api/results/<token>/meta  — colonnes disponibles + comptages
+# ─────────────────────────────────────────────────────────────
+@app.route("/api/results/<token>/meta")
+def get_results_meta(token):
+    with _sessions_lock:
+        sess = _sessions.get(token)
+    if not sess:
+        return jsonify({"error": "Session introuvable"}), 404
+    rule_counts = {}
+    for r in sess.get("results", []):
+        name = r.get("rule_name")
+        if name:
+            rule_counts[name] = rule_counts.get(name, 0) + 1
+    return jsonify({
+        "total":       len(sess.get("results", [])),
+        "ref_columns": sess.get("ref_columns", []),
+        "tgt_columns": sess.get("tgt_columns", []),
+        "rule_counts": rule_counts,
+    })
+
+
+# ─────────────────────────────────────────────────────────────
+#  GET /api/results/<token>  — résultats paginés + filtrés + triés
+# ─────────────────────────────────────────────────────────────
+_SORT_FIELDS = {
+    "key":  "join_key",
+    "type": "type_ecart",
+    "rule": "rule_name",
+    "ref":  "valeur_reference",
+    "tgt":  "valeur_cible",
+}
+
+@app.route("/api/results/<token>")
+def get_results_page(token):
+    with _sessions_lock:
+        sess = _sessions.get(token)
+    if not sess:
+        return jsonify({"error": "Session introuvable"}), 404
+
+    page      = max(1, int(request.args.get("page",  1)))
+    size      = min(500, max(1, int(request.args.get("size", 100))))
+    sort_col  = request.args.get("sort",  "")
+    sort_dir  = request.args.get("dir",   "asc")
+    types_str = request.args.get("types", "")
+    rules_str = request.args.get("rules", "")
+    q         = request.args.get("q",     "").lower().strip()
+    extra_ref = [c for c in request.args.get("extra_ref", "").split(",") if c]
+    extra_tgt = [c for c in request.args.get("extra_tgt", "").split(",") if c]
+
+    results = sess.get("results", [])
+
+    if types_str:
+        active_types = set(types_str.split(","))
+        results = [r for r in results if r["type_ecart"] in active_types]
+
+    if rules_str:
+        active_rules = set(rules_str.split(","))
+        results = [r for r in results if (
+            r["type_ecart"] in ("ORPHELIN_A", "ORPHELIN_B") or
+            r.get("rule_name", "") in active_rules
+        )]
+
+    if q:
+        results = [r for r in results if (
+            q in str(r.get("join_key",          "")).lower() or
+            q in str(r.get("valeur_reference",  "")).lower() or
+            q in str(r.get("valeur_cible",      "")).lower()
+        )]
+
+    if sort_col in _SORT_FIELDS:
+        field   = _SORT_FIELDS[sort_col]
+        reverse = (sort_dir == "desc")
+        results = sorted(results, key=lambda r: str(r.get(field, "")).lower(), reverse=reverse)
+
+    total  = len(results)
+    pages  = max(1, (total + size - 1) // size)
+    page   = min(page, pages)
+    page_r = results[(page - 1) * size : page * size]
+
+    if extra_ref or extra_tgt:
+        ref_rows_map = sess.get("ref_rows_map", {})
+        tgt_rows_map = sess.get("tgt_rows_map", {})
+        enriched = []
+        for r in page_r:
+            er  = dict(r)
+            key = r.get("join_key", "")
+            if extra_ref:
+                er["_ref"] = {c: ref_rows_map.get(key, {}).get(c, "") for c in extra_ref}
+            if extra_tgt:
+                er["_tgt"] = {c: tgt_rows_map.get(key, {}).get(c, "") for c in extra_tgt}
+            enriched.append(er)
+        page_r = enriched
+
+    return jsonify({"total": total, "page": page, "size": size, "pages": pages, "results": page_r})
 
 
 # ─────────────────────────────────────────────────────────────

@@ -20,6 +20,7 @@ async function runAudit() {
   document.getElementById('results-area').style.display = 'none';
   document.getElementById('trunc').style.display = 'none';
   allResults = [];
+  _liveOA = 0; _liveOB = 0;
   filterText = ''; sortCol = null; sortDir = 1;
   // Réinitialiser les filtres pour chaque nouvel audit
   activeFilters = new Set(['ORPHELIN_A', 'ORPHELIN_B']);
@@ -102,11 +103,8 @@ function listenSSE(token) {
       document.getElementById('s-tgt').textContent = ev.tgt_count.toLocaleString('fr-FR');
 
     } else if (ev.event === 'result') {
-      const max = config?.report?.max_diff_preview || 500;
-      if (allResults.length < max) {
-        allResults.push(ev);
-      }
-      // Mise à jour compteurs live
+      if (ev.type_ecart === 'ORPHELIN_A') _liveOA++;
+      else if (ev.type_ecart === 'ORPHELIN_B') _liveOB++;
       updateLiveCounts();
 
     } else if (ev.event === 'summary') {
@@ -126,8 +124,9 @@ function listenSSE(token) {
       document.getElementById('prog-bar').classList.remove('indeterminate');
       document.getElementById('prog-bar').style.width = '100%';
 
-      // Rendre le tableau (allResults est complet)
-      rebuildTable();
+      // Charger la première page depuis le serveur
+      fetchPage(1);
+      fetchMeta();
 
       // Activer exports
       document.getElementById('btn-csv').disabled  = false;
@@ -221,6 +220,10 @@ async function loadHistoryEntry(filename) {
     rebuildTable();
     showProgress(false);
     document.getElementById('results-area').style.display  = 'flex';
+    const cp = document.getElementById('col-picker');
+    if (cp) cp.style.display = 'none';
+    const pb = document.getElementById('pagination-bar');
+    if (pb) pb.style.display = 'none';
     document.getElementById('btn-csv').disabled  = true;
     document.getElementById('btn-html').disabled = false;
     document.getElementById('btn-xlsx').disabled = true;

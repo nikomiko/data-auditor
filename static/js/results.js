@@ -1,6 +1,191 @@
-// ── Ajout d'une ligne au tableau ──────────────────────────
+// ═══════════════════════════════════════════════════════════
+//  PAGINATION SERVEUR — fetch + render
+// ═══════════════════════════════════════════════════════════
+async function fetchPage(page) {
+  if (!currentToken) { rebuildTable(); return; }
+  _pageNum = page;
+
+  const p = new URLSearchParams({ page, size: _pageSize });
+
+  // Types actifs : orphelins depuis activeFilters, KO/OK si des règles sont actives
+  const types = new Set(activeFilters);
+  if (!activeRuleFilters || activeRuleFilters.size > 0) { types.add('KO'); types.add('OK'); }
+  p.set('types', [...types].join(','));
+
+  if (activeRuleFilters !== null) p.set('rules', [...activeRuleFilters].join(','));
+  if (filterText) p.set('q', filterText);
+  if (sortCol)  { p.set('sort', sortCol); p.set('dir', sortDir === -1 ? 'desc' : 'asc'); }
+  if (extraRefCols.length) p.set('extra_ref', extraRefCols.join(','));
+  if (extraTgtCols.length) p.set('extra_tgt', extraTgtCols.join(','));
+
+  try {
+    const data = await fetch(`/api/results/${currentToken}?${p}`).then(r => r.json());
+    if (data.error) { showErr(data.error); return; }
+    _pageTot   = data.total;
+    _pagePages = data.pages;
+    _pageNum   = data.page;
+    _syncExtraHeaders();
+    _renderPage(data.results);
+    _renderPagination();
+  } catch(e) { showErr('Erreur pagination : ' + e.message); }
+}
+
+async function fetchMeta() {
+  if (!currentToken) return;
+  try {
+    const meta = await fetch(`/api/results/${currentToken}/meta`).then(r => r.json());
+    if (meta.error) return;
+    _updateRuleChipCounts(meta.rule_counts || {});
+    _renderColumnPicker(meta.ref_columns || [], meta.tgt_columns || []);
+  } catch(_) {}
+}
+
+function _refresh() {
+  if (currentToken) fetchPage(1);
+  else              rebuildTable();
+}
+
+// ── Rendu d'une page de résultats ─────────────────────────
+function _renderPage(rows) {
+  const tbody = document.getElementById('tbody');
+  const empty = document.getElementById('empty');
+  tbody.innerHTML = '';
+  if (!rows.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  rows.forEach(r => _appendPageRow(r));
+}
+
+function _appendPageRow(r) {
+  const tbody = document.getElementById('tbody');
+  const tr = document.createElement('tr');
+
+  // Cellules fixes
+  let html = `
+    <td class="tk">${esc(r.join_key)}</td>
+    <td><span class="badge badge-${r.type_ecart}">${r.type_ecart}</span></td>
+    <td>${r.rule_name ? `<button class="rule-chip">${esc(r.rule_name)}</button>` : ''}</td>
+    <td class="tv r" title="${esc(r.valeur_reference)}">${esc(r.valeur_reference)}</td>
+    <td class="tv t" title="${esc(r.valeur_cible)}">${esc(r.valeur_cible)}</td>`;
+
+  // Colonnes supplémentaires ref
+  extraRefCols.forEach(c => {
+    const v = r._ref?.[c] ?? '';
+    html += `<td class="tv xc xc-ref" title="${esc(v)}">${esc(v)}</td>`;
+  });
+  // Colonnes supplémentaires tgt
+  extraTgtCols.forEach(c => {
+    const v = r._tgt?.[c] ?? '';
+    html += `<td class="tv xc xc-tgt" title="${esc(v)}">${esc(v)}</td>`;
+  });
+
+  html += `<td class="td-eye"><button class="eye-btn" title="Voir le contexte"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></td>`;
+
+  tr.innerHTML = html;
+  const ruleBtn = tr.querySelector('.rule-chip');
+  if (ruleBtn) {
+    if (activeRuleFilters && activeRuleFilters.size === 1 && activeRuleFilters.has(r.rule_name))
+      ruleBtn.classList.add('solo');
+    ruleBtn.addEventListener('click', () => filterToRule(r.rule_name));
+  }
+  tr.querySelector('.eye-btn').addEventListener('click', () => openCtxModal(r.join_key));
+  tbody.appendChild(tr);
+}
+
+// ── En-têtes colonnes supplémentaires ─────────────────────
+function _syncExtraHeaders() {
+  const tr = document.querySelector('#wfv-6 table thead tr');
+  if (!tr) return;
+  // Supprimer les anciens th extra
+  tr.querySelectorAll('.th-extra').forEach(th => th.remove());
+  // Insérer avant th-eye
+  const eyeTh = document.getElementById('th-eye');
+  const insertBefore = eyeTh || null;
+  extraRefCols.forEach(c => {
+    const th = document.createElement('th');
+    th.className = 'th-extra th-extra-ref';
+    th.textContent = c;
+    th.title = `Source A — ${c}`;
+    tr.insertBefore(th, insertBefore);
+  });
+  extraTgtCols.forEach(c => {
+    const th = document.createElement('th');
+    th.className = 'th-extra th-extra-tgt';
+    th.textContent = c;
+    th.title = `Source B — ${c}`;
+    tr.insertBefore(th, insertBefore);
+  });
+}
+
+// ── Pagination controls ────────────────────────────────────
+function _renderPagination() {
+  const bar = document.getElementById('pagination-bar');
+  if (!bar) return;
+  if (!currentToken || _pagePages <= 1) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  const from = ((_pageNum - 1) * _pageSize + 1).toLocaleString('fr-FR');
+  const to   = Math.min(_pageNum * _pageSize, _pageTot).toLocaleString('fr-FR');
+  const tot  = _pageTot.toLocaleString('fr-FR');
+  const sizeSel = [50, 100, 200, 500].map(n =>
+    `<option value="${n}"${n === _pageSize ? ' selected' : ''}>${n}</option>`).join('');
+  const pageSel = Array.from({length: _pagePages}, (_, i) =>
+    `<option value="${i+1}"${i+1 === _pageNum ? ' selected' : ''}>${i+1}</option>`).join('');
+  bar.innerHTML = `
+    <button class="btn-xs" ${_pageNum <= 1 ? 'disabled' : ''} onclick="fetchPage(${_pageNum-1})">← Préc.</button>
+    <span class="pag-info">${from}–${to} / ${tot}</span>
+    <select class="pag-sel" onchange="fetchPage(+this.value)">${pageSel}</select>
+    <span class="pag-sep">|</span>
+    <select class="pag-sel" onchange="_setPageSize(+this.value)" title="Lignes par page">${sizeSel} / page</select>
+    <button class="btn-xs" ${_pageNum >= _pagePages ? 'disabled' : ''} onclick="fetchPage(${_pageNum+1})">Suiv. →</button>`;
+}
+
+function _setPageSize(n) { _pageSize = n; fetchPage(1); }
+
+// ── Sélecteur de colonnes supplémentaires ─────────────────
+function _renderColumnPicker(refCols, tgtCols) {
+  const panel = document.getElementById('col-picker');
+  if (!panel) return;
+  if (!refCols.length && !tgtCols.length) { panel.style.display = 'none'; return; }
+  panel.style.display = '';
+
+  const refLbl = esc(WS?.sources?.reference?.label || refLabel || 'Source A');
+  const tgtLbl = esc(WS?.sources?.target?.label    || tgtLabel || 'Source B');
+
+  const mkGroup = (label, cols, side) => {
+    if (!cols.length) return '';
+    const checks = cols.map(c => {
+      const sel = (side === 'ref' ? extraRefCols : extraTgtCols).includes(c);
+      return `<label class="col-pick-item col-pick-${side}">
+        <input type="checkbox" ${sel ? 'checked' : ''} onchange="_toggleExtraCol('${side}','${esc(c)}',this.checked)">
+        ${esc(c)}</label>`;
+    }).join('');
+    return `<div class="col-pick-group"><span class="col-pick-lbl">${label}</span>${checks}</div>`;
+  };
+
+  document.getElementById('col-picker-body').innerHTML =
+    mkGroup(refLbl, refCols, 'ref') + mkGroup(tgtLbl, tgtCols, 'tgt');
+}
+
+function _toggleExtraCol(side, col, checked) {
+  if (side === 'ref') {
+    if (checked) { if (!extraRefCols.includes(col)) extraRefCols.push(col); }
+    else extraRefCols = extraRefCols.filter(c => c !== col);
+  } else {
+    if (checked) { if (!extraTgtCols.includes(col)) extraTgtCols.push(col); }
+    else extraTgtCols = extraTgtCols.filter(c => c !== col);
+  }
+  _syncExtraHeaders();
+  if (currentToken) fetchPage(_pageNum);
+}
+
+function toggleColPicker() {
+  const body = document.getElementById('col-picker-body');
+  if (body) body.style.display = body.style.display === 'none' ? '' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  HISTORIQUE — rendu local (allResults)
+// ═══════════════════════════════════════════════════════════
 function appendRow(r) {
-  // Orphelins filtrés par type ; KO/DIVERGENT filtrés uniquement par règle
   if (r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') {
     if (!activeFilters.has(r.type_ecart)) return;
   }
@@ -14,11 +199,9 @@ function appendRow(r) {
     <td>${r.rule_name ? `<button class="rule-chip">${esc(r.rule_name)}</button>` : ''}</td>
     <td class="tv r" title="${esc(r.valeur_reference)}">${esc(r.valeur_reference)}</td>
     <td class="tv t" title="${esc(r.valeur_cible)}">${esc(r.valeur_cible)}</td>
-    <td class="td-eye"><button class="eye-btn" title="Voir le détail"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></td>`;
-  // Listeners via closure — évite le problème des guillemets dans les attributs onclick HTML
+    <td class="td-eye"><button class="eye-btn" title="Voir le contexte"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></td>`;
   const ruleBtn = tr.querySelector('.rule-chip');
   if (ruleBtn) {
-    // Solo style : appliqué ici car rebuildTable() recrée les lignes après filterToRule()
     if (activeRuleFilters && activeRuleFilters.size === 1 && activeRuleFilters.has(r.rule_name))
       ruleBtn.classList.add('solo');
     ruleBtn.addEventListener('click', () => filterToRule(r.rule_name));
@@ -27,38 +210,73 @@ function appendRow(r) {
   tbody.appendChild(tr);
 }
 
-function updateLiveCounts() {
-  // Pendant le streaming, on n'a pas encore lastConfig.rules → on compte juste les orphelins
-  let oa = 0, ob = 0;
-  allResults.forEach(r => {
-    if (r.type_ecart === 'ORPHELIN_A') oa++;
-    else if (r.type_ecart === 'ORPHELIN_B') ob++;
+function rebuildTable() {
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  const empty = document.getElementById('empty');
+
+  let rows = allResults.filter(r => {
+    if ((r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') && !activeFilters.has(r.type_ecart)) return false;
+    if (activeRuleFilters !== null && r.rule_name && !activeRuleFilters.has(r.rule_name)) return false;
+    if (!_rowMatchesText(r)) return false;
+    return true;
   });
-  document.getElementById('c-oa').textContent = oa;
-  document.getElementById('c-ob').textContent = ob;
-  // Counts cohérence/incohérence mis à jour par updateChipCounts après summary
+  if (sortCol) {
+    const key = _SORT_KEY[sortCol];
+    rows = rows.slice().sort((a, b) => {
+      const va = (a[key] || '').toString().toLowerCase();
+      const vb = (b[key] || '').toString().toLowerCase();
+      return va < vb ? -sortDir : va > vb ? sortDir : 0;
+    });
+  }
+  if (!rows.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  rows.forEach(r => appendRow(r));
+  // Pas de pagination pour l'historique (données déjà limitées côté serveur)
+  const bar = document.getElementById('pagination-bar');
+  if (bar) bar.style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  COMPTEURS
+// ═══════════════════════════════════════════════════════════
+function updateLiveCounts() {
+  document.getElementById('c-oa').textContent = _liveOA;
+  document.getElementById('c-ob').textContent = _liveOB;
 }
 
 function updateChipCounts() {
-  const counts = { ORPHELIN_A:0, ORPHELIN_B:0 };
-  const ruleTypeCounts = { coherence:0, incoherence:0 };
-  const ruleTypeMap = {};
-  (lastConfig?.rules || []).forEach(r => { ruleTypeMap[r.name] = r.rule_type || 'coherence'; });
-  allResults.forEach(r => {
-    if (r.type_ecart === 'ORPHELIN_A') counts.ORPHELIN_A++;
-    else if (r.type_ecart === 'ORPHELIN_B') counts.ORPHELIN_B++;
-    else if (r.rule_name) {
-      // KO → incoherence ; OK → coherence (selon le nouveau modèle)
-      const rt = ruleTypeMap[r.rule_name] || 'coherence';
-      ruleTypeCounts[rt]++;
-    }
-  });
-  document.getElementById('c-oa').textContent  = counts.ORPHELIN_A;
-  document.getElementById('c-ob').textContent  = counts.ORPHELIN_B;
-  document.getElementById('c-coh').textContent = ruleTypeCounts.coherence;
-  document.getElementById('c-inc').textContent = ruleTypeCounts.incoherence;
+  document.getElementById('c-oa').textContent  = lastSummary.orphelins_a || 0;
+  document.getElementById('c-ob').textContent  = lastSummary.orphelins_b || 0;
+  // c-coh et c-inc mis à jour via _updateRuleChipCounts après fetchMeta
+  const hasCoh = (lastConfig?.rules || []).some(r => (r.rule_type||'coherence') === 'coherence');
+  const hasInc = (lastConfig?.rules || []).some(r => r.rule_type === 'incoherence');
+  if (hasCoh) document.getElementById('c-coh').textContent = '…';
+  if (hasInc) document.getElementById('c-inc').textContent = '…';
 }
 
+function _updateRuleChipCounts(ruleCounts) {
+  const rules = lastConfig?.rules || [];
+  let cohTotal = 0, incTotal = 0;
+  rules.forEach(rule => {
+    const cnt = ruleCounts[rule.name] || 0;
+    // Mettre à jour le chip individuel de la règle
+    document.querySelectorAll(`#filter-dynamic .chip[data-t="${CSS.escape(rule.name)}"]`).forEach(btn => {
+      const sp = btn.querySelector('.chip-c');
+      if (sp) sp.textContent = cnt;
+    });
+    if ((rule.rule_type || 'coherence') === 'coherence') cohTotal += cnt;
+    else incTotal += cnt;
+  });
+  const cohEl = document.getElementById('c-coh');
+  const incEl = document.getElementById('c-inc');
+  if (cohEl) cohEl.textContent = cohTotal;
+  if (incEl) incEl.textContent = incTotal;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  FILTER BAR
+// ═══════════════════════════════════════════════════════════
 function ruleTooltip(rule) {
   const OP_LABEL = { equals:'=', '=':'=', differs:'≠', '<>':'≠', greater:'>',  '>':'>',
                      less:'<', '<':'<', contains:'∋', not_contains:'∌' };
@@ -66,18 +284,13 @@ function ruleTooltip(rule) {
   const logic = rule.logic || 'AND';
   const fields = (rule.fields || []).map(f => {
     const op = OP_LABEL[f.operator] || f.operator || '=';
-    // source_data / target_data form
     if (f.source_data) {
       const src = f.source_data.field || '?';
       const tgt = f.target_data?.field || f.target_data?.value || '?';
       const tol = f.target_data?.tolerance ? ` ±${f.target_data.tolerance}` : '';
       return `  • ${src} ${op} ${tgt}${tol}`;
     }
-    // fixed target_value
-    if (f.target_value !== undefined) {
-      return `  • ${f.source_field || '?'} ${op} "${f.target_value}"`;
-    }
-    // standard source_field / target_field
+    if (f.target_value !== undefined) return `  • ${f.source_field || '?'} ${op} "${f.target_value}"`;
     const src = f.source_field || '?';
     const tgt = f.target_field || '?';
     const tol = f.tolerance ? ` ±${f.tolerance}` : '';
@@ -87,11 +300,10 @@ function ruleTooltip(rule) {
 }
 
 function buildRuleFilterBar(summary, config) {
-  const dyn   = document.getElementById('filter-dynamic');
+  const dyn  = document.getElementById('filter-dynamic');
   dyn.innerHTML = '';
   const rules = config?.rules || [];
 
-  // Afficher / masquer les chips groupe cohérence / incohérence
   const hasCoh = rules.some(r => (r.rule_type || 'coherence') === 'coherence');
   const hasInc = rules.some(r => r.rule_type === 'incoherence');
   const showGroup = hasCoh || hasInc;
@@ -101,27 +313,17 @@ function buildRuleFilterBar(summary, config) {
   document.getElementById('chip-inc').style.display      = hasInc ? '' : 'none';
 
   if (!rules.length) { activeRuleFilters = null; return; }
-
   activeRuleFilters = new Set(rules.map(r => r.name));
 
-  if (!rules.length) return;
   const sep = document.createElement('div');
   sep.className = 'filter-sep';
   dyn.appendChild(sep);
-
   const grp = document.createElement('div');
   grp.className = 'filter-group';
   grp.innerHTML = '<span class="filter-group-label">Règles</span>';
 
-  // Comptage par règle depuis allResults (rule_stats ne couvre que les KO)
-  const ruleCounts = {};
-  allResults.forEach(r => {
-    if (r.rule_name) ruleCounts[r.rule_name] = (ruleCounts[r.rule_name] || 0) + 1;
-  });
-
   rules.forEach(rule => {
     const ruleType = rule.rule_type || 'coherence';
-    const cnt = ruleCounts[rule.name] || 0;
     const btn = document.createElement('button');
     btn.className = ruleType === 'incoherence' ? 'chip ca on' : 'chip co on';
     btn.dataset.kind     = 'rule';
@@ -129,14 +331,14 @@ function buildRuleFilterBar(summary, config) {
     btn.dataset.ruleType = ruleType;
     btn.title = ruleTooltip(rule);
     btn.addEventListener('click', function() { toggleChip(this); });
-    btn.innerHTML = `${esc(rule.name)} <span class="chip-c">${cnt}</span>`;
+    btn.innerHTML = `${esc(rule.name)} <span class="chip-c">…</span>`;
     grp.appendChild(btn);
   });
   dyn.appendChild(grp);
 }
 
 // ═══════════════════════════════════════════════════════════
-//  FILTERS
+//  FILTRES & TRI
 // ═══════════════════════════════════════════════════════════
 function toggleChip(btn) {
   const kind = btn.dataset.kind || 'type';
@@ -146,32 +348,22 @@ function toggleChip(btn) {
 
   if (kind === 'type') {
     if (isOn) activeFilters.delete(t); else activeFilters.add(t);
-
   } else if (kind === 'ruletype') {
-    // Active/désactive toutes les règles du type cohérence ou incohérence
-    if (!activeRuleFilters) {
-      activeRuleFilters = new Set((lastConfig?.rules || []).map(r => r.name));
-    }
+    if (!activeRuleFilters) activeRuleFilters = new Set((lastConfig?.rules || []).map(r => r.name));
     (lastConfig?.rules || []).forEach(r => {
       if ((r.rule_type || 'coherence') === t) {
-        if (isOn) activeRuleFilters.delete(r.name);
-        else      activeRuleFilters.add(r.name);
+        if (isOn) activeRuleFilters.delete(r.name); else activeRuleFilters.add(r.name);
       }
     });
-    // Sync pills individuelles du même type
     document.querySelectorAll(`#filter-dynamic .chip[data-kind="rule"][data-rule-type="${t}"]`).forEach(p => {
       p.classList.toggle('on', !isOn);
     });
-
   } else if (kind === 'rule') {
-    if (!activeRuleFilters) {
-      activeRuleFilters = new Set((lastConfig?.rules || []).map(r => r.name));
-    }
+    if (!activeRuleFilters) activeRuleFilters = new Set((lastConfig?.rules || []).map(r => r.name));
     if (isOn) activeRuleFilters.delete(t); else activeRuleFilters.add(t);
-    // Sync chip groupe : on si au moins une règle du même type est active
     _syncRuletypeChips();
   }
-  rebuildTable();
+  _refresh();
 }
 
 function _syncRuletypeChips() {
@@ -185,7 +377,6 @@ function _syncRuletypeChips() {
 }
 
 function filterToRule(name) {
-  // Solo : si déjà seule règle active → tout réactiver, sinon → isoler
   const isSolo = activeRuleFilters && activeRuleFilters.size === 1 && activeRuleFilters.has(name);
   if (isSolo) {
     const rules = lastConfig?.rules || [];
@@ -193,25 +384,21 @@ function filterToRule(name) {
   } else {
     activeRuleFilters = new Set([name]);
   }
-  // Sync visuels chips règles et chips groupe
   document.querySelectorAll('#filter-dynamic .chip[data-kind="rule"]').forEach(btn => {
-    const on = !activeRuleFilters || activeRuleFilters.has(btn.dataset.t);
-    btn.classList.toggle('on', on);
+    btn.classList.toggle('on', !activeRuleFilters || activeRuleFilters.has(btn.dataset.t));
   });
   _syncRuletypeChips();
-  // rebuildTable recrée les lignes — appendRow applique le style solo directement
-  rebuildTable();
+  _refresh();
 }
 
 function setFilterText(v) {
   filterText = v.trim().toLowerCase();
-  rebuildTable();
+  _refresh();
 }
 
 function setSortCol(col) {
   if (sortCol === col) { sortDir = -sortDir; }
   else { sortCol = col; sortDir = 1; }
-  // Mise à jour visuelle des icônes
   ['key','type','rule','ref','tgt'].forEach(c => {
     const th = document.getElementById('si-' + c)?.parentElement;
     const ic = document.getElementById('si-' + c);
@@ -223,7 +410,7 @@ function setSortCol(col) {
       ic.textContent = sortDir === 1 ? '↑' : '↓';
     }
   });
-  rebuildTable();
+  _refresh();
 }
 
 const _SORT_KEY = { key:'join_key', type:'type_ecart', rule:'rule_name', ref:'valeur_reference', tgt:'valeur_cible' };
@@ -235,47 +422,19 @@ function _rowMatchesText(r) {
       || (r.valeur_cible || '').toLowerCase().includes(filterText);
 }
 
-function rebuildTable() {
-  const tbody = document.getElementById('tbody');
-  tbody.innerHTML = '';
-  const max = lastConfig?.report?.max_diff_preview || 500;
-
-  let rows = allResults.filter(r => {
-    if ((r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') && !activeFilters.has(r.type_ecart)) return false;
-    if (activeRuleFilters !== null && r.rule_name && !activeRuleFilters.has(r.rule_name)) return false;
-    if (!_rowMatchesText(r)) return false;
-    return true;
-  });
-
-  if (sortCol) {
-    const key = _SORT_KEY[sortCol];
-    rows = rows.slice().sort((a, b) => {
-      const va = (a[key] || '').toString().toLowerCase();
-      const vb = (b[key] || '').toString().toLowerCase();
-      return va < vb ? -sortDir : va > vb ? sortDir : 0;
-    });
-  }
-
-  rows.slice(0, max).forEach(r => appendRow(r));
-}
-
 // ═══════════════════════════════════════════════════════════
 //  EXPORT
 // ═══════════════════════════════════════════════════════════
 function exportReport(fmt) {
-  if (fmt === 'csv') {
-    if (!currentToken) return;
-    window.location.href = `/api/export?token=${currentToken}&format=csv`;
-  } else if (fmt === 'xlsx') {
-    if (!currentToken) return;
-    window.location.href = `/api/export?token=${currentToken}&format=xlsx`;
+  if (currentToken && (fmt === 'csv' || fmt === 'xlsx' || fmt === 'html')) {
+    window.location.href = `/api/export?token=${currentToken}&format=${fmt}`;
   } else {
-    exportHTMLDynamic();
+    exportHTMLDynamic();   // historique : rendu client
   }
 }
 
 function _getVisibleRows() {
-  // Reconstruit la liste visible (filtres + tri actuels) sans limite max
+  // Pour l'export HTML historique (sans token) uniquement
   const rows = allResults.filter(r => {
     if ((r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') && !activeFilters.has(r.type_ecart)) return false;
     if (activeRuleFilters !== null && r.rule_name && !activeRuleFilters.has(r.rule_name)) return false;
@@ -441,4 +600,3 @@ initCounts();render();
   a.click();
   URL.revokeObjectURL(a.href);
 }
-
