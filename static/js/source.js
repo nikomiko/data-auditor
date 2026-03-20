@@ -252,6 +252,9 @@ async function previewFile(which, evt, openTab) {
   const file = which === 'ref' ? fileRef : fileTgt;
   if (!file || isBinary(file)) return;
 
+  // S'assurer que l'état wizard est à jour avant de lire WS.sources
+  _saveCurrentWFStep();
+
   const srcKey = which === 'ref' ? 'reference' : 'target';
   const label  = which === 'ref' ? (refLabel || 'Référence') : (tgtLabel || 'Cible');
   document.getElementById('preview-title').textContent =
@@ -271,6 +274,13 @@ async function previewFile(which, evt, openTab) {
   renderPreviewTable(lines, delim);
   renderPreviewRaw(lines);
   renderValidationCols(which, lines);
+
+  // Onglet Dépivoté : visible uniquement si unpivot activé avec au moins un pivot configuré
+  const tabUnpivot = document.getElementById('tab-unpivot');
+  const hasUnpivot = src.unpivot_enabled && (src.unpivot.pivot_fields || []).filter(p => p.source).length > 0;
+  tabUnpivot.style.display = hasUnpivot ? '' : 'none';
+  if (hasUnpivot) renderPreviewUnpivot(lines, srcKey, delim);
+
   switchPreviewTab(openTab || 'table');
   document.getElementById('preview-modal').classList.add('show');
 }
@@ -445,12 +455,89 @@ function renderPreviewRaw(lines) {
 }
 
 function switchPreviewTab(tab) {
-  document.getElementById('preview-table-wrap').style.display = tab === 'table' ? '' : 'none';
-  document.getElementById('preview-raw-wrap').style.display   = tab === 'raw'   ? '' : 'none';
-  document.getElementById('preview-cols-wrap').style.display  = tab === 'cols'  ? '' : 'none';
-  document.getElementById('tab-table').classList.toggle('active', tab === 'table');
-  document.getElementById('tab-raw').classList.toggle('active',   tab === 'raw');
-  document.getElementById('tab-cols').classList.toggle('active',  tab === 'cols');
+  document.getElementById('preview-table-wrap').style.display   = tab === 'table'   ? '' : 'none';
+  document.getElementById('preview-raw-wrap').style.display     = tab === 'raw'     ? '' : 'none';
+  document.getElementById('preview-cols-wrap').style.display    = tab === 'cols'    ? '' : 'none';
+  document.getElementById('preview-unpivot-wrap').style.display = tab === 'unpivot' ? '' : 'none';
+  document.getElementById('tab-table').classList.toggle('active',   tab === 'table');
+  document.getElementById('tab-raw').classList.toggle('active',     tab === 'raw');
+  document.getElementById('tab-cols').classList.toggle('active',    tab === 'cols');
+  document.getElementById('tab-unpivot').classList.toggle('active', tab === 'unpivot');
+}
+
+function renderPreviewUnpivot(lines, srcKey, delim) {
+  const wrap = document.getElementById('preview-unpivot-wrap');
+  const s = WS.sources[srcKey];
+  const u = s.unpivot;
+
+  const anchors  = (u.anchor_fields  || []).filter(Boolean);
+  const locField = u.location_field  || 'location_key';
+  const valField = u.value_field     || 'pivot_value';
+  const pivots   = (u.pivot_fields   || []).filter(p => p.source);
+
+  if (!s.has_header) {
+    wrap.innerHTML = '<div class="preview-na">Aperçu non disponible sans en-tête (has_header: false).</div>';
+    return;
+  }
+
+  const skip = parseInt(s.skip_rows) || 0;
+  const headerLine = lines[skip] || '';
+  if (!headerLine.trim()) {
+    wrap.innerHTML = '<div class="preview-na">En-tête introuvable dans le fichier.</div>';
+    return;
+  }
+
+  const headers   = headerLine.split(delim).map(h => h.trim().replace(/^"|"$/g, ''));
+  const headerSet = new Set(headers);
+
+  const missingAnchors = anchors.filter(a => !headerSet.has(a));
+  const missingPivots  = pivots.filter(p => !headerSet.has(p.source)).map(p => p.source);
+  if (missingAnchors.length || missingPivots.length) {
+    const msgs = [];
+    if (missingAnchors.length) msgs.push('anchor_fields introuvables : ' + missingAnchors.join(', '));
+    if (missingPivots.length)  msgs.push('pivot_fields introuvables : '  + missingPivots.join(', '));
+    wrap.innerHTML = '<div class="preview-na">' + msgs.map(esc).join('<br>') + '</div>';
+    return;
+  }
+
+  // Générer les lignes dépivotées (max 10 lignes source)
+  const MAX_SRC = 10;
+  const resultRows = [];
+  for (let i = skip + 1; i < lines.length && resultRows.length < MAX_SRC * pivots.length; i++) {
+    const cells  = lines[i].split(delim);
+    const rowData = {};
+    headers.forEach((h, ci) => { rowData[h] = (cells[ci] || '').trim().replace(/^"|"$/g, ''); });
+    for (const pf of pivots) {
+      const newRow = {};
+      for (const a of anchors) newRow[a] = rowData[a] ?? '';
+      newRow[locField] = pf.location || pf.source;
+      newRow[valField] = rowData[pf.source] ?? '';
+      resultRows.push(newRow);
+    }
+  }
+
+  const cols        = [...anchors, locField, valField];
+  const srcRowCount = Math.floor(resultRows.length / pivots.length);
+  const totalSrc    = lines.length - skip - 1;
+
+  let html = `<div class="val-summary">${srcRowCount} lignes source × ${pivots.length} pivot(s) → ${resultRows.length} lignes générées (aperçu)</div>`;
+  html += '<table class="preview-table"><thead><tr>';
+  cols.forEach(c => {
+    const style = c === locField ? 'color:var(--acc)' : c === valField ? 'color:var(--ok)' : '';
+    html += `<th style="${style}">${esc(c)}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+  resultRows.forEach((row, ri) => {
+    const sep = ri > 0 && ri % pivots.length === 0 ? 'border-top:2px solid var(--border)' : '';
+    html += `<tr style="${sep}">`;
+    cols.forEach(c => { html += `<td>${esc(String(row[c] ?? ''))}</td>`; });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  if (totalSrc > MAX_SRC) {
+    html += `<div class="preview-na" style="padding:.5rem 1rem">Aperçu limité à ${MAX_SRC} lignes source sur ${totalSrc.toLocaleString('fr-FR')}</div>`;
+  }
+  wrap.innerHTML = html;
 }
 
 function closePreview(e) {

@@ -13,7 +13,7 @@
 <header>
   <div class="logo">data<em>/</em>auditor
     <span class="logo-tag">server</span>
-    <span class="logo-ver">v3.1.0</span>
+    <span class="logo-ver">v3.1.1</span>
   </div>
   <div class="wf-steps" id="wf-steps">
     <button class="wf-chev reset" onclick="resetAll()" title="Réinitialiser toute la configuration"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.36"/></svg><span class="wf-chev-lbl">Reset</span></button>
@@ -343,16 +343,18 @@ document.addEventListener('keydown', e => {
     <div class="modal-header">
       <span class="modal-title" id="preview-title">Prévisualisation</span>
       <div class="modal-tabs">
-        <button class="modal-tab active" id="tab-table" onclick="switchPreviewTab('table')">Tableau</button>
-        <button class="modal-tab" id="tab-raw"   onclick="switchPreviewTab('raw')">Brut</button>
-        <button class="modal-tab" id="tab-cols"  onclick="switchPreviewTab('cols')">Colonnes</button>
+        <button class="modal-tab active" id="tab-table"   onclick="switchPreviewTab('table')">Tableau</button>
+        <button class="modal-tab" id="tab-raw"            onclick="switchPreviewTab('raw')">Brut</button>
+        <button class="modal-tab" id="tab-cols"           onclick="switchPreviewTab('cols')">Colonnes</button>
+        <button class="modal-tab" id="tab-unpivot" style="display:none" onclick="switchPreviewTab('unpivot')">Dépivoté</button>
       </div>
       <button class="modal-close" onclick="closePreview()">✕</button>
     </div>
     <div class="modal-body">
       <div id="preview-table-wrap"></div>
-      <div id="preview-raw-wrap"  style="display:none"></div>
-      <div id="preview-cols-wrap" style="display:none"></div>
+      <div id="preview-raw-wrap"    style="display:none"></div>
+      <div id="preview-cols-wrap"   style="display:none"></div>
+      <div id="preview-unpivot-wrap" style="display:none"></div>
     </div>
   </div>
 </div>
