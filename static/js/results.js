@@ -421,15 +421,15 @@ function render(){
   const em=document.getElementById('empty');
   if(!rows.length){tb.innerHTML='';em.style.display='block';return;}
   em.style.display='none';
-  tb.innerHTML=rows.map(r=>`<tr>
-    <td class="tk">${esc(r.join_key)}</td>
-    <td><span class="badge badge-${esc(r.type_ecart)}">${esc(r.type_ecart)}</span></td>
-    <td class="td-rule">${esc(r.rule_name)}</td>
-    <td class="tv">${esc(r.champ)}</td>
-    <td class="tv r">${esc(r.valeur_reference)}</td>
-    <td class="tv t">${esc(r.valeur_cible)}</td>
-    <td class="td-det" title="${esc(r.detail)}">${esc(r.detail)}</td>
-  </tr>`).join('');
+  tb.innerHTML=rows.map(r=>'<tr>'+
+    '<td class="tk">'+esc(r.join_key)+'</td>'+
+    '<td><span class="badge badge-'+esc(r.type_ecart)+'">'+esc(r.type_ecart)+'</span></td>'+
+    '<td class="td-rule">'+esc(r.rule_name)+'</td>'+
+    '<td class="tv">'+esc(r.champ)+'</td>'+
+    '<td class="tv r">'+esc(r.valeur_reference)+'</td>'+
+    '<td class="tv t">'+esc(r.valeur_cible)+'</td>'+
+    '<td class="td-det" title="'+esc(r.detail)+'">'+esc(r.detail)+'</td>'+
+  '</tr>').join('');
 }
 initCounts();render();
 <\/script></body></html>`;
@@ -441,3 +441,4 @@ initCounts();render();
   a.click();
   URL.revokeObjectURL(a.href);
 }
+

@@ -105,7 +105,6 @@ function listenSSE(token) {
       const max = config?.report?.max_diff_preview || 500;
       if (allResults.length < max) {
         allResults.push(ev);
-        appendRow(ev);
       }
       // Mise à jour compteurs live
       updateLiveCounts();
@@ -126,6 +125,9 @@ function listenSSE(token) {
                        step: `Terminé — ${ev.total_results.toLocaleString('fr-FR')} résultats` });
       document.getElementById('prog-bar').classList.remove('indeterminate');
       document.getElementById('prog-bar').style.width = '100%';
+
+      // Rendre le tableau (allResults est complet)
+      rebuildTable();
 
       // Activer exports
       document.getElementById('btn-csv').disabled  = false;
