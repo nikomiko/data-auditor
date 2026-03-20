@@ -8,7 +8,7 @@ function wizSrcDefault() {
     fixed_width:false,
     fields:[], column_positions:[],
     unpivot_enabled:false,
-    unpivot:{ anchor_fields:[], location_field:'location_key', value_field:'pivot_value', pivot_fields:[] }
+    unpivot:{ location_field:'location_key', value_field:'pivot_value', pivot_fields:[] }
   };
 }
 const WS = {
@@ -23,22 +23,20 @@ const WS = {
 };
 
 function wGetFieldNames(src) {
-  const s = WS.sources[src];
+  const s    = WS.sources[src];
   const list = s.fixed_width ? s.column_positions : s.fields;
-  const raw = list.map(f => f.name).filter(Boolean);
 
-  // Quand le dépivotage est actif, le DataFrame résultant ne contient plus
-  // les colonnes pivot_fields : seuls anchor_fields + location_field + value_field subsistent.
   if (s.unpivot_enabled) {
-    const anchors  = (s.unpivot.anchor_fields || []).filter(Boolean);
+    // Après dépivotage : anchor_fields (non ignorés, non pivot) + location_field + value_field
+    const pivotSources = new Set((s.unpivot.pivot_fields||[]).map(p=>p.source).filter(Boolean));
     const locField = s.unpivot.location_field || 'location_key';
     const valField = s.unpivot.value_field    || 'pivot_value';
-    // Conserver uniquement les anchors présents dans les colonnes brutes, plus les deux champs générés
-    const anchorSet = new Set(anchors);
-    return [...raw.filter(n => anchorSet.has(n)), locField, valField];
+    const anchors  = list.filter(f => f.name && !f.ignored && !pivotSources.has(f.name)).map(f => f.name);
+    return [...anchors, locField, valField];
   }
 
-  return raw;
+  // Sans dépivotage : tous les champs non ignorés
+  return list.filter(f => !f.ignored).map(f => f.name).filter(Boolean);
 }
 
 // ── Lecture YAML → WizardState ─────────────────────────────
@@ -81,23 +79,29 @@ function wizLoadFromYaml(parsed) {
       s.fixed_width = true;
       s.column_positions = src.column_positions.map(f => ({
         name: f.name||'', position: f.position||0, width: f.width||0,
-        type: f.type||'string', date_format: f.date_format||''
+        type: f.type||'string', date_format: f.date_format||'', ignored: !!f.ignored
       }));
       s.fields = [];
     } else if (src.fields && src.fields.length) {
       s.fields = src.fields.map(f => ({
-        name: f.name||'', type: f.type||'string', date_format: f.date_format||''
+        name: f.name||'', type: f.type||'string', date_format: f.date_format||'', ignored: !!f.ignored
       }));
       s.column_positions = [];
     }
     if (src.unpivot) {
-      s.unpivot_enabled = true;
-      s.unpivot.anchor_fields  = src.unpivot.anchor_fields || [];
+      s.unpivot_enabled    = true;
       s.unpivot.location_field = src.unpivot.location_field || 'location_key';
       s.unpivot.value_field    = src.unpivot.value_field    || 'pivot_value';
       s.unpivot.pivot_fields   = (src.unpivot.pivot_fields||[]).map(p => ({
         source: p.source||'', location: p.location||''
       }));
+      // Rétro-compat : si anchor_fields présent dans le YAML, en déduire les flags ignored
+      if (src.unpivot.anchor_fields && src.unpivot.anchor_fields.length) {
+        const anchorSet = new Set(src.unpivot.anchor_fields);
+        const pivotSet  = new Set(s.unpivot.pivot_fields.map(p=>p.source).filter(Boolean));
+        const fieldList = s.fixed_width ? s.column_positions : s.fields;
+        fieldList.forEach(f => { f.ignored = !!(f.name && !anchorSet.has(f.name) && !pivotSet.has(f.name)); });
+      }
     } else {
       s.unpivot_enabled = false;
     }
@@ -185,6 +189,7 @@ function wizBuildYaml() {
           const o = { name: f.name, position: Number(f.position), width: Number(f.width) };
           if (f.type && f.type !== 'string') o.type = f.type;
           if (f.type === 'date' && f.date_format) o.date_format = f.date_format;
+          if (f.ignored) o.ignored = true;
           return o;
         });
       } else {
@@ -192,14 +197,18 @@ function wizBuildYaml() {
           const o = { name: f.name };
           if (f.type && f.type !== 'string') o.type = f.type;
           if (f.type === 'date' && f.date_format) o.date_format = f.date_format;
+          if (f.ignored) o.ignored = true;
           return o;
         });
       }
     }
     // unpivot
     if (s.unpivot_enabled) {
+      const fieldList   = s.fixed_width ? s.column_positions : s.fields;
+      const pivotSources = new Set((s.unpivot.pivot_fields||[]).map(p=>p.source).filter(Boolean));
+      const anchorFields = fieldList.filter(f => f.name && !f.ignored && !pivotSources.has(f.name)).map(f=>f.name);
       sr.unpivot = {
-        anchor_fields:  s.unpivot.anchor_fields.filter(Boolean),
+        anchor_fields:  anchorFields,
         location_field: s.unpivot.location_field || 'location_key',
         value_field:    s.unpivot.value_field    || 'pivot_value',
         pivot_fields:   s.unpivot.pivot_fields.filter(p => p.source)
@@ -464,8 +473,8 @@ function wizRenderSource(stepEl, srcKey, label) {
       </div>
       <table class="col-table" id="ctbl-${srcKey}">
         <thead><tr>${s.fixed_width
-          ? '<th>Nom</th><th>Position</th><th>Largeur</th><th>Type</th><th title="Format Python strftime. Exemples&#10;%d/%m/%Y → 31/12/2024&#10;%Y-%m-%d → 2024-12-31&#10;%Y%m%d → 20241231&#10;%d/%m/%Y %H:%M:%S → date+heure&#10;Codes : %Y=année %m=mois %d=jour %H=heure %M=minute %S=seconde">Date fmt ⓘ</th><th></th>'
-          : '<th>Nom</th><th>Type</th><th title="Format Python strftime. Exemples&#10;%d/%m/%Y → 31/12/2024&#10;%Y-%m-%d → 2024-12-31&#10;%Y%m%d → 20241231&#10;%d/%m/%Y %H:%M:%S → date+heure&#10;Codes : %Y=année %m=mois %d=jour %H=heure %M=minute %S=seconde">Date fmt ⓘ</th><th></th>'
+          ? '<th>Nom</th><th>Position</th><th>Largeur</th><th>Type</th><th title="Format Python strftime. Exemples&#10;%d/%m/%Y → 31/12/2024&#10;%Y-%m-%d → 2024-12-31&#10;%Y%m%d → 20241231&#10;%d/%m/%Y %H:%M:%S → date+heure&#10;Codes : %Y=année %m=mois %d=jour %H=heure %M=minute %S=seconde">Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>'
+          : '<th>Nom</th><th>Type</th><th title="Format Python strftime. Exemples&#10;%d/%m/%Y → 31/12/2024&#10;%Y-%m-%d → 2024-12-31&#10;%Y%m%d → 20241231&#10;%d/%m/%Y %H:%M:%S → date+heure&#10;Codes : %Y=année %m=mois %d=jour %H=heure %M=minute %S=seconde">Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>'
         }</tr></thead>
         <tbody id="ctbody-${srcKey}">
           ${wizColRows(srcKey, s)}
@@ -475,10 +484,10 @@ function wizRenderSource(stepEl, srcKey, label) {
 
   const unpivotFieldsHtml = s.unpivot_enabled ? `
     <div class="wiz-grid" style="margin-top:.5rem">
-      ${wizField('Colonnes identité <i class="wiz-info" title="Colonnes conservées sur chaque ligne générée — les colonnes \'fixes\' de votre fichier large. Ex : SKU (chaque ligne SKU génère N lignes, une par dépôt)">i</i>', wizInput('w-ua-'+srcKey, s.unpivot.anchor_fields.join(', '), 'ex: SKU'))}
       ${wizField('Nom du champ «clé» (dépivoté) <i class="wiz-info" title="Nom de la nouvelle colonne qui contiendra la clé de chaque entrée dépivotée. Ex : \'depot\' → chaque ligne générée aura une colonne depot avec la valeur depot_A, depot_B…">i</i>', wizInput('w-ul-'+srcKey, s.unpivot.location_field, 'ex: depot'))}
       ${wizField('Nom du champ «valeur» (dépivoté) <i class="wiz-info" title="Nom de la nouvelle colonne qui contiendra la valeur dépivotée. Ex : \'qty\' → chaque ligne aura une colonne qty avec la valeur 100, 200…">i</i>', wizInput('w-uv-'+srcKey, s.unpivot.value_field, 'ex: qty'))}
     </div>
+    <p style="font-size:.72rem;color:var(--muted);margin:.25rem 0 .5rem">Colonnes identité = champs non ignorés et non utilisés comme clés de dépivotage (cochés «Ign.» dans le tableau ci-dessus).</p>
     <div class="wiz-section-title" style="margin-top:.75rem;font-size:.72rem">Liste des clés</div>
     <table class="col-table">
       <thead><tr>
@@ -522,13 +531,14 @@ function wizRenderSource(stepEl, srcKey, label) {
   const ueEl = document.getElementById('w-ue-'+srcKey);
   if (ueEl) ueEl.addEventListener('change', () => {
     wizReadSourceForm(srcKey);
+    const cur = WS.sources[srcKey];
     document.getElementById('unpivot-fields-'+srcKey).innerHTML =
-      WS.sources[srcKey].unpivot_enabled ? `
+      cur.unpivot_enabled ? `
         <div class="wiz-grid" style="margin-top:.5rem">
-          ${wizField('Colonnes identité <i class="wiz-info" title="Colonnes conservées sur chaque ligne générée — les colonnes \'fixes\' de votre fichier large. Ex : SKU">i</i>', wizInput('w-ua-'+srcKey, WS.sources[srcKey].unpivot.anchor_fields.join(', '), 'ex: SKU'))}
-          ${wizField('Nom du champ «clé» (dépivoté) <i class="wiz-info" title="Nom de la nouvelle colonne qui contiendra la clé de chaque entrée dépivotée. Ex : \'depot\'">i</i>', wizInput('w-ul-'+srcKey, WS.sources[srcKey].unpivot.location_field, 'ex: depot'))}
-          ${wizField('Nom du champ «valeur» (dépivoté) <i class="wiz-info" title="Nom de la nouvelle colonne qui contiendra la valeur dépivotée. Ex : \'qty\'">i</i>', wizInput('w-uv-'+srcKey, WS.sources[srcKey].unpivot.value_field, 'ex: qty'))}
+          ${wizField('Nom du champ «clé» (dépivoté) <i class="wiz-info" title="Nom de la nouvelle colonne qui contiendra la clé de chaque entrée dépivotée. Ex : \'depot\'">i</i>', wizInput('w-ul-'+srcKey, cur.unpivot.location_field, 'ex: depot'))}
+          ${wizField('Nom du champ «valeur» (dépivoté) <i class="wiz-info" title="Nom de la nouvelle colonne qui contiendra la valeur dépivotée. Ex : \'qty\'">i</i>', wizInput('w-uv-'+srcKey, cur.unpivot.value_field, 'ex: qty'))}
         </div>
+        <p style="font-size:.72rem;color:var(--muted);margin:.25rem 0 .5rem">Colonnes identité = champs non ignorés et non utilisés comme clés de dépivotage (cochés «Ign.» dans le tableau ci-dessus).</p>
         <div class="wiz-section-title" style="margin-top:.75rem;font-size:.72rem">Liste des clés</div>
         <table class="col-table">
           <thead><tr>
@@ -536,7 +546,7 @@ function wizRenderSource(stepEl, srcKey, label) {
             <th>Clé (dépivoté) <i class="wiz-info" title="Valeur qui apparaîtra dans le champ «clé» pour cette colonne. Optionnel — par défaut = nom de la colonne.">i</i></th>
             <th></th>
           </tr></thead>
-          <tbody id="ptbody-${srcKey}">${wizPivotRows(srcKey, WS.sources[srcKey])}</tbody>
+          <tbody id="ptbody-${srcKey}">${wizPivotRows(srcKey, cur)}</tbody>
         </table>
         <button class="btn-wiz-add" onclick="wizAddPivot('${srcKey}')">+ Ajouter une clé</button>` : '';
   });
@@ -568,20 +578,23 @@ function wizColRows(srcKey, s) {
     const dfHtml = `<div id="w-df-wrap-${srcKey}-${i}" style="${type !== 'date' ? 'display:none' : ''}">`
       + wizInput(`w-df-${srcKey}-${i}`, f.date_format || '', '%Y-%m-%d')
       + `</div>`;
+    const ignHtml = `<input type="checkbox" id="w-ig-${srcKey}-${i}" title="Ignorer ce champ"${f.ignored?' checked':''} style="cursor:pointer">`;
     if (s.fixed_width) {
-      return `<tr>
+      return `<tr${f.ignored?' style="opacity:.45"':''}>
         <td>${wizInput(`w-cn-${srcKey}-${i}`, f.name, 'nom')}</td>
         <td>${wizInput(`w-cp-${srcKey}-${i}`, f.position, '0')}</td>
         <td>${wizInput(`w-cw-${srcKey}-${i}`, f.width, '1')}</td>
         <td>${typeSelHtml}</td>
         <td>${dfHtml}</td>
+        <td style="text-align:center">${ignHtml}</td>
         <td><button class="btn-icon" onclick="wizRemoveCol('${srcKey}',${i})" title="Supprimer">✕</button></td>
       </tr>`;
     } else {
-      return `<tr>
+      return `<tr${f.ignored?' style="opacity:.45"':''}>
         <td>${wizInput(`w-cn-${srcKey}-${i}`, f.name, 'nom')}</td>
         <td>${typeSelHtml}</td>
         <td>${dfHtml}</td>
+        <td style="text-align:center">${ignHtml}</td>
         <td><button class="btn-icon" onclick="wizRemoveCol('${srcKey}',${i})" title="Supprimer">✕</button></td>
       </tr>`;
     }
@@ -609,9 +622,9 @@ function wizAddCol(srcKey) {
   if (s.fixed_width) {
     const prev = s.column_positions[s.column_positions.length - 1];
     const nextPos = prev ? (Number(prev.position) + Number(prev.width)) : 0;
-    s.column_positions.push({name:'', position:nextPos, width:1, type:'string', date_format:''});
+    s.column_positions.push({name:'', position:nextPos, width:1, type:'string', date_format:'', ignored:false});
   }
-  else s.fields.push({name:'', type:'string', date_format:''});
+  else s.fields.push({name:'', type:'string', date_format:'', ignored:false});
   const tbody = document.getElementById('ctbody-'+srcKey);
   if (tbody) tbody.innerHTML = wizColRows(srcKey, s);
 }
@@ -643,18 +656,19 @@ function wizToggleFW(srcKey) {
   wizReadSourceForm(srcKey);
   const s = WS.sources[srcKey];
   s.fixed_width = !s.fixed_width;
+  const dfTooltip = 'title="Format Python strftime. Exemples&#10;%d/%m/%Y → 31/12/2024&#10;%Y-%m-%d → 2024-12-31&#10;%Y%m%d → 20241231&#10;%d/%m/%Y %H:%M:%S → date+heure&#10;Codes : %Y=année %m=mois %d=jour %H=heure %M=minute %S=seconde"';
   if (s.fixed_width) {
-    s.column_positions = s.fields.map(f => ({name:f.name, position:0, width:1, type:f.type, date_format:f.date_format}));
+    s.column_positions = s.fields.map(f => ({name:f.name, position:0, width:1, type:f.type, date_format:f.date_format, ignored:!!f.ignored}));
     s.fields = [];
   } else {
-    s.fields = s.column_positions.map(f => ({name:f.name, type:f.type, date_format:f.date_format}));
+    s.fields = s.column_positions.map(f => ({name:f.name, type:f.type, date_format:f.date_format, ignored:!!f.ignored}));
     s.column_positions = [];
   }
   const tbody = document.getElementById('ctbody-'+srcKey);
   const thead = tbody?.closest('table')?.querySelector('thead tr');
   if (thead) thead.innerHTML = s.fixed_width
-    ? '<th>Nom</th><th>Position</th><th>Largeur</th><th>Type</th><th>Date fmt</th><th></th>'
-    : '<th>Nom</th><th>Type</th><th>Date fmt</th><th></th>';
+    ? `<th>Nom</th><th>Position</th><th>Largeur</th><th>Type</th><th ${dfTooltip}>Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>`
+    : `<th>Nom</th><th>Type</th><th ${dfTooltip}>Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>`;
   if (tbody) tbody.innerHTML = wizColRows(srcKey, s);
 }
 
@@ -678,15 +692,14 @@ function wizReadSourceForm(srcKey) {
     if (g(`w-cn-${srcKey}-${i}`) !== null) f.name = g(`w-cn-${srcKey}-${i}`);
     if (g(`w-ct-${srcKey}-${i}`) !== null) f.type = g(`w-ct-${srcKey}-${i}`);
     if (g(`w-df-${srcKey}-${i}`) !== null) f.date_format = g(`w-df-${srcKey}-${i}`);
+    const igEl = document.getElementById(`w-ig-${srcKey}-${i}`);
+    if (igEl !== null) f.ignored = igEl.checked;
     if (s.fixed_width) {
       if (g(`w-cp-${srcKey}-${i}`) !== null) f.position = Number(g(`w-cp-${srcKey}-${i}`))||0;
       if (g(`w-cw-${srcKey}-${i}`) !== null) f.width    = Number(g(`w-cw-${srcKey}-${i}`))||1;
     }
   });
   // Unpivot
-  if (g('w-ua-'+srcKey) !== null) {
-    s.unpivot.anchor_fields  = g('w-ua-'+srcKey).split(',').map(v=>v.trim()).filter(Boolean);
-  }
   if (g('w-ul-'+srcKey) !== null) s.unpivot.location_field = g('w-ul-'+srcKey);
   if (g('w-uv-'+srcKey) !== null) s.unpivot.value_field    = g('w-uv-'+srcKey);
   (s.unpivot.pivot_fields||[]).forEach((p, i) => {
@@ -813,11 +826,14 @@ function wizBuildSourcesObj() {
       if (s.fields.length) sr.fields = s.fields.map(f=>({name:f.name, type:f.type||'string'}));
     }
     if (s.unpivot_enabled) {
+      const fieldList2    = s.fixed_width ? s.column_positions : s.fields;
+      const pivotSources2 = new Set((s.unpivot.pivot_fields||[]).map(p=>p.source).filter(Boolean));
+      const anchorFields2 = fieldList2.filter(f => f.name && !f.ignored && !pivotSources2.has(f.name)).map(f=>f.name);
       sr.unpivot = {
-        anchor_fields: s.unpivot.anchor_fields,
+        anchor_fields:  anchorFields2,
         location_field: s.unpivot.location_field,
-        value_field: s.unpivot.value_field,
-        pivot_fields: s.unpivot.pivot_fields
+        value_field:    s.unpivot.value_field,
+        pivot_fields:   s.unpivot.pivot_fields
       };
     }
     obj[k] = sr;

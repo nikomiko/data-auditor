@@ -209,7 +209,7 @@ async function autoDetectColumns(srcKey, file) {
     const delim = src.delimiter || ';';
     const names = header.split(delim).map(s => s.trim().replace(/^"|"$/g, '')).filter(Boolean);
     if (!names.length) return;
-    src.fields = names.map(n => ({ name: n, type: 'string', date_format: '' }));
+    src.fields = names.map(n => ({ name: n, type: 'string', date_format: '', ignored: false }));
   } catch(_) {}
 }
 
@@ -470,10 +470,12 @@ function renderPreviewUnpivot(lines, srcKey, delim) {
   const s = WS.sources[srcKey];
   const u = s.unpivot;
 
-  const anchors  = (u.anchor_fields  || []).filter(Boolean);
-  const locField = u.location_field  || 'location_key';
-  const valField = u.value_field     || 'pivot_value';
-  const pivots   = (u.pivot_fields   || []).filter(p => p.source);
+  const locField   = u.location_field || 'location_key';
+  const valField   = u.value_field    || 'pivot_value';
+  const pivots     = (u.pivot_fields  || []).filter(p => p.source);
+  const pivotSet   = new Set(pivots.map(p => p.source));
+  const fieldList  = s.fixed_width ? s.column_positions : s.fields;
+  const anchors    = fieldList.filter(f => f.name && !f.ignored && !pivotSet.has(f.name)).map(f => f.name);
 
   if (!s.has_header) {
     wrap.innerHTML = '<div class="preview-na">Aperçu non disponible sans en-tête (has_header: false).</div>';
@@ -494,8 +496,8 @@ function renderPreviewUnpivot(lines, srcKey, delim) {
   const missingPivots  = pivots.filter(p => !headerSet.has(p.source)).map(p => p.source);
   if (missingAnchors.length || missingPivots.length) {
     const msgs = [];
-    if (missingAnchors.length) msgs.push('anchor_fields introuvables : ' + missingAnchors.join(', '));
-    if (missingPivots.length)  msgs.push('pivot_fields introuvables : '  + missingPivots.join(', '));
+    if (missingAnchors.length) msgs.push('Champs identité introuvables : ' + missingAnchors.join(', '));
+    if (missingPivots.length)  msgs.push('pivot_fields introuvables : '    + missingPivots.join(', '));
     wrap.innerHTML = '<div class="preview-na">' + msgs.map(esc).join('<br>') + '</div>';
     return;
   }
