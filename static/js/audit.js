@@ -21,6 +21,12 @@ async function runAudit() {
   document.getElementById('trunc').style.display = 'none';
   allResults = [];
   filterText = ''; sortCol = null; sortDir = 1;
+  // Réinitialiser les filtres pour chaque nouvel audit
+  activeFilters = new Set(['ORPHELIN_A', 'ORPHELIN_B']);
+  activeRuleFilters = null;
+  document.querySelectorAll('#filter-bar .chip[data-kind="type"]').forEach(btn => btn.classList.add('on'));
+  document.querySelectorAll('#filter-bar .chip[data-kind="ruletype"]').forEach(btn => btn.classList.add('on'));
+  document.getElementById('filter-dynamic').innerHTML = '';
   const ftEl = document.getElementById('filter-text');
   if (ftEl) ftEl.value = '';
   ['key','type','rule','ref','tgt'].forEach(c => {
