@@ -357,15 +357,7 @@ def compare_with_progress(
                 if type_ecart == "KO":
                     rule_ko_keys[rule_name].add(key)
 
-            elif show_ok and rule_type == "incoherence":
-                # Règle incoherence non passante : aucune incohérence détectée → OK
-                row_results.append({
-                    "join_key": key, "type_ecart": "OK",
-                    "rule_name": rule_name,
-                    "champ": "", "valeur_reference": "", "valeur_cible": "",
-                    "detail": f'Règle "{rule_name}" : aucune incohérence détectée',
-                })
-                # Règle coherence non passante : condition non vérifiée → on n'émet rien
+            # Règle non passante (coherence ou incoherence) → on n'émet rien
 
         # ── Emit ───────────────────────────────────────────────
         if row_results:
@@ -376,7 +368,7 @@ def compare_with_progress(
                 divergent_keys.add(key)
             else:
                 ok += 1
-        elif show_ok and not rules:
+        elif show_ok:
             r = {"join_key": key, "type_ecart": "OK", "rule_name": "",
                  "champ": "", "valeur_reference": "", "valeur_cible": "",
                  "detail": "Toutes les valeurs sont conformes"}
