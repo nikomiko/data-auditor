@@ -79,8 +79,8 @@ def to_xlsx(results: list, summary: dict, config: dict) -> bytes:
         ("Généré le",          datetime.now().strftime("%d/%m/%Y %H:%M:%S")),
         ("Référence (lignes)", summary.get("total_reference", 0)),
         ("Cible (lignes)",     summary.get("total_cible", 0)),
-        ("Orphelins A",        summary.get("orphelins_a", 0)),
-        ("Orphelins B",        summary.get("orphelins_b", 0)),
+        ("Pas dans la cible",  summary.get("orphelins_a", 0)),
+        ("Pas dans la réf.",   summary.get("orphelins_b", 0)),
         ("Divergents",         summary.get("divergents", 0)),
         ("OK",                 summary.get("ok", 0)),
     ]:
@@ -153,8 +153,8 @@ code{font-family:monospace;font-size:.8rem;color:#4a5568}
 <div class="cards">
   <div class="card"><div class="v">{{ s.total_reference }}</div><div class="l">Réf.</div></div>
   <div class="card"><div class="v">{{ s.total_cible }}</div><div class="l">Cible</div></div>
-  <div class="card ca"><div class="v">{{ s.orphelins_a }}</div><div class="l">Orphelins A</div></div>
-  <div class="card cb"><div class="v">{{ s.orphelins_b }}</div><div class="l">Orphelins B</div></div>
+  <div class="card ca"><div class="v">{{ s.orphelins_a }}</div><div class="l">Pas dans la cible</div></div>
+  <div class="card cb"><div class="v">{{ s.orphelins_b }}</div><div class="l">Pas dans la réf.</div></div>
   <div class="card cd"><div class="v">{{ s.divergents }}</div><div class="l">Divergents</div></div>
 </div>
 {% if results %}

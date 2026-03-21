@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════
 function wizSrcDefault() {
   return {
-    label:'', format:'csv', encoding:'utf-8', delimiter:';',
+    label:'', file:'', format:'csv', encoding:'utf-8', delimiter:';',
     has_header:true, skip_rows:0, max_columns:'', record_filter_marker:'',
     fixed_width:false,
     fields:[], column_positions:[],
@@ -67,6 +67,7 @@ function wizLoadFromYaml(parsed) {
     if (!src) return;
     const s = WS.sources[k];
     s.label  = src.label    || '';
+    s.file   = src.file     || '';
     s.format = src.format   || 'csv';
     s.encoding   = src.encoding  || 'utf-8';
     s.delimiter  = src.delimiter !== undefined ? src.delimiter : ';';
@@ -173,6 +174,7 @@ function wizBuildYaml() {
     const s  = WS.sources[k];
     const sr = { format: s.format };
     if (s.label)    sr.label    = s.label;
+    if (s.file)     sr.file     = s.file;
     if (s.encoding) sr.encoding = s.encoding;
     const noDelim = ['json','xlsx'].includes(s.format);
     if (!noDelim && s.delimiter !== undefined) sr.delimiter = s.delimiter;
@@ -466,6 +468,14 @@ function wizRenderSource(stepEl, srcKey, label) {
   const noDelim = ['json','xlsx'].includes(s.format);
   const noFields = ['json','xlsx'].includes(s.format);
 
+  const fileLoaded = srcKey === 'reference' ? !!fileRef : !!fileTgt;
+  const detectBanner = (fileLoaded && !_hasSourceConfig(srcKey) && !s.fixed_width && !noFields)
+    ? `<div class="detect-banner">
+        <span>Aucune colonne configurée — cliquez pour inférer la structure depuis le fichier.</span>
+        <button class="btn-detect" onclick="detectAndApply('${srcKey}')">🔍 Détecter la structure</button>
+      </div>`
+    : '';
+
   const colsHtml = noFields
     ? `<div class="wiz-warn">Format <strong>${s.format}</strong> : colonnes détectées automatiquement au parsing.</div>`
     : `<div>
@@ -505,6 +515,7 @@ function wizRenderSource(stepEl, srcKey, label) {
       <div class="wiz-grid">
         ${wizField('Format', wizSelect('w-fmt-'+srcKey, [['csv','CSV'],['txt','TXT'],['dat','DAT'],['json','JSON'],['xlsx','XLSX']], s.format))}
         ${wizField('Label', wizInput('w-lbl-'+srcKey, s.label, 'ex: Stock WMS'))}
+        ${wizField('Chemin du fichier', wizInput('w-file-'+srcKey, s.file, 'ex: /data/export.csv'))}
         ${wizField('Encodage', wizSelect('w-enc-'+srcKey, [['utf-8','UTF-8'],['utf-8-sig','UTF-8 avec BOM'],['windows-1252','Windows-1252 (ANSI)'],['latin-1','Latin-1 / ISO-8859-1']], s.encoding||'utf-8'))}
         ${noDelim ? '' : wizField('Délimiteur', wizInput('w-del-'+srcKey, s.delimiter, ';'))}
         ${wizField('Skip rows', wizInput('w-sk-'+srcKey, s.skip_rows, '0'))}
@@ -515,6 +526,7 @@ function wizRenderSource(stepEl, srcKey, label) {
     </div>
     <div class="wiz-section">
       <div class="wiz-section-title">Colonnes</div>
+      ${detectBanner}
       ${colsHtml}
     </div>
     <div class="wiz-section">
@@ -676,9 +688,10 @@ function wizReadSourceForm(srcKey) {
   const s  = WS.sources[srcKey];
   const g  = id => { const el = document.getElementById(id); return el ? el.value : null; };
   const gc = id => { const el = document.getElementById(id); return el ? el.checked : null; };
-  if (g('w-fmt-'+srcKey) !== null) s.format  = g('w-fmt-'+srcKey);
-  if (g('w-lbl-'+srcKey) !== null) s.label   = g('w-lbl-'+srcKey);
-  if (g('w-enc-'+srcKey) !== null) s.encoding = g('w-enc-'+srcKey);
+  if (g('w-fmt-'+srcKey)  !== null) s.format  = g('w-fmt-'+srcKey);
+  if (g('w-lbl-'+srcKey)  !== null) s.label   = g('w-lbl-'+srcKey);
+  if (g('w-file-'+srcKey) !== null) s.file    = g('w-file-'+srcKey);
+  if (g('w-enc-'+srcKey)  !== null) s.encoding = g('w-enc-'+srcKey);
   if (g('w-del-'+srcKey) !== null) s.delimiter = g('w-del-'+srcKey);
   if (g('w-sk-'+srcKey)  !== null) s.skip_rows = Number(g('w-sk-'+srcKey))||0;
   if (g('w-mc-'+srcKey)  !== null) s.max_columns = g('w-mc-'+srcKey);
@@ -804,8 +817,8 @@ async function wizTestJoin() {
     res.innerHTML = `<div class="join-result">
       <div class="join-stats">
         <div class="join-stat m"><span class="n">${data.matched.toLocaleString('fr-FR')}</span><span>paires matchées</span></div>
-        <div class="join-stat a"><span class="n">${data.orphelins_a.toLocaleString('fr-FR')}</span><span>orphelins A</span></div>
-        <div class="join-stat b"><span class="n">${data.orphelins_b.toLocaleString('fr-FR')}</span><span>orphelins B</span></div>
+        <div class="join-stat a"><span class="n">${data.orphelins_a.toLocaleString('fr-FR')}</span><span>pas dans la cible</span></div>
+        <div class="join-stat b"><span class="n">${data.orphelins_b.toLocaleString('fr-FR')}</span><span>pas dans la réf.</span></div>
         <div class="join-stat" style="color:var(--muted)"><span class="n" style="font-size:.85rem">${data.total_ref}</span><span>réf.</span></div>
         <div class="join-stat" style="color:var(--muted)"><span class="n" style="font-size:.85rem">${data.total_tgt}</span><span>cible</span></div>
       </div>

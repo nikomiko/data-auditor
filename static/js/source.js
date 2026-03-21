@@ -41,6 +41,10 @@ function applyYamlContent(content, filename) {
   try {
     const parsed = jsyaml.load(content);
     wizLoadFromYaml(parsed);
+    _updateFileHint('reference');
+    _updateFileHint('target');
+    if (fileRef) _quickConformityCheck('reference', fileRef);
+    if (fileTgt) _quickConformityCheck('target', fileTgt);
     // Mettre à jour le résumé dans wfv-0
     const sum = document.getElementById('yaml-loaded-summary');
     const dz  = document.getElementById('dz-yaml');
@@ -211,6 +215,110 @@ async function autoDetectColumns(srcKey, file) {
     if (!names.length) return;
     src.fields = names.map(n => ({ name: n, type: 'string', date_format: '', ignored: false }));
   } catch(_) {}
+}
+
+function _basename(path) {
+  return (path || '').replace(/\\/g, '/').split('/').pop();
+}
+
+function _updateFileHint(srcKey) {
+  const which = srcKey === 'reference' ? 'ref' : 'tgt';
+  const fileLoaded = srcKey === 'reference' ? !!fileRef : !!fileTgt;
+  const path = WS.sources[srcKey].file || '';
+  const dz = document.getElementById('dz-' + which);
+  if (!dz) return;
+  if (fileLoaded || !path) {
+    dz.classList.remove('hinted');
+    return;
+  }
+  const name = _basename(path);
+  document.getElementById('dz-' + which + '-label').textContent = name || path;
+  document.getElementById('dz-' + which + '-sub').textContent   =
+    path !== name ? path : 'Cliquez pour charger ce fichier';
+  dz.classList.add('hinted');
+}
+
+function _hasSourceConfig(srcKey) {
+  const s = WS.sources[srcKey];
+  return (s.fields && s.fields.length > 0) ||
+         (s.column_positions && s.column_positions.length > 0);
+}
+
+async function _onFileLoaded(srcKey, file) {
+  if (_hasSourceConfig(srcKey)) {
+    await _quickConformityCheck(srcKey, file);
+  }
+  if (wfCurrentStep === 1 && srcKey === 'reference') onEnterRef();
+  else if (wfCurrentStep === 2 && srcKey === 'target') onEnterTgt();
+}
+
+async function _quickConformityCheck(srcKey, file) {
+  const which = srcKey === 'reference' ? 'ref' : 'tgt';
+  const src = WS.sources[srcKey];
+  if (!['csv','txt','dat'].includes(src.format) || src.fixed_width || !src.has_header) {
+    _updateValBadge(which, null); return;
+  }
+  try {
+    const buf = await file.slice(0, 32768).arrayBuffer();
+    const enc = src.encoding === 'utf-8-sig' ? 'utf-8' : (src.encoding || 'utf-8');
+    let text;
+    try { text = new TextDecoder(enc, {fatal:false}).decode(buf); }
+    catch(_) { text = new TextDecoder('utf-8', {fatal:false}).decode(buf); }
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+    const skip = parseInt(src.skip_rows) || 0;
+    const header = lines[skip] || '';
+    const delim = src.delimiter || ';';
+    const fileNames = header.split(delim).map(s => s.trim().replace(/^"|"$/g,''));
+    const declared = (src.fields || []).map(f => f.name);
+    let ok = 0, warn = 0;
+    fileNames.forEach((fn, i) => { declared[i] === fn ? ok++ : warn++; });
+    const missing = Math.max(0, declared.length - fileNames.length);
+    _updateValBadge(which, {ok, warn, missing});
+  } catch(_) { _updateValBadge(which, null); }
+}
+
+async function detectAndApply(srcKey) {
+  const file = srcKey === 'reference' ? fileRef : fileTgt;
+  if (!file) return;
+  const src = WS.sources[srcKey];
+  try {
+    const buf = await file.slice(0, 65536).arrayBuffer();
+    let text;
+    try { text = new TextDecoder('utf-8', {fatal:true}).decode(buf); }
+    catch(_) { text = new TextDecoder('windows-1252').decode(buf); }
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    const allLines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+    const lines = allLines.filter(l => l.trim());
+
+    const DELIMS = [';', ',', '\t', '|'];
+    let bestDelim = ';', bestScore = -1;
+    for (const d of DELIMS) {
+      const cnts = lines.slice(0, 10).map(l => l.split(d).length);
+      const maxCnt = Math.max(...cnts);
+      const score = cnts.filter(c => c === maxCnt).length * maxCnt;
+      if (score > bestScore) { bestScore = score; bestDelim = d; }
+    }
+    src.delimiter = bestDelim;
+
+    const cnts = lines.map(l => l.split(bestDelim).length);
+    const maxCnt = Math.max(...cnts.slice(0, 15));
+    let skip = 0;
+    while (skip < lines.length && cnts[skip] < maxCnt) skip++;
+    src.skip_rows = skip;
+    src.has_header = true;
+    src.fixed_width = false;
+
+    const hdrLine = lines[skip] || '';
+    const names = hdrLine.split(bestDelim)
+      .map(s => s.trim().replace(/^"|"$/g, '')).filter(Boolean);
+    if (names.length) {
+      src.fields = names.map(n => ({name: n, type: 'string', date_format: '', ignored: false}));
+    }
+
+    if (srcKey === 'reference') onEnterRef();
+    else onEnterTgt();
+  } catch(e) { console.error('detectAndApply failed', e); }
 }
 
 // ═══════════════════════════════════════════════════════════

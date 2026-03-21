@@ -60,8 +60,8 @@ function updateSourceLabels() {
   const rL = refLabel || 'Référence';
   const tL = tgtLabel || 'Cible';
   const e = id => document.getElementById(id);
-  if (e('lbl-ref'))       e('lbl-ref').textContent       = rL;
-  if (e('lbl-tgt'))       e('lbl-tgt').textContent       = tL;
+  if (e('lbl-ref'))       e('lbl-ref').textContent       = refLabel || '';
+  if (e('lbl-tgt'))       e('lbl-tgt').textContent       = tgtLabel || '';
   if (e('nav-lbl-tgt'))   e('nav-lbl-tgt').textContent   = tL;
   if (e('nav-lbl-ref'))   e('nav-lbl-ref').textContent   = rL;
   if (e('nav-lbl-ref0'))  e('nav-lbl-ref0').textContent  = rL;
@@ -255,9 +255,10 @@ function resetAll() {
   const yamlEl = document.getElementById('yaml');
   if (yamlEl) yamlEl.value = '';
   yamlFilename = 'config.yaml'; yamlOriginal = ''; yamlFileHandle = null;
+  updateSaveBtn();
 
   // Drop zone référence
-  document.getElementById('dz-ref').classList.remove('loaded');
+  document.getElementById('dz-ref').classList.remove('loaded', 'hinted');
   document.getElementById('dz-ref-label').textContent = 'Glissez votre fichier ici';
   document.getElementById('dz-ref-sub').textContent   = 'ou cliquez pour parcourir — CSV, TXT, DAT, JSON, XLSX';
   document.getElementById('eye-ref').style.display    = 'none';
@@ -267,7 +268,7 @@ function resetAll() {
   document.getElementById('f-ref').value = '';
 
   // Drop zone cible
-  document.getElementById('dz-tgt').classList.remove('loaded');
+  document.getElementById('dz-tgt').classList.remove('loaded', 'hinted');
   document.getElementById('dz-tgt-label').textContent = 'Glissez votre fichier ici';
   document.getElementById('dz-tgt-sub').textContent   = 'ou cliquez pour parcourir — CSV, TXT, DAT, JSON, XLSX';
   document.getElementById('eye-tgt').style.display    = 'none';
@@ -298,7 +299,13 @@ function resetAll() {
   updateGlobalNav(0);
 
   // Réinitialiser WS APRÈS goWFStep (qui peut relire le DOM via _saveCurrentWFStep)
-  wizSrcDefault();
+  WS.sources.reference = wizSrcDefault();
+  WS.sources.target    = wizSrcDefault();
+  WS.join.keys  = [];
+  WS.rules      = [];
+  WS.filters    = [];
+  WS.report     = { show_matching: false, max_diff_preview: 500 };
+  WS.meta       = { name: '', version: '' };
 
   // Vider le rendu des étapes source pour ne pas afficher de contenu résiduel
   const src1 = document.getElementById('wfv-1-src');

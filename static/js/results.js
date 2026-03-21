@@ -511,15 +511,15 @@ th.sort-asc .sort-ic,th.sort-desc .sort-ic{opacity:1;color:#3b82f6}
 <div class="cards">
   <div class="card"><div class="v">${s.total_reference||0}</div><div class="l">R\xe9f.</div></div>
   <div class="card"><div class="v">${s.total_cible||0}</div><div class="l">Cible</div></div>
-  <div class="card ca"><div class="v">${s.orphelins_a||0}</div><div class="l">Orphelins A</div></div>
-  <div class="card cb"><div class="v">${s.orphelins_b||0}</div><div class="l">Orphelins B</div></div>
+  <div class="card ca"><div class="v">${s.orphelins_a||0}</div><div class="l">Pas dans la cible</div></div>
+  <div class="card cb"><div class="v">${s.orphelins_b||0}</div><div class="l">Pas dans la réf.</div></div>
   <div class="card cd"><div class="v">${s.divergents||0}</div><div class="l">KO</div></div>
   <div class="card co"><div class="v">${s.ok||0}</div><div class="l">OK</div></div>
 </div>
 <div class="filter-bar">
   <span class="fl">Types</span>
-  <button class="chip ca on" data-k="type" data-v="ORPHELIN_A" onclick="toggleChip(this)">Orphelin A <span class="chip-c" id="cc-a">0</span></button>
-  <button class="chip cb on" data-k="type" data-v="ORPHELIN_B" onclick="toggleChip(this)">Orphelin B <span class="chip-c" id="cc-b">0</span></button>
+  <button class="chip ca on" data-k="type" data-v="ORPHELIN_A" onclick="toggleChip(this)">Pas dans la cible <span class="chip-c" id="cc-a">0</span></button>
+  <button class="chip cb on" data-k="type" data-v="ORPHELIN_B" onclick="toggleChip(this)">Pas dans la réf. <span class="chip-c" id="cc-b">0</span></button>
   <button class="chip cd on" data-k="type" data-v="KO" onclick="toggleChip(this)">KO <span class="chip-c" id="cc-ko">0</span></button>
   <button class="chip co on" data-k="type" data-v="OK" onclick="toggleChip(this)">OK <span class="chip-c" id="cc-ok">0</span></button>
   ${ruleChips}

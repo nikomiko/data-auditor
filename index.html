@@ -13,13 +13,13 @@
 <header>
   <div class="logo">data<em>/</em>auditor
     <span class="logo-tag">server</span>
-    <span class="logo-ver">v3.3.1</span>
+    <span class="logo-ver">v3.4.0</span>
   </div>
   <div class="wf-steps" id="wf-steps">
     <button class="wf-chev reset" onclick="resetAll()" title="Réinitialiser toute la configuration"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.36"/></svg><span class="wf-chev-lbl">Reset</span></button>
     <button class="wf-chev opt active" id="wfs-0" onclick="goWFStep(0)"><span class="wf-chev-num">⓪</span><span class="wf-chev-lbl">Config</span></button>
-    <button class="wf-chev" id="wfs-1" onclick="goWFStep(1)"><span class="wf-chev-num">①</span><span class="wf-chev-lbl" id="lbl-ref">Référence</span></button>
-    <button class="wf-chev" id="wfs-2" onclick="goWFStep(2)" disabled><span class="wf-chev-num">②</span><span class="wf-chev-lbl" id="lbl-tgt">Cible</span></button>
+    <button class="wf-chev" id="wfs-1" onclick="goWFStep(1)"><span class="wf-chev-num">①</span><span class="wf-chev-lbl"><span class="wf-chev-role">Source</span><span class="wf-chev-sub" id="lbl-ref"></span></span></button>
+    <button class="wf-chev" id="wfs-2" onclick="goWFStep(2)" disabled><span class="wf-chev-num">②</span><span class="wf-chev-lbl"><span class="wf-chev-role">Cible</span><span class="wf-chev-sub" id="lbl-tgt"></span></span></button>
     <button class="wf-chev" id="wfs-3" onclick="goWFStep(3)" disabled><span class="wf-chev-num">③</span><span class="wf-chev-lbl">Jointure</span></button>
     <button class="wf-chev" id="wfs-4" onclick="goWFStep(4)" disabled><span class="wf-chev-num">④</span><span class="wf-chev-lbl">Règles</span></button>
     <button class="wf-chev" id="wfs-5" onclick="goWFStep(5)" disabled><span class="wf-chev-num">⑤</span><span class="wf-chev-lbl">Filtres &amp; Rapport</span></button>
@@ -217,17 +217,17 @@
         <div class="stats">
           <div class="stat t"><span class="stat-n" id="s-ref">—</span><span class="stat-l">réf.</span></div>
           <div class="stat t"><span class="stat-n" id="s-tgt">—</span><span class="stat-l">cible</span></div>
-          <div class="stat a"><span class="stat-n" id="s-oa">0</span><span class="stat-l">orphelins A</span></div>
-          <div class="stat b"><span class="stat-n" id="s-ob">0</span><span class="stat-l">orphelins B</span></div>
+          <div class="stat a"><span class="stat-n" id="s-oa">0</span><span class="stat-l">pas dans la cible</span></div>
+          <div class="stat b"><span class="stat-n" id="s-ob">0</span><span class="stat-l">pas dans la réf.</span></div>
           <div class="stat d"><span class="stat-n" id="s-dv">0</span><span class="stat-l">KO</span></div>
         </div>
       </div>
 
       <div class="filter-bar" id="filter-bar">
         <div class="filter-group">
-          <span class="filter-group-label">Orphelins</span>
-          <button class="chip ca on" data-kind="type" data-t="ORPHELIN_A" onclick="toggleChip(this)">Orphelin A <span class="chip-c" id="c-oa">0</span></button>
-          <button class="chip cb on" data-kind="type" data-t="ORPHELIN_B" onclick="toggleChip(this)">Orphelin B <span class="chip-c" id="c-ob">0</span></button>
+          <span class="filter-group-label">Présence</span>
+          <button class="chip ca on" data-kind="type" data-t="ORPHELIN_A" onclick="toggleChip(this)">Pas dans la cible <span class="chip-c" id="c-oa">0</span></button>
+          <button class="chip cb on" data-kind="type" data-t="ORPHELIN_B" onclick="toggleChip(this)">Pas dans la réf. <span class="chip-c" id="c-ob">0</span></button>
         </div>
         <div class="filter-sep" id="sep-ruletype" style="display:none"></div>
         <div class="filter-group" id="grp-ruletype" style="display:none">
@@ -292,6 +292,7 @@ document.getElementById('f-ref').addEventListener('change', e => {
   if (!f) return;
   fileRef = f;
   const dz  = document.getElementById('dz-ref');
+  dz.classList.remove('hinted');
   dz.classList.add('loaded');
   document.getElementById('dz-ref-label').textContent = f.name;
   document.getElementById('dz-ref-sub').textContent   = (f.size/1024).toFixed(1) + ' Ko';
@@ -301,9 +302,7 @@ document.getElementById('f-ref').addEventListener('change', e => {
   document.getElementById('cfg-ref-pill').textContent = f.name;
   updateGlobalNav(wfCurrentStep);
   if (wfUnlocked < 2) { wfUnlocked = 2; updateWFSteps(); }
-  autoDetectColumns('reference', f).then(() => {
-    if (wfCurrentStep === 1) onEnterRef();
-  });
+  _onFileLoaded('reference', f);
   sessionSave();
 });
 
@@ -312,6 +311,7 @@ document.getElementById('f-tgt').addEventListener('change', e => {
   if (!f) return;
   fileTgt = f;
   const dz  = document.getElementById('dz-tgt');
+  dz.classList.remove('hinted');
   dz.classList.add('loaded');
   document.getElementById('dz-tgt-label').textContent = f.name;
   document.getElementById('dz-tgt-sub').textContent   = (f.size/1024).toFixed(1) + ' Ko';
@@ -321,9 +321,7 @@ document.getElementById('f-tgt').addEventListener('change', e => {
   document.getElementById('cfg-tgt-pill').textContent = f.name;
   updateGlobalNav(wfCurrentStep);
   if (wfUnlocked < 3) { wfUnlocked = 3; updateWFSteps(); }
-  autoDetectColumns('target', f).then(() => {
-    if (wfCurrentStep === 2) onEnterTgt();
-  });
+  _onFileLoaded('target', f);
   sessionSave();
 });
 
