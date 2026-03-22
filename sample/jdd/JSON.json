@@ -1,0 +1,38 @@
+{
+  "dataset_id": "STOCK_NET_20260322T110600+0100_T0",
+  "as_of": "2026-03-22T11:06:00+01:00",
+  "currency": "EUR",
+  "stores": [
+    { "store_id": "S001", "store_code": "PAR-01", "name": "Paris Rivoli", "region": "IDF" },
+    { "store_id": "S002", "store_code": "ORS-01", "name": "Orsay Centre", "region": "IDF" },
+    { "store_id": "S003", "store_code": "LYO-01", "name": "Lyon Part-Dieu", "region": "ARA" }
+  ],
+  "products": [
+    { "sku": "SKU0001", "ean13": "3760123456789", "name": "Café 250g", "uom": "EA", "category": "Épicerie" },
+    { "sku": "SKU0002", "ean13": "3700987654321", "name": "Thé vert 40s", "uom": "EA", "category": "Épicerie" },
+    { "sku": "SKU0003", "ean13": "3256543210987", "name": "Biscuit 200g", "uom": "EA", "category": "Épicerie" },
+    { "sku": "SKU0004", "ean13": "3012345678901", "name": "Lessive 1L", "uom": "EA", "category": "Entretien" }
+  ],
+  "stock": [
+    { "store_id": "S001", "sku": "SKU0001", "on_hand": 120, "reserved": 10, "in_transit": 30, "reorder_point": 50, "available": 110 },
+    { "store_id": "S001", "sku": "SKU0002", "on_hand": 60,  "reserved": 5,  "in_transit": 0,  "reorder_point": 40, "available": 55  },
+    { "store_id": "S001", "sku": "SKU0003", "on_hand": 15,  "reserved": 2,  "in_transit": 20, "reorder_point": 25, "available": 13  },
+    { "store_id": "S001", "sku": "SKU0004", "on_hand": 8,   "reserved": 0,  "in_transit": 10, "reorder_point": 12, "available": 8   },
+
+    { "store_id": "S002", "sku": "SKU0001", "on_hand": 45,  "reserved": 3,  "in_transit": 15, "reorder_point": 50, "available": 42  },
+    { "store_id": "S002", "sku": "SKU0002", "on_hand": 80,  "reserved": 6,  "in_transit": 10, "reorder_point": 40, "available": 74  },
+    { "store_id": "S002", "sku": "SKU0003", "on_hand": 0,   "reserved": 0,  "in_transit": 25, "reorder_point": 25, "available": 0   },
+    { "store_id": "S002", "sku": "SKU0004", "on_hand": 22,  "reserved": 1,  "in_transit": 0,  "reorder_point": 12, "available": 21  },
+
+    { "store_id": "S003", "sku": "SKU0001", "on_hand": 200, "reserved": 25, "in_transit": 0,  "reorder_point": 70, "available": 175 },
+    { "store_id": "S003", "sku": "SKU0002", "on_hand": 10,  "reserved": 1,  "in_transit": 30, "reorder_point": 35, "available": 9   },
+    { "store_id": "S003", "sku": "SKU0003", "on_hand": 55,  "reserved": 10, "in_transit": 0,  "reorder_point": 25, "available": 45  },
+    { "store_id": "S003", "sku": "SKU0004", "on_hand": 5,   "reserved": 0,  "in_transit": 5,  "reorder_point": 12, "available": 5   }
+  ],
+  "quality_rules": [
+    "available = on_hand - reserved",
+    "on_hand >= 0, reserved >= 0, in_transit >= 0",
+    "reserved <= on_hand",
+    "store_id et sku doivent exister dans les référentiels"
+  ]
+}

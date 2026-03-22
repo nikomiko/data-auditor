@@ -1,0 +1,78 @@
+meta:
+  name: "Test XLSX"
+  version: "1.0"
+
+sources:
+  reference:
+    label: "Reference WMS"
+    format: xlsx
+    sheet_name: Stock
+
+  target:
+    label: "Cible ERP"
+    format: xlsx
+    sheet_name: Stock
+
+join:
+  keys:
+    - source_field: ref
+      target_field: ref
+    - source_field: site
+      target_field: site
+
+filters:
+  - field: site
+    source: reference
+    operator: differs
+    value: ZZZ
+  - field: site
+    source: target
+    operator: differs
+    value: ZZZ
+
+rules:
+  - name: "Quantite"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: qty
+        target_field: qty
+        operator: differs
+        tolerance: 0
+
+  - name: "Prix HT"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: prix_ht
+        target_field: prix_ht
+        operator: differs
+        tolerance: 0.05
+
+  - name: "Designation"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: designation
+        target_field: designation
+        operator: differs
+
+  - name: "Statut"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: statut
+        target_field: statut
+        operator: differs
+
+  - name: "Code-barres"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: ean13
+        target_field: ean13
+        operator: differs
+
+report:
+  show_matching: true
+  max_diff_preview: 500

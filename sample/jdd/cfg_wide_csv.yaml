@@ -1,0 +1,114 @@
+meta:
+  name: "Test CSV pivoté (wide → long via unpivot)"
+  version: "1.0"
+
+sources:
+  reference:
+    label: "Reference WMS (wide)"
+    format: csv
+    encoding: utf-8
+    delimiter: ";"
+    has_header: true
+    fields:
+      - {name: ref,             type: string }
+      - {name: designation,     type: string }
+      - {name: categorie,       type: string }
+      - {name: prix_ht,         type: decimal}
+      - {name: date_inventaire, type: date, date_format: "%Y%m%d"}
+      - {name: statut,          type: string }
+      - {name: ean13,           type: string }
+      - {name: qty_PAR,         type: integer}
+      - {name: qty_LYO,         type: integer}
+      - {name: qty_MAR,         type: integer}
+    unpivot:
+      anchor_fields: [ref, designation, categorie, prix_ht, date_inventaire, statut, ean13]
+      location_field: site
+      value_field: qty
+      pivot_fields:
+        - source: qty_PAR
+          location: PAR
+        - source: qty_LYO
+          location: LYO
+        - source: qty_MAR
+          location: MAR
+
+  target:
+    label: "Cible ERP (long)"
+    format: csv
+    encoding: utf-8
+    delimiter: ";"
+    has_header: true
+    fields:
+      - {name: ref,             type: string }
+      - {name: designation,     type: string }
+      - {name: categorie,       type: string }
+      - {name: site,            type: string }
+      - {name: qty,             type: integer}
+      - {name: prix_ht,         type: decimal}
+      - {name: date_inventaire, type: date, date_format: "%Y%m%d"}
+      - {name: statut,          type: string }
+      - {name: ean13,           type: string }
+
+join:
+  keys:
+    - source_field: ref
+      target_field: ref
+    - source_field: site
+      target_field: site
+
+filters:
+  - field: site
+    source: reference
+    operator: differs
+    value: ZZZ
+  - field: site
+    source: target
+    operator: differs
+    value: ZZZ
+
+rules:
+  - name: "Quantite"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: qty
+        target_field: qty
+        operator: differs
+        tolerance: 0
+
+  - name: "Prix HT"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: prix_ht
+        target_field: prix_ht
+        operator: differs
+        tolerance: 0.05
+
+  - name: "Designation"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: designation
+        target_field: designation
+        operator: differs
+
+  - name: "Statut"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: statut
+        target_field: statut
+        operator: differs
+
+  - name: "Code-barres"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: ean13
+        target_field: ean13
+        operator: differs
+
+report:
+  show_matching: true
+  max_diff_preview: 500

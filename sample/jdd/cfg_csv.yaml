@@ -1,0 +1,102 @@
+meta:
+  name: "Test CSV long format"
+  version: "1.0"
+
+sources:
+  reference:
+    label: "Reference WMS"
+    format: csv
+    encoding: utf-8
+    delimiter: ";"
+    has_header: true
+    fields:
+      - {name: ref,             type: string }
+      - {name: designation,     type: string }
+      - {name: categorie,       type: string }
+      - {name: site,            type: string }
+      - {name: qty,             type: integer}
+      - {name: prix_ht,         type: decimal}
+      - {name: date_inventaire, type: date, date_format: "%Y%m%d"}
+      - {name: statut,          type: string }
+      - {name: ean13,           type: string }
+
+  target:
+    label: "Cible ERP"
+    format: csv
+    encoding: utf-8
+    delimiter: ";"
+    has_header: true
+    fields:
+      - {name: ref,             type: string }
+      - {name: designation,     type: string }
+      - {name: categorie,       type: string }
+      - {name: site,            type: string }
+      - {name: qty,             type: integer}
+      - {name: prix_ht,         type: decimal}
+      - {name: date_inventaire, type: date, date_format: "%Y%m%d"}
+      - {name: statut,          type: string }
+      - {name: ean13,           type: string }
+
+join:
+  keys:
+    - source_field: ref
+      target_field: ref
+    - source_field: site
+      target_field: site
+
+filters:
+  - field: site
+    source: reference
+    operator: differs
+    value: ZZZ
+  - field: site
+    source: target
+    operator: differs
+    value: ZZZ
+
+rules:
+  - name: "Quantite"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: qty
+        target_field: qty
+        operator: differs
+        tolerance: 0
+
+  - name: "Prix HT"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: prix_ht
+        target_field: prix_ht
+        operator: differs
+        tolerance: 0.05
+
+  - name: "Designation"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: designation
+        target_field: designation
+        operator: differs
+
+  - name: "Statut"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: statut
+        target_field: statut
+        operator: differs
+
+  - name: "Code-barres"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: ean13
+        target_field: ean13
+        operator: differs
+
+report:
+  show_matching: true
+  max_diff_preview: 500

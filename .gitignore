@@ -6,5 +6,8 @@ reports/
 uploads/
 *.dat
 *.csv
+# Jeux de données de test : exception
+!sample/jdd/*.csv
+!sample/jdd/*.dat
 venv/
 .venv/
