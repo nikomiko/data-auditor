@@ -843,6 +843,31 @@ function openCtxModal(key, ecarts) {
   _ctxKey    = key;
   _ctxEcarts = ecarts || [];
   document.getElementById('ctx-center-key').textContent = key;
+
+  // Badges des règles dans le header
+  const badgesEl = document.getElementById('ctx-rules-badges');
+  if (badgesEl) {
+    const TYPE_LABELS = { ORPHELIN_A: 'Orphelin source', ORPHELIN_B: 'Orphelin cible' };
+    const seen = new Set();
+    let html = '';
+    _ctxEcarts.forEach(e => {
+      const t = e.type_ecart;
+      if (t === 'ORPHELIN_A' || t === 'ORPHELIN_B') {
+        if (!seen.has(t)) {
+          seen.add(t);
+          const bg = t === 'ORPHELIN_A' ? 'var(--oa)' : 'var(--ob)';
+          html += `<span style="font-size:.65rem;padding:.1rem .4rem;border-radius:3px;background:${bg};color:#fff;white-space:nowrap">${TYPE_LABELS[t]}</span>`;
+        }
+      } else if (e.rule_name && !seen.has(e.rule_name)) {
+        seen.add(e.rule_name);
+        const bg  = (typeof ruleColor === 'function') ? ruleColor(e.rule_name) : '#94a3b8';
+        const lbl = t === 'KO' ? `✗ ${e.rule_name}` : `✓ ${e.rule_name}`;
+        html += `<span style="font-size:.65rem;padding:.1rem .4rem;border-radius:3px;background:${bg};color:#fff;white-space:nowrap">${esc(lbl)}</span>`;
+      }
+    });
+    badgesEl.innerHTML = html;
+  }
+
   document.getElementById('ctx-modal').style.display = 'flex';
   _loadCtx();
 }

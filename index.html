@@ -360,9 +360,10 @@ document.addEventListener('keydown', e => {
 <div class="modal-backdrop" id="ctx-modal" style="display:none" onclick="closeCtxModal(event)">
   <div class="ctx-modal" onclick="event.stopPropagation()">
     <div class="ctx-modal-header">
-      <div style="display:flex;align-items:center;gap:.6rem;min-width:0">
+      <div style="display:flex;align-items:center;gap:.6rem;min-width:0;flex-wrap:wrap">
         <span style="font-size:.72rem;font-weight:600;color:var(--muted);white-space:nowrap">Revue — clé&nbsp;:</span>
         <code id="ctx-center-key" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></code>
+        <span id="ctx-rules-badges" style="display:flex;gap:.3rem;flex-wrap:wrap;margin-left:.25rem"></span>
       </div>
       <div style="display:flex;align-items:center;gap:.75rem;flex-shrink:0">
         <label style="font-size:.72rem;display:flex;align-items:center;gap:.35rem;color:var(--dim)">
