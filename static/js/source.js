@@ -431,7 +431,11 @@ async function previewFile(which, evt, openTab) {
   const src   = WS.sources[srcKey];
   const delim = src.delimiter || ';';
 
-  renderPreviewTable(lines, delim);
+  if (['json','jsonl'].includes(src.format)) {
+    renderPreviewJson(which, text);
+  } else {
+    renderPreviewTable(lines, delim);
+  }
   renderPreviewRaw(lines);
   renderValidationCols(which, lines);
 
@@ -566,6 +570,70 @@ function _updateValBadge(which, stats) {
   badgeEl.className = `val-badge ${cls}`;
   badgeEl.textContent = txt;
   badgeEl.style.display = '';
+}
+
+function renderPreviewJson(which, text) {
+  const wrap   = document.getElementById('preview-table-wrap');
+  const srcKey = which === 'ref' ? 'reference' : 'target';
+  const src    = WS.sources[srcKey];
+  const MAX_ROWS = 200;
+  try {
+    let records;
+    if (src.format === 'jsonl') {
+      records = text.split('\n').map(l => l.trim()).filter(Boolean)
+        .map(l => { try { return JSON.parse(l); } catch(_) { return null; } }).filter(Boolean);
+    } else {
+      const obj = JSON.parse(text);
+      const jp  = src.json_path || '';
+      if (jp)                      records = _dotGet(obj, jp);
+      else if (Array.isArray(obj)) records = obj;
+      else {
+        for (const k of ['records','data','items','rows'])
+          if (Array.isArray(obj[k])) { records = obj[k]; break; }
+        if (!records) records = [obj];
+      }
+    }
+    if (!Array.isArray(records) || !records.length) {
+      wrap.innerHTML = '<div class="preview-na">Aucun enregistrement trouvé.</div>';
+      return;
+    }
+
+    // Colonnes : champs configurés si disponibles, sinon clés du 1er enregistrement
+    const fields = (src.fields && src.fields.length)
+      ? src.fields.filter(f => f.type !== 'skip' && !f.ignored)
+      : Object.keys(records[0]).map(k => ({ name: k, path: '' }));
+
+    const display = records.slice(0, MAX_ROWS);
+    const truncR  = records.length > MAX_ROWS;
+
+    let html = '<table class="preview-table"><thead><tr>';
+    html += '<th style="color:var(--muted);font-weight:400">#</th>';
+    fields.forEach(f => {
+      const tip = f.path ? `${f.name} (path: ${f.path})` : f.name;
+      html += `<th title="${esc(tip)}">${esc(f.name)}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    display.forEach((rec, ri) => {
+      html += `<tr><td style="color:var(--muted);font-size:.6rem">${ri + 1}</td>`;
+      fields.forEach(f => {
+        const fpath = f.path || f.name;
+        const val   = fpath.includes('.') ? _dotGet(rec, fpath) : rec[fpath];
+        const s     = (val === null || val === undefined) ? ''
+                    : (typeof val === 'object' ? JSON.stringify(val) : String(val));
+        html += `<td title="${esc(s)}">${esc(s)}</td>`;
+      });
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    if (truncR) {
+      html += `<div class="preview-na" style="padding:.5rem 1rem">… ${records.length.toLocaleString('fr-FR')} enregistrements au total (aperçu limité à ${MAX_ROWS})</div>`;
+    }
+    wrap.innerHTML = html;
+  } catch(e) {
+    wrap.innerHTML = `<div class="preview-na">Erreur de parsing JSON : ${esc(String(e))}</div>`;
+  }
 }
 
 function renderPreviewTable(lines, delim) {
