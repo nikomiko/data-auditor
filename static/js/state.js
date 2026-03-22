@@ -1,4 +1,24 @@
 // ═══════════════════════════════════════════════════════════
+//  VERSION
+// ═══════════════════════════════════════════════════════════
+const UI_VERSION = '3.5.0';
+
+(async function checkVersion() {
+  try {
+    const data = await fetch('/api/version').then(r => r.json());
+    const srv  = data.version || '?';
+    const badge = document.getElementById('version-mismatch');
+    const ver   = document.getElementById('logo-ver');
+    if (ver) ver.textContent = `v${srv}`;
+    if (srv !== UI_VERSION && badge) {
+      badge.textContent = `⚠ UI v${UI_VERSION} ≠ serveur v${srv}`;
+      badge.title = `L'interface (v${UI_VERSION}) ne correspond pas au serveur (v${srv}). Rechargez la page après redémarrage.`;
+      badge.style.display = '';
+    }
+  } catch (_) { /* serveur inaccessible au chargement */ }
+})();
+
+// ═══════════════════════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════════════════════
 let allResults     = [];      // utilisé uniquement pour les entrées historique
@@ -36,7 +56,7 @@ let wfCurrentStep = 0; // step actuellement affiché
 //  FILES
 // ═══════════════════════════════════════════════════════════
 let fileRef = null, fileTgt = null;
-const TEXT_EXTS = new Set(['csv','txt','dat','json']);
+const TEXT_EXTS = new Set(['csv','txt','dat','json','jsonl']);
 
 function isBinary(file) {
   const ext = file.name.split('.').pop().toLowerCase();
@@ -260,7 +280,7 @@ function resetAll() {
   // Drop zone référence
   document.getElementById('dz-ref').classList.remove('loaded', 'hinted');
   document.getElementById('dz-ref-label').textContent = 'Glissez votre fichier ici';
-  document.getElementById('dz-ref-sub').textContent   = 'ou cliquez pour parcourir — CSV, TXT, DAT, JSON, XLSX';
+  document.getElementById('dz-ref-sub').textContent   = 'ou cliquez pour parcourir — CSV, TXT, JSON, JSONL, XLSX';
   document.getElementById('eye-ref').style.display    = 'none';
   document.getElementById('val-ref').style.display    = 'none';
   document.getElementById('val-badge-ref').style.display = 'none';
@@ -270,7 +290,7 @@ function resetAll() {
   // Drop zone cible
   document.getElementById('dz-tgt').classList.remove('loaded', 'hinted');
   document.getElementById('dz-tgt-label').textContent = 'Glissez votre fichier ici';
-  document.getElementById('dz-tgt-sub').textContent   = 'ou cliquez pour parcourir — CSV, TXT, DAT, JSON, XLSX';
+  document.getElementById('dz-tgt-sub').textContent   = 'ou cliquez pour parcourir — CSV, TXT, JSON, JSONL, XLSX';
   document.getElementById('eye-tgt').style.display    = 'none';
   document.getElementById('val-tgt').style.display    = 'none';
   document.getElementById('val-badge-tgt').style.display = 'none';

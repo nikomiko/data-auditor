@@ -16,7 +16,7 @@ Serveur Flask + UI web, piloté par configuration YAML.
 server.py        Flask + SSE streaming + apply_filters
 config_loader.py Validation YAML (ConfigError)
 parser.py        CSV / DAT / JSON / XLSX → DataFrame
-normalizer.py    Typage pandas (string/integer/decimal/date/boolean)
+normalizer.py    Typage pandas (string/integer/decimal/date/boolean/skip)
 unpivot.py       Dépivotage format large → long
 comparator.py    Jointure + rules + génération SSE progress
 report.py        Export CSV/HTML + historisation JSON (reports/)
@@ -66,6 +66,7 @@ Le champ `DIVERGENT` (legacy) est assimilé à `KO`. Les résultats `KO` portent
 - `fixed_width: true` : colonnes à positions fixes avec `column_positions`
 - `record_filter.marker` : regex de filtrage de lignes avant parsing
 - `max_columns` : limite de split pour colonnes contenant des `;` internes
+- `_split_line` : RFC 4180 strict — le mode guillemet n'est activé qu'en début de champ (pas sur un `"` au milieu d'un blob)
 - `xlsx` : via openpyxl, avec `sheet_name`
 
 ### Config YAML (schéma)
@@ -89,6 +90,10 @@ rules:
       - { source_field, target_field, operator, tolerance, normalize }
       - { source_field, target_value }                         # valeur fixe
       - { source_data: {field, normalize}, target_data: {value|field, tolerance} }
+# Types de champs (field.type) :
+#   string | integer | decimal | date | boolean
+#   skip   → champ lu (pour ne pas décaler les positions) mais ignoré :
+#            pas de normalisation, pas de comparaison (blob JSON, hash Ruby, etc.)
 comparison:
   fields: [...]        # legacy, préférer rules
   ignore_fields: [...]

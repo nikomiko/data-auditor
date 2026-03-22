@@ -191,9 +191,52 @@ async function saveAsConfig() {
   updateSaveBtn();
 }
 
+function _dotGet(obj, path) {
+  for (const key of path.replace(/^\./,'').split('.')) {
+    if (!key || typeof obj !== 'object' || obj === null) return undefined;
+    obj = obj[key];
+  }
+  return obj;
+}
+
+async function _autoDetectJson(srcKey, file) {
+  try {
+    const text = await readFileText(file.slice(0, 512000));
+    const src  = WS.sources[srcKey];
+    let records;
+    if (src.format === 'jsonl') {
+      records = text.split('\n').map(l => l.trim()).filter(Boolean)
+        .map(l => { try { return JSON.parse(l); } catch(_) { return null; } }).filter(Boolean);
+    } else {
+      const obj = JSON.parse(text);
+      const jp  = src.json_path || '';
+      if (jp)                  records = _dotGet(obj, jp);
+      else if (Array.isArray(obj)) records = obj;
+      else {
+        for (const k of ['records','data','items','rows'])
+          if (Array.isArray(obj[k])) { records = obj[k]; break; }
+      }
+    }
+    if (!Array.isArray(records) || !records.length) return;
+    const first = records[0];
+    if (typeof first !== 'object' || !first) return;
+    const fields = [];
+    for (const [k, v] of Object.entries(first)) {
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        for (const sk of Object.keys(v))
+          fields.push({ name: sk, type:'string', date_format:'', ignored:false, path:`${k}.${sk}` });
+      } else {
+        fields.push({ name: k, type:'string', date_format:'', ignored:false, path:'' });
+      }
+    }
+    WS.sources[srcKey].fields = fields;
+  } catch(_) {}
+}
+
 async function autoDetectColumns(srcKey, file) {
   const src = WS.sources[srcKey];
-  if (!['csv','txt','dat'].includes(src.format)) return;
+  if (src.format === 'json' || src.format === 'jsonl') return _autoDetectJson(srcKey, file);
+  if (!['csv','txt','dat','positionnel'].includes(src.format)) return;
   if (!src.has_header) return;
   if (src.fixed_width) return;
   try {
@@ -369,7 +412,7 @@ async function previewFile(which, evt, openTab) {
     `Prévisualisation — ${label} : ${file.name}`;
 
   // Lire les premières lignes (max 50KB)
-  const slice = file.slice(0, 51200);
+  const slice = file.slice(0, 512000);
   const text  = await slice.text();
   const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l => l.trim());
 
@@ -518,7 +561,7 @@ function _updateValBadge(which, stats) {
 
 function renderPreviewTable(lines, delim) {
   const wrap = document.getElementById('preview-table-wrap');
-  const MAX_ROWS = 20, MAX_COLS = 30;
+  const MAX_ROWS = 200, MAX_COLS = 30;
 
   if (!lines.length) { wrap.innerHTML = '<div class="preview-na">Fichier vide.</div>'; return; }
 
@@ -717,8 +760,11 @@ report:
 // ═══════════════════════════════════════════════════════════
 //  REVUE CÔTE À CÔTE
 // ═══════════════════════════════════════════════════════════
-function openCtxModal(key) {
-  _ctxKey = key;
+let _ctxEcarts = [];   // écarts du row courant (passés depuis _appendPageRow)
+
+function openCtxModal(key, ecarts) {
+  _ctxKey    = key;
+  _ctxEcarts = ecarts || [];
   document.getElementById('ctx-center-key').textContent = key;
   document.getElementById('ctx-modal').style.display = 'flex';
   _loadCtx();
@@ -746,17 +792,33 @@ async function _loadCtx() {
 function _renderCtxPanels(data) {
   const diffSet = new Set(data.diff_fields || []);
 
+  // Construire une map champ → [{ruleName, color, side}] depuis _ctxEcarts
+  const fieldRuleMap = {};   // fieldName → [{name, color}]
+  _ctxEcarts.forEach(e => {
+    if (!e.rule_name || !e.champ) return;
+    const color = (typeof ruleColor === 'function') ? ruleColor(e.rule_name) : '#94a3b8';
+    if (!fieldRuleMap[e.champ]) fieldRuleMap[e.champ] = [];
+    if (!fieldRuleMap[e.champ].some(x => x.name === e.rule_name))
+      fieldRuleMap[e.champ].push({ name: e.rule_name, color });
+  });
+
   function renderPanel(rows, panelId) {
     const el = document.getElementById(panelId);
     el.innerHTML = rows.map(row => {
-      const center = row.is_center;
+      const center  = row.is_center;
       const keyHtml = `<div class="ctx-record-key">${esc(row.key)}</div>`;
       if (!row.data) {
         return `<div class="ctx-record${center?' is-center':''}">${keyHtml}<div class="ctx-absent">Absent</div></div>`;
       }
       const fields = Object.entries(row.data).map(([k, v]) => {
-        const diff = center && diffSet.has(k);
-        return `<tr class="${diff?'ctx-diff':''}"><td>${esc(k)}</td><td>${esc(String(v??''))}</td></tr>`;
+        const diff  = center && diffSet.has(k);
+        const rules = center ? (fieldRuleMap[k] || []) : [];
+        const active = rules.some(r => !activeRuleFilters || activeRuleFilters.has(r.name));
+        const dots  = rules.map(r =>
+          `<span class="rule-dot" style="background:${r.color};display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:3px;vertical-align:middle" title="${esc(r.name)}"></span>`
+        ).join('');
+        const valCls = active ? ' ctx-rule-active' : '';
+        return `<tr class="${diff?'ctx-diff':''}"><td>${esc(k)}${dots}</td><td class="${valCls}">${esc(String(v??''))}</td></tr>`;
       }).join('');
       return `<div class="ctx-record${center?' is-center':''}">${keyHtml}<table>${fields}</table></div>`;
     }).join('');

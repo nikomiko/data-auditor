@@ -25,12 +25,14 @@ async function runAudit() {
   // Réinitialiser les filtres pour chaque nouvel audit
   activeFilters = new Set(['ORPHELIN_A', 'ORPHELIN_B']);
   activeRuleFilters = null;
-  document.querySelectorAll('#filter-bar .chip[data-kind="type"]').forEach(btn => btn.classList.add('on'));
-  document.querySelectorAll('#filter-bar .chip[data-kind="ruletype"]').forEach(btn => btn.classList.add('on'));
+  document.querySelectorAll('#filter-bar .chip[data-kind="type"]').forEach(btn => {
+    const t = btn.dataset.t;
+    btn.classList.toggle('on', activeFilters.has(t));
+  });
   document.getElementById('filter-dynamic').innerHTML = '';
   const ftEl = document.getElementById('filter-text');
   if (ftEl) ftEl.value = '';
-  ['key','type','rule','ref','tgt'].forEach(c => {
+  ['key','type'].forEach(c => {
     const th = document.getElementById('si-' + c)?.parentElement;
     const ic = document.getElementById('si-' + c);
     if (th) { th.classList.remove('sort-asc','sort-desc'); }
@@ -98,9 +100,11 @@ function listenSSE(token) {
       updateProgress(ev);
 
     } else if (ev.event === 'filter_counts') {
-      // Mise à jour des compteurs ref/cible après filtrage serveur
-      document.getElementById('s-ref').textContent = ev.ref_count.toLocaleString('fr-FR');
-      document.getElementById('s-tgt').textContent = ev.tgt_count.toLocaleString('fr-FR');
+      // Mise à jour partielle pendant le streaming
+      const rL = WS?.sources?.reference?.label || refLabel || 'Source';
+      const tL = WS?.sources?.target?.label    || tgtLabel || 'Cible';
+      document.getElementById('sum-src').textContent = `${rL} : ${ev.ref_count.toLocaleString('fr-FR')} enr.`;
+      document.getElementById('sum-tgt').textContent = `${tL} : ${ev.tgt_count.toLocaleString('fr-FR')} enr.`;
 
     } else if (ev.event === 'result') {
       if (ev.type_ecart === 'ORPHELIN_A') _liveOA++;
@@ -110,11 +114,16 @@ function listenSSE(token) {
     } else if (ev.event === 'summary') {
       lastSummary = ev;
       lastConfig  = config || {};
-      document.getElementById('s-ref').textContent = ev.total_reference;
-      document.getElementById('s-tgt').textContent = ev.total_cible;
-      document.getElementById('s-oa').textContent  = ev.orphelins_a;
-      document.getElementById('s-ob').textContent  = ev.orphelins_b;
-      document.getElementById('s-dv').textContent  = ev.divergents;
+      const rL = WS?.sources?.reference?.label || refLabel || 'Source';
+      const tL = WS?.sources?.target?.label    || tgtLabel || 'Cible';
+      const oa = (ev.orphelins_a || 0).toLocaleString('fr-FR');
+      const ob = (ev.orphelins_b || 0).toLocaleString('fr-FR');
+      const tr = (ev.total_reference || 0).toLocaleString('fr-FR');
+      const tc = (ev.total_cible     || 0).toLocaleString('fr-FR');
+      document.getElementById('sum-src').textContent =
+        `${rL} : ${tr} enr. dont ${oa} absents de la cible`;
+      document.getElementById('sum-tgt').textContent =
+        `${tL} : ${tc} enr. dont ${ob} absents de la source`;
       updateChipCounts();
       buildRuleFilterBar(ev, config);
 
@@ -211,11 +220,16 @@ async function loadHistoryEntry(filename) {
     lastConfig  = data.config  || {};
     currentToken = null;
 
-    document.getElementById('s-ref').textContent = lastSummary.total_reference || '—';
-    document.getElementById('s-tgt').textContent = lastSummary.total_cible     || '—';
-    document.getElementById('s-oa').textContent  = lastSummary.orphelins_a;
-    document.getElementById('s-ob').textContent  = lastSummary.orphelins_b;
-    document.getElementById('s-dv').textContent  = lastSummary.divergents;
+    const rLH = WS?.sources?.reference?.label || refLabel || 'Source';
+    const tLH = WS?.sources?.target?.label    || tgtLabel || 'Cible';
+    const oaH = (lastSummary.orphelins_a || 0).toLocaleString('fr-FR');
+    const obH = (lastSummary.orphelins_b || 0).toLocaleString('fr-FR');
+    const trH = (lastSummary.total_reference || 0).toLocaleString('fr-FR');
+    const tcH = (lastSummary.total_cible     || 0).toLocaleString('fr-FR');
+    document.getElementById('sum-src').textContent =
+      `${rLH} : ${trH} enr. dont ${oaH} absents de la cible`;
+    document.getElementById('sum-tgt').textContent =
+      `${tLH} : ${tcH} enr. dont ${obH} absents de la source`;
     updateChipCounts();
     rebuildTable();
     showProgress(false);

@@ -5,7 +5,7 @@ function wizSrcDefault() {
   return {
     label:'', file:'', format:'csv', encoding:'utf-8', delimiter:';',
     has_header:true, skip_rows:0, max_columns:'', record_filter_marker:'',
-    fixed_width:false,
+    fixed_width:false, json_path:'',
     fields:[], column_positions:[],
     unpivot_enabled:false,
     unpivot:{ location_field:'location_key', value_field:'pivot_value', pivot_fields:[] }
@@ -68,16 +68,19 @@ function wizLoadFromYaml(parsed) {
     const s = WS.sources[k];
     s.label  = src.label    || '';
     s.file   = src.file     || '';
-    s.format = src.format   || 'csv';
+    // Normaliser les anciens formats (txt/dat → csv)
+    const rawFmt = src.format || 'csv';
+    s.format = (rawFmt === 'txt' || rawFmt === 'dat') ? 'csv' : rawFmt;
+    s.json_path = src.json_path || '';
     s.encoding   = src.encoding  || 'utf-8';
     s.delimiter  = src.delimiter !== undefined ? src.delimiter : ';';
     s.has_header = src.has_header !== false;
     s.skip_rows  = src.skip_rows  || 0;
     s.max_columns = src.max_columns || '';
     s.record_filter_marker = (src.record_filter || {}).marker || '';
-    s.fixed_width = !!src.fixed_width;
+    s.fixed_width = !!(src.fixed_width || (src.column_positions && src.column_positions.length));
+    if (s.fixed_width) s.format = 'positionnel';
     if (src.column_positions && src.column_positions.length) {
-      s.fixed_width = true;
       s.column_positions = src.column_positions.map(f => ({
         name: f.name||'', position: f.position||0, width: f.width||0,
         type: f.type||'string', date_format: f.date_format||'', ignored: !!f.ignored
@@ -85,7 +88,8 @@ function wizLoadFromYaml(parsed) {
       s.fields = [];
     } else if (src.fields && src.fields.length) {
       s.fields = src.fields.map(f => ({
-        name: f.name||'', type: f.type||'string', date_format: f.date_format||'', ignored: !!f.ignored
+        name: f.name||'', type: f.type||'string', date_format: f.date_format||'',
+        ignored: !!f.ignored, path: f.path || ''
       }));
       s.column_positions = [];
     }
@@ -149,10 +153,22 @@ function wizLoadFromYaml(parsed) {
     })
   }));
   // filters
-  WS.filters = (parsed.filters||[]).map(f => ({
-    field: f.field||'', source: f.source||'reference',
-    values: (f.values||[]).join(', ')
-  }));
+  WS.filters = (parsed.filters||[]).map(f => {
+    // Compat ascendante : ancien format { values: [...] } → equals + value
+    if (f.values !== undefined && f.value_type === undefined) {
+      return {
+        field: f.field||'', source: f.source||'reference',
+        operator: 'equals', value_type: 'value',
+        value: (f.values||[]).join(', ')
+      };
+    }
+    return {
+      field: f.field||'', source: f.source||'reference',
+      operator: f.operator||'equals',
+      value_type: f.value_type||'value',
+      value: f.value !== undefined ? String(f.value) : ''
+    };
+  });
   // report
   const rp = parsed.report || {};
   WS.report.show_matching   = !!rp.show_matching;
@@ -172,19 +188,24 @@ function wizBuildYaml() {
   obj.sources = {};
   ['reference','target'].forEach(k => {
     const s  = WS.sources[k];
-    const sr = { format: s.format };
+    const yamlFmt = s.format === 'positionnel' ? 'csv' : s.format;
+    const sr = { format: yamlFmt };
     if (s.label)    sr.label    = s.label;
     if (s.file)     sr.file     = s.file;
     if (s.encoding) sr.encoding = s.encoding;
-    const noDelim = ['json','xlsx'].includes(s.format);
+    const noDelim = ['json','jsonl','xlsx','positionnel'].includes(s.format);
     if (!noDelim && s.delimiter !== undefined) sr.delimiter = s.delimiter;
-    sr.has_header = s.has_header;
-    if (s.skip_rows) sr.skip_rows = Number(s.skip_rows);
-    if (s.max_columns) sr.max_columns = Number(s.max_columns);
-    if (s.record_filter_marker) sr.record_filter = { marker: s.record_filter_marker };
+    if (s.format === 'json' && s.json_path) sr.json_path = s.json_path;
+    const isJsonFmt = s.format === 'json' || s.format === 'jsonl';
+    if (!isJsonFmt) {
+      sr.has_header = s.has_header;
+      if (s.skip_rows) sr.skip_rows = Number(s.skip_rows);
+      if (s.max_columns) sr.max_columns = Number(s.max_columns);
+      if (s.record_filter_marker) sr.record_filter = { marker: s.record_filter_marker };
+    }
     if (s.fixed_width) sr.fixed_width = true;
     // colonnes
-    const noFields = ['json','xlsx'].includes(s.format);
+    const noFields = ['xlsx'].includes(s.format);
     if (!noFields) {
       if (s.fixed_width) {
         sr.column_positions = s.column_positions.map(f => {
@@ -194,9 +215,10 @@ function wizBuildYaml() {
           if (f.ignored) o.ignored = true;
           return o;
         });
-      } else {
+      } else if (s.fields.length > 0 || !['json','jsonl'].includes(s.format)) {
         sr.fields = s.fields.map(f => {
           const o = { name: f.name };
+          if ((s.format === 'json' || s.format === 'jsonl') && f.path && f.path !== f.name) o.path = f.path;
           if (f.type && f.type !== 'string') o.type = f.type;
           if (f.type === 'date' && f.date_format) o.date_format = f.date_format;
           if (f.ignored) o.ignored = true;
@@ -226,9 +248,13 @@ function wizBuildYaml() {
   const validFilters = WS.filters.filter(f => f.field);
   if (validFilters.length) {
     obj.filters = validFilters.map(f => {
-      const o = { field: f.field, source: f.source };
-      const vals = f.values.split(',').map(v => v.trim()).filter(Boolean);
-      if (vals.length) o.values = vals;
+      const o = { field: f.field, source: f.source, operator: f.operator || 'equals' };
+      const vt = f.value_type || 'value';
+      if (vt === 'empty' || vt === 'not_empty') {
+        o.value_type = vt;
+      } else if (f.value) {
+        o.value = f.value;
+      }
       return o;
     });
   }
@@ -368,7 +394,7 @@ function applyWizard() {
 //  WIZARD — Navigation
 // ═══════════════════════════════════════════════════════════
 function WIZ_LABELS() {
-  return ['① ' + (refLabel||'Source A'), '② ' + (tgtLabel||'Source B'), '③ Jointure', '④ Règles', '⑤ Filtres & Rapport'];
+  return ['① ' + (refLabel||'Source A'), '② ' + (tgtLabel||'Source B'), '③ Jointure et filtres', '④ Règles', '⑤ Options'];
 }
 
 function wizShowErr(msg) {
@@ -390,7 +416,7 @@ function wizValidateStep(step) {
   if (step === 1) {
     const s = WS.sources.reference;
     if (!s.format) return 'Sélectionnez un format pour la source A.';
-    if (!['json','xlsx'].includes(s.format)) {
+    if (!['json','jsonl','xlsx'].includes(s.format)) {
       const list = s.fixed_width ? s.column_positions : s.fields;
       if (!list.length) return 'Déclarez au moins une colonne pour la source A.';
     }
@@ -398,7 +424,7 @@ function wizValidateStep(step) {
   if (step === 2) {
     const s = WS.sources.target;
     if (!s.format) return 'Sélectionnez un format pour la source B.';
-    if (!['json','xlsx'].includes(s.format)) {
+    if (!['json','jsonl','xlsx'].includes(s.format)) {
       const list = s.fixed_width ? s.column_positions : s.fields;
       if (!list.length) return 'Déclarez au moins une colonne pour la source B.';
     }
@@ -465,26 +491,28 @@ function toggleFixedInput(inputId, val) {
 // ═══════════════════════════════════════════════════════════
 function wizRenderSource(stepEl, srcKey, label) {
   const s = WS.sources[srcKey];
-  const noDelim = ['json','xlsx'].includes(s.format);
-  const noFields = ['json','xlsx'].includes(s.format);
+  const noDelim  = ['json','jsonl','xlsx','positionnel'].includes(s.format);
+  const noFields = ['xlsx'].includes(s.format);
+  const isJson   = s.format === 'json' || s.format === 'jsonl';
 
   const fileLoaded = srcKey === 'reference' ? !!fileRef : !!fileTgt;
-  const detectBanner = (fileLoaded && !_hasSourceConfig(srcKey) && !s.fixed_width && !noFields)
+  const detectBanner = (fileLoaded && !_hasSourceConfig(srcKey) && (s.format === 'csv' || isJson) && !noFields)
     ? `<div class="detect-banner">
         <span>Aucune colonne configurée — cliquez pour inférer la structure depuis le fichier.</span>
         <button class="btn-detect" onclick="detectAndApply('${srcKey}')">🔍 Détecter la structure</button>
       </div>`
     : '';
 
+  const isFixed  = s.format === 'positionnel';
+  const dfTip = 'title="Format Python strftime. Exemples&#10;%d/%m/%Y → 31/12/2024&#10;%Y-%m-%d → 2024-12-31&#10;%Y%m%d → 20241231&#10;%d/%m/%Y %H:%M:%S → date+heure&#10;Codes : %Y=année %m=mois %d=jour %H=heure %M=minute %S=seconde"';
   const colsHtml = noFields
     ? `<div class="wiz-warn">Format <strong>${s.format}</strong> : colonnes détectées automatiquement au parsing.</div>`
-    : `<div>
-        ${wizToggleRow('w-fw-'+srcKey, 'Format à largeur fixe (fixed_width)', s.fixed_width)}
-      </div>
-      <table class="col-table" id="ctbl-${srcKey}">
-        <thead><tr>${s.fixed_width
-          ? '<th>Nom</th><th>Position</th><th>Largeur</th><th>Type</th><th title="Format Python strftime. Exemples&#10;%d/%m/%Y → 31/12/2024&#10;%Y-%m-%d → 2024-12-31&#10;%Y%m%d → 20241231&#10;%d/%m/%Y %H:%M:%S → date+heure&#10;Codes : %Y=année %m=mois %d=jour %H=heure %M=minute %S=seconde">Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>'
-          : '<th>Nom</th><th>Type</th><th title="Format Python strftime. Exemples&#10;%d/%m/%Y → 31/12/2024&#10;%Y-%m-%d → 2024-12-31&#10;%Y%m%d → 20241231&#10;%d/%m/%Y %H:%M:%S → date+heure&#10;Codes : %Y=année %m=mois %d=jour %H=heure %M=minute %S=seconde">Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>'
+    : `<table class="col-table" id="ctbl-${srcKey}">
+        <thead><tr>${isFixed
+          ? `<th>Nom</th><th>Position</th><th>Largeur</th><th>Type</th><th ${dfTip}>Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>`
+          : isJson
+            ? `<th>Nom</th><th title="Chemin dot-notation depuis chaque enregistrement (ex: customer.name). Laisser vide = utilise le nom du champ.">Chemin (path) ⓘ</th><th>Type</th><th ${dfTip}>Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>`
+            : `<th>Nom</th><th>Type</th><th ${dfTip}>Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>`
         }</tr></thead>
         <tbody id="ctbody-${srcKey}">
           ${wizColRows(srcKey, s)}
@@ -513,14 +541,15 @@ function wizRenderSource(stepEl, srcKey, label) {
     <div class="wiz-section">
       <div class="wiz-section-title">${label}</div>
       <div class="wiz-grid">
-        ${wizField('Format', wizSelect('w-fmt-'+srcKey, [['csv','CSV'],['txt','TXT'],['dat','DAT'],['json','JSON'],['xlsx','XLSX']], s.format))}
+        ${wizField('Format', wizSelect('w-fmt-'+srcKey, [['csv','CSV'],['positionnel','Positionnel'],['json','JSON'],['jsonl','JSONL'],['xlsx','XLSX']], s.format))}
         ${wizField('Label', wizInput('w-lbl-'+srcKey, s.label, 'ex: Stock WMS'))}
         ${wizField('Chemin du fichier', wizInput('w-file-'+srcKey, s.file, 'ex: /data/export.csv'))}
         ${wizField('Encodage', wizSelect('w-enc-'+srcKey, [['utf-8','UTF-8'],['utf-8-sig','UTF-8 avec BOM'],['windows-1252','Windows-1252 (ANSI)'],['latin-1','Latin-1 / ISO-8859-1']], s.encoding||'utf-8'))}
         ${noDelim ? '' : wizField('Délimiteur', wizInput('w-del-'+srcKey, s.delimiter, ';'))}
+        ${s.format === 'json' ? wizField('Chemin tableau <i class="wiz-info" title="Chemin dot-notation depuis la racine du JSON jusqu\'au tableau d\'enregistrements.&#10;Ex : data.records — laisser vide si le JSON est déjà un tableau à la racine.">i</i>', wizInput('w-jp-'+srcKey, s.json_path, 'ex: data.records')) : ''}
         ${wizField('Skip rows', wizInput('w-sk-'+srcKey, s.skip_rows, '0'))}
         ${wizField('Max colonnes', wizInput('w-mc-'+srcKey, s.max_columns, 'optionnel'))}
-        ${wizField('Filtre lignes (regex)', wizInput('w-rf-'+srcKey, s.record_filter_marker, 'ex: ^1'))}
+        ${wizField('Pré filtrage (regex)', wizInput('w-rf-'+srcKey, s.record_filter_marker, 'ex: ^1'))}
       </div>
       ${wizToggleRow('w-hh-'+srcKey, 'Has header', s.has_header)}
     </div>
@@ -534,10 +563,6 @@ function wizRenderSource(stepEl, srcKey, label) {
       ${wizToggleRow('w-ue-'+srcKey, 'Activer le dépivotage', s.unpivot_enabled)}
       <div id="unpivot-fields-${srcKey}">${unpivotFieldsHtml}</div>
     </div>`;
-
-  // Binding toggle fixed_width
-  const fwEl = document.getElementById('w-fw-'+srcKey);
-  if (fwEl) fwEl.addEventListener('change', () => wizToggleFW(srcKey));
 
   // Binding toggle unpivot
   const ueEl = document.getElementById('w-ue-'+srcKey);
@@ -566,7 +591,19 @@ function wizRenderSource(stepEl, srcKey, label) {
   // Binding format change
   const fmtEl = document.getElementById('w-fmt-'+srcKey);
   if (fmtEl) fmtEl.addEventListener('change', () => {
+    const prevFW = WS.sources[srcKey].fixed_width;
     wizReadSourceForm(srcKey);
+    const s2 = WS.sources[srcKey];
+    const newFW = s2.fixed_width;
+    if (!prevFW && newFW) {
+      // csv → positionnel : migrer fields → column_positions
+      s2.column_positions = s2.fields.map(f => ({name:f.name, position:0, width:1, type:f.type, date_format:f.date_format||'', ignored:!!f.ignored}));
+      s2.fields = [];
+    } else if (prevFW && !newFW) {
+      // positionnel → csv : migrer column_positions → fields
+      s2.fields = s2.column_positions.map(f => ({name:f.name, type:f.type, date_format:f.date_format||'', ignored:!!f.ignored}));
+      s2.column_positions = [];
+    }
     wizRenderSource(stepEl, srcKey, label);
   });
 
@@ -596,6 +633,15 @@ function wizColRows(srcKey, s) {
         <td>${wizInput(`w-cn-${srcKey}-${i}`, f.name, 'nom')}</td>
         <td>${wizInput(`w-cp-${srcKey}-${i}`, f.position, '0')}</td>
         <td>${wizInput(`w-cw-${srcKey}-${i}`, f.width, '1')}</td>
+        <td>${typeSelHtml}</td>
+        <td>${dfHtml}</td>
+        <td style="text-align:center">${ignHtml}</td>
+        <td><button class="btn-icon" onclick="wizRemoveCol('${srcKey}',${i})" title="Supprimer">✕</button></td>
+      </tr>`;
+    } else if (s.format === 'json' || s.format === 'jsonl') {
+      return `<tr${f.ignored?' style="opacity:.45"':''}>
+        <td>${wizInput(`w-cn-${srcKey}-${i}`, f.name, 'nom')}</td>
+        <td>${wizInput(`w-jpf-${srcKey}-${i}`, f.path||'', 'ex: customer.name')}</td>
         <td>${typeSelHtml}</td>
         <td>${dfHtml}</td>
         <td style="text-align:center">${ignHtml}</td>
@@ -688,7 +734,7 @@ function wizReadSourceForm(srcKey) {
   const s  = WS.sources[srcKey];
   const g  = id => { const el = document.getElementById(id); return el ? el.value : null; };
   const gc = id => { const el = document.getElementById(id); return el ? el.checked : null; };
-  if (g('w-fmt-'+srcKey)  !== null) s.format  = g('w-fmt-'+srcKey);
+  if (g('w-fmt-'+srcKey)  !== null) { s.format = g('w-fmt-'+srcKey); s.fixed_width = (s.format === 'positionnel'); }
   if (g('w-lbl-'+srcKey)  !== null) s.label   = g('w-lbl-'+srcKey);
   if (g('w-file-'+srcKey) !== null) s.file    = g('w-file-'+srcKey);
   if (g('w-enc-'+srcKey)  !== null) s.encoding = g('w-enc-'+srcKey);
@@ -698,7 +744,7 @@ function wizReadSourceForm(srcKey) {
   if (g('w-rf-'+srcKey)  !== null) s.record_filter_marker = g('w-rf-'+srcKey);
   if (gc('w-hh-'+srcKey) !== null) s.has_header = gc('w-hh-'+srcKey);
   if (gc('w-ue-'+srcKey) !== null) s.unpivot_enabled = gc('w-ue-'+srcKey);
-  if (gc('w-fw-'+srcKey) !== null) s.fixed_width = gc('w-fw-'+srcKey);
+  if (g('w-jp-'+srcKey) !== null) s.json_path = g('w-jp-'+srcKey);
   // Colonnes
   const list = s.fixed_width ? s.column_positions : s.fields;
   list.forEach((f, i) => {
@@ -710,6 +756,9 @@ function wizReadSourceForm(srcKey) {
     if (s.fixed_width) {
       if (g(`w-cp-${srcKey}-${i}`) !== null) f.position = Number(g(`w-cp-${srcKey}-${i}`))||0;
       if (g(`w-cw-${srcKey}-${i}`) !== null) f.width    = Number(g(`w-cw-${srcKey}-${i}`))||1;
+    }
+    if (s.format === 'json' || s.format === 'jsonl') {
+      if (g(`w-jpf-${srcKey}-${i}`) !== null) f.path = g(`w-jpf-${srcKey}-${i}`);
     }
   });
   // Unpivot
@@ -739,6 +788,9 @@ function wizRenderJoin() {
     <td><button class="btn-icon" onclick="wizRemoveJoinKey(${i})">✕</button></td>
   </tr>`).join('');
 
+  const labelA = esc(WS.sources.reference.label || 'Source A');
+  const labelB = esc(WS.sources.target.label    || 'Source B');
+
   document.getElementById('wfv-3-body').innerHTML = `
     <div class="wiz-section">
       <div class="wiz-section-title">Clés de jointure</div>
@@ -747,16 +799,43 @@ function wizRenderJoin() {
         <thead><tr><th>Champ Source A</th><th>Champ Source B</th><th></th></tr></thead>
         <tbody id="jtbody">${rowsHtml}</tbody>
       </table>
-      <button class="btn-wiz-add" onclick="wizAddJoinKey()">+ Ajouter une clé</button>
-    </div>
-    <div class="wiz-section">
-      <div class="wiz-section-title">Test de la clé</div>
-      <button class="btn-xs" id="btn-test-join" onclick="wizTestJoin()"
-        ${(!fileRef || !fileTgt) ? 'disabled title="Chargez les fichiers pour tester"' : ''}>
-        Tester la clé
-      </button>
-      ${(!fileRef || !fileTgt) ? '<span style="font-size:.72rem;color:var(--muted);margin-left:.5rem">⚠ Fichiers non chargés</span>' : ''}
+      <div class="join-key-actions">
+        <button class="btn-wiz-add" onclick="wizAddJoinKey()">+ Ajouter une clé</button>
+        <button class="btn-xs" id="btn-test-join" onclick="wizTestJoin()"
+          ${(!fileRef || !fileTgt) ? 'disabled title="Chargez les fichiers pour tester"' : ''}>
+          Tester la clé
+        </button>
+        ${(!fileRef || !fileTgt) ? '<span style="font-size:.72rem;color:var(--muted)">⚠ Fichiers non chargés</span>' : ''}
+      </div>
       <div id="join-result"></div>
+    </div>
+    <div class="wiz-filter-cols">
+      <div class="wiz-filter-col">
+        <div class="wiz-section-title">${labelA} — Filtres</div>
+        <table class="col-table">
+          <thead><tr><th>Champ</th><th>Op.</th><th>Valeur</th><th></th><th></th></tr></thead>
+          <tbody id="ftbody-reference">${wizFilterRows('reference', refNames)}</tbody>
+        </table>
+        <div class="filter-col-footer">
+          <button class="btn-wiz-add" onclick="wizAddFilterFor('reference')">+ Filtre</button>
+          <button class="btn-xs" id="btn-test-filters-ref" onclick="wizTestFilters('reference')"
+            ${!fileRef ? 'disabled title="Chargez le fichier pour tester"' : ''}>Tester</button>
+        </div>
+        <div id="filter-result-reference" class="filter-test-result"></div>
+      </div>
+      <div class="wiz-filter-col">
+        <div class="wiz-section-title">${labelB} — Filtres</div>
+        <table class="col-table">
+          <thead><tr><th>Champ</th><th>Op.</th><th>Valeur</th><th></th><th></th></tr></thead>
+          <tbody id="ftbody-target">${wizFilterRows('target', tgtNames)}</tbody>
+        </table>
+        <div class="filter-col-footer">
+          <button class="btn-wiz-add" onclick="wizAddFilterFor('target')">+ Filtre</button>
+          <button class="btn-xs" id="btn-test-filters-tgt" onclick="wizTestFilters('target')"
+            ${!fileTgt ? 'disabled title="Chargez le fichier pour tester"' : ''}>Tester</button>
+        </div>
+        <div id="filter-result-target" class="filter-test-result"></div>
+      </div>
     </div>`;
 }
 
@@ -779,6 +858,7 @@ function wizReadJoinForm() {
     if (s) k.source_field = s.value;
     if (t) k.target_field = t.value;
   });
+  wizReadFiltersForJoin();
 }
 
 async function wizTestJoin() {
@@ -787,7 +867,10 @@ async function wizTestJoin() {
   const res = document.getElementById('join-result');
   btn.disabled = true;
   btn.textContent = '…';
-  res.innerHTML = '';
+  res.innerHTML = `<div style="padding:.75rem 0;display:flex;flex-direction:column;gap:.5rem">
+    <div class="progress-bar-track"><div class="progress-bar-fill indeterminate"></div></div>
+    <div style="font-size:.72rem;color:var(--muted)">Lecture et jointure des fichiers…</div>
+  </div>`;
   try {
     // YAML partiel avec seulement sources + join
     const partialObj = { sources: wizBuildSourcesObj(), join: { keys: WS.join.keys.filter(k=>k.source_field&&k.target_field) } };
@@ -829,6 +912,42 @@ async function wizTestJoin() {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Tester la clé';
+  }
+}
+
+async function wizTestFilters(which) {
+  wizReadJoinForm();
+  const file   = which === 'reference' ? fileRef : fileTgt;
+  const btnId  = which === 'reference' ? 'btn-test-filters-ref' : 'btn-test-filters-tgt';
+  const resId  = 'filter-result-' + which;
+  const btn    = document.getElementById(btnId);
+  const res    = document.getElementById(resId);
+  if (!btn || !res || !file) return;
+  btn.disabled = true;
+  btn.textContent = '…';
+  res.innerHTML = '<div class="filter-test-loading"><div class="progress-bar-track"><div class="progress-bar-fill indeterminate"></div></div></div>';
+  try {
+    const partialObj = { sources: wizBuildSourcesObj(), filters: WS.filters.filter(f => f.field && f.source === which) };
+    const partialYaml = jsyaml.dump(partialObj, {lineWidth:120, noRefs:true});
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('source', which);
+    fd.append('config_yaml', partialYaml);
+    const resp = await fetch('/api/test-filters', { method:'POST', body:fd });
+    const data = await resp.json();
+    if (data.error) { res.innerHTML = `<div class="wiz-warn">${esc(data.error)}</div>`; return; }
+    const pct = data.total ? Math.round(data.filtered / data.total * 100) : 0;
+    res.innerHTML = `<div class="filter-test-ok">
+      <span class="filter-test-count">${data.filtered.toLocaleString('fr-FR')}</span>
+      <span class="filter-test-sep">enregistrements /</span>
+      <span class="filter-test-total">${data.total.toLocaleString('fr-FR')}</span>
+      <span class="filter-test-sep">(${pct} %)</span>
+    </div>`;
+  } catch(e) {
+    res.innerHTML = `<div class="wiz-warn">Erreur : ${esc(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Tester';
   }
 }
 
@@ -999,25 +1118,10 @@ function wizRemoveRuleField(ri, fi) {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  WIZARD — Étape 4 : Filtres & Rapport
+//  WIZARD — Étape 4 : Options (Rapport + Méta)
 // ═══════════════════════════════════════════════════════════
 function wizRenderFilters() {
-  const filterRows = WS.filters.map((f, i) => `<tr>
-    <td>${wizInput('w-ff-'+i, f.field, 'champ')}</td>
-    <td>${wizSelect('w-fs-'+i, [['reference','Source A'],['target','Source B']], f.source)}</td>
-    <td>${wizInput('w-fv-'+i, f.values, 'val1, val2, …')}</td>
-    <td><button class="btn-icon" onclick="wizRemoveFilter(${i})">✕</button></td>
-  </tr>`).join('');
-
   document.getElementById('wfv-5-body').innerHTML = `
-    <div class="wiz-section wiz-section-narrow">
-      <div class="wiz-section-title">Filtres</div>
-      <table class="col-table">
-        <thead><tr><th>Champ</th><th>Source</th><th>Valeurs (virgule)</th><th></th></tr></thead>
-        <tbody id="ftbody">${filterRows}</tbody>
-      </table>
-      <button class="btn-wiz-add" onclick="wizAddFilter()">+ Filtre</button>
-    </div>
     <div class="wiz-section wiz-section-narrow">
       <div class="wiz-section-title">Rapport</div>
       <div class="wiz-grid">
@@ -1034,27 +1138,68 @@ function wizRenderFilters() {
     </div>`;
 }
 
-function wizAddFilter() {
-  wizReadFiltersForm();
-  WS.filters.push({ field:'', source:'reference', values:'' });
-  wizRenderFilters();
+// ── Filtres (dans l'étape Jointure) ─────────────────────────
+const _FILTER_OPS      = [['equals','='],['differs','≠'],['greater','>'],['less','<'],['contains','∋'],['not_contains','∌']];
+const _FILTER_VAL_TYPES = [['value','Valeur'],['empty','Vide'],['not_empty','Non vide']];
+
+function wizFilterRows(source, fieldNames) {
+  return WS.filters
+    .map((f, i) => ({ f, i }))
+    .filter(({ f }) => f.source === source)
+    .map(({ f, i }) => {
+      const op = f.operator   || 'equals';
+      const vt = f.value_type || 'value';
+      const fieldSel = fieldNames.length
+        ? `<select class="wiz-select" id="w-ff-${i}">${
+            ['', ...fieldNames].map(n => `<option value="${esc(n)}"${n===f.field?' selected':''}>${n||'—'}</option>`).join('')
+          }</select>`
+        : wizInput('w-ff-'+i, f.field, 'champ');
+      const opOpts  = _FILTER_OPS.map(([v,l])      => `<option value="${v}"${v===op?' selected':''}>${l}</option>`).join('');
+      const vtOpts  = _FILTER_VAL_TYPES.map(([v,l]) => `<option value="${v}"${v===vt?' selected':''}>${l}</option>`).join('');
+      return `<tr>
+        <td>${fieldSel}</td>
+        <td><select class="wiz-select" id="w-fo-${i}">${opOpts}</select></td>
+        <td><select class="wiz-select" id="w-fvt-${i}" onchange="wizToggleFilterVal(${i},this.value)">${vtOpts}</select></td>
+        <td id="w-fv-wrap-${i}" style="${vt==='value'?'':'display:none'}">
+          ${wizInput('w-fv-'+i, f.value||'', 'valeur')}
+        </td>
+        <td><button class="btn-icon" onclick="wizRemoveFilter(${i})">✕</button></td>
+      </tr>`;
+    }).join('');
+}
+
+function wizToggleFilterVal(i, vt) {
+  const wrap = document.getElementById('w-fv-wrap-'+i);
+  if (wrap) wrap.style.display = vt === 'value' ? '' : 'none';
+}
+
+function wizAddFilterFor(source) {
+  wizReadFiltersForJoin();
+  WS.filters.push({ field:'', source, operator:'equals', value_type:'value', value:'' });
+  wizRenderJoin();
 }
 
 function wizRemoveFilter(i) {
-  wizReadFiltersForm();
-  WS.filters.splice(i,1);
-  wizRenderFilters();
+  wizReadFiltersForJoin();
+  WS.filters.splice(i, 1);
+  wizRenderJoin();
+}
+
+function wizReadFiltersForJoin() {
+  WS.filters.forEach((f, i) => {
+    const ff  = document.getElementById('w-ff-'+i);
+    const fo  = document.getElementById('w-fo-'+i);
+    const fvt = document.getElementById('w-fvt-'+i);
+    const fv  = document.getElementById('w-fv-'+i);
+    if (ff)  f.field      = ff.value;
+    if (fo)  f.operator   = fo.value;
+    if (fvt) f.value_type = fvt.value;
+    if (fv)  f.value      = fv.value;
+  });
 }
 
 function wizReadFiltersForm() {
-  WS.filters.forEach((f, i) => {
-    const ff = document.getElementById('w-ff-'+i);
-    const fs = document.getElementById('w-fs-'+i);
-    const fv = document.getElementById('w-fv-'+i);
-    if (ff) f.field  = ff.value;
-    if (fs) f.source = fs.value;
-    if (fv) f.values = fv.value;
-  });
+  wizReadFiltersForJoin();
   const mdp = document.getElementById('w-rp-mdp');
   const sm  = document.getElementById('w-rp-sm');
   const mn  = document.getElementById('w-meta-name');

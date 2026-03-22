@@ -1,4 +1,16 @@
 // ═══════════════════════════════════════════════════════════
+//  COULEURS PAR RÈGLE
+// ═══════════════════════════════════════════════════════════
+const RULE_COLORS = [
+  '#6366f1','#f59e0b','#10b981','#ef4444','#3b82f6',
+  '#8b5cf6','#f97316','#14b8a6','#ec4899','#84cc16',
+];
+function ruleColor(ruleName) {
+  const idx = (lastConfig?.rules || []).findIndex(r => r.name === ruleName);
+  return idx >= 0 ? RULE_COLORS[idx % RULE_COLORS.length] : '#94a3b8';
+}
+
+// ═══════════════════════════════════════════════════════════
 //  PAGINATION SERVEUR — fetch + render
 // ═══════════════════════════════════════════════════════════
 async function fetchPage(page) {
@@ -7,9 +19,11 @@ async function fetchPage(page) {
 
   const p = new URLSearchParams({ page, size: _pageSize });
 
-  // Types actifs : orphelins depuis activeFilters, KO/OK si des règles sont actives
-  const types = new Set(activeFilters);
-  if (!activeRuleFilters || activeRuleFilters.size > 0) { types.add('KO'); types.add('OK'); }
+  // Types actifs : orphelins depuis activeFilters, KO+OK si BOTH actif
+  const types = new Set();
+  if (activeFilters.has('ORPHELIN_A')) types.add('ORPHELIN_A');
+  if (activeFilters.has('ORPHELIN_B')) types.add('ORPHELIN_B');
+  if (activeFilters.has('BOTH'))       { types.add('KO'); types.add('OK'); }
   p.set('types', [...types].join(','));
 
   if (activeRuleFilters !== null) p.set('rules', [...activeRuleFilters].join(','));
@@ -55,40 +69,58 @@ function _renderPage(rows) {
   rows.forEach(r => _appendPageRow(r));
 }
 
+const _EYE_SVG = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+
 function _appendPageRow(r) {
   const tbody = document.getElementById('tbody');
-  const tr = document.createElement('tr');
+  const tr    = document.createElement('tr');
 
-  // Cellules fixes
-  let html = `
-    <td class="tk">${esc(r.join_key)}</td>
-    <td><span class="badge badge-${r.type_ecart}">${r.type_ecart}</span></td>
-    <td>${r.rule_name ? `<button class="rule-chip">${esc(r.rule_name)}</button>` : ''}</td>
-    <td class="tv r" title="${esc(r.valeur_reference)}">${esc(r.valeur_reference)}</td>
-    <td class="tv t" title="${esc(r.valeur_cible)}">${esc(r.valeur_cible)}</td>`;
+  // Badges pour chaque écart
+  const badges = (r.ecarts || []).map(e => {
+    const isOrphan = e.type_ecart === 'ORPHELIN_A' || e.type_ecart === 'ORPHELIN_B';
+    const color    = (!isOrphan && e.rule_name) ? ruleColor(e.rule_name) : null;
+    const dot      = color ? `<span class="rule-dot" style="background:${color}"></span>` : '';
+    const lbl      = isOrphan ? _typeLabel(e.type_ecart) : esc(e.rule_name || e.type_ecart);
+    const title    = e.rule_name && !isOrphan
+      ? `${esc(e.rule_name)} — réf: ${esc(e.valeur_reference)} / cible: ${esc(e.valeur_cible)}`
+      : '';
+    const dimmed   = (activeRuleFilters !== null && !isOrphan && e.rule_name && !activeRuleFilters.has(e.rule_name))
+      ? ' dimmed' : '';
+    const cls      = isOrphan
+      ? `badge badge-${e.type_ecart}`
+      : `rule-badge${dimmed}`;
+    const style    = (!isOrphan && color) ? ` style="border-color:${color};color:${color};background:${color}18"` : '';
+    const dataRule = e.rule_name ? ` data-rule="${esc(e.rule_name)}"` : '';
+    return `<button class="${cls}"${style}${dataRule} title="${title}">${dot}${lbl}</button>`;
+  }).join('');
 
-  // Colonnes supplémentaires ref
+  let html = `<td class="td-eye"><button class="eye-btn" title="Voir le contexte">${_EYE_SVG}</button></td>`;
+  html    += `<td class="tk">${esc(r.join_key)}</td>`;
+  html    += `<td><div class="td-ecarts">${badges}</div></td>`;
+
   extraRefCols.forEach(c => {
     const v = r._ref?.[c] ?? '';
     html += `<td class="tv xc xc-ref" title="${esc(v)}">${esc(v)}</td>`;
   });
-  // Colonnes supplémentaires tgt
   extraTgtCols.forEach(c => {
     const v = r._tgt?.[c] ?? '';
     html += `<td class="tv xc xc-tgt" title="${esc(v)}">${esc(v)}</td>`;
   });
 
-  html += `<td class="td-eye"><button class="eye-btn" title="Voir le contexte"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></td>`;
-
   tr.innerHTML = html;
-  const ruleBtn = tr.querySelector('.rule-chip');
-  if (ruleBtn) {
-    if (activeRuleFilters && activeRuleFilters.size === 1 && activeRuleFilters.has(r.rule_name))
-      ruleBtn.classList.add('solo');
-    ruleBtn.addEventListener('click', () => filterToRule(r.rule_name));
-  }
-  tr.querySelector('.eye-btn').addEventListener('click', () => openCtxModal(r.join_key));
+
+  // Clic sur un badge de règle → filtrer sur cette règle
+  tr.querySelectorAll('.rule-badge[data-rule]').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); filterToRule(btn.dataset.rule); });
+  });
+  tr.querySelector('.eye-btn').addEventListener('click', () => openCtxModal(r.join_key, r.ecarts || []));
   tbody.appendChild(tr);
+}
+
+function _typeLabel(t) {
+  if (t === 'ORPHELIN_A') return 'Absent cible';
+  if (t === 'ORPHELIN_B') return 'Absent source';
+  return t;
 }
 
 // ── En-têtes colonnes supplémentaires ─────────────────────
@@ -97,20 +129,21 @@ function _syncExtraHeaders() {
   if (!tr) return;
   // Supprimer les anciens th extra
   tr.querySelectorAll('.th-extra').forEach(th => th.remove());
-  // Insérer avant th-eye
-  const eyeTh = document.getElementById('th-eye');
-  const insertBefore = eyeTh || null;
+  // Insérer à la fin (après les colonnes fixes)
+  const insertBefore = null;
+  const refLblPfx = WS?.sources?.reference?.label || refLabel || 'Source';
+  const tgtLblPfx = WS?.sources?.target?.label    || tgtLabel || 'Cible';
   extraRefCols.forEach(c => {
     const th = document.createElement('th');
     th.className = 'th-extra th-extra-ref';
-    th.textContent = c;
+    th.textContent = `${refLblPfx} : ${c}`;
     th.title = `Source A — ${c}`;
     tr.insertBefore(th, insertBefore);
   });
   extraTgtCols.forEach(c => {
     const th = document.createElement('th');
     th.className = 'th-extra th-extra-tgt';
-    th.textContent = c;
+    th.textContent = `${tgtLblPfx} : ${c}`;
     th.title = `Source B — ${c}`;
     tr.insertBefore(th, insertBefore);
   });
@@ -246,32 +279,25 @@ function updateLiveCounts() {
 }
 
 function updateChipCounts() {
-  document.getElementById('c-oa').textContent  = lastSummary.orphelins_a || 0;
-  document.getElementById('c-ob').textContent  = lastSummary.orphelins_b || 0;
-  // c-coh et c-inc mis à jour via _updateRuleChipCounts après fetchMeta
-  const hasCoh = (lastConfig?.rules || []).some(r => (r.rule_type||'coherence') === 'coherence');
-  const hasInc = (lastConfig?.rules || []).some(r => r.rule_type === 'incoherence');
-  if (hasCoh) document.getElementById('c-coh').textContent = '…';
-  if (hasInc) document.getElementById('c-inc').textContent = '…';
+  const oa = lastSummary.orphelins_a || 0;
+  const ob = lastSummary.orphelins_b || 0;
+  document.getElementById('c-oa').textContent  = oa;
+  document.getElementById('c-ob').textContent  = ob;
+  // "Présence dans les deux" = clés avec au moins un résultat de règle (KO ou OK émis)
+  const both = (lastSummary.divergents || 0) + (lastSummary.ok || 0);
+  const bothEl = document.getElementById('c-both');
+  if (bothEl) bothEl.textContent = both.toLocaleString('fr-FR');
 }
 
 function _updateRuleChipCounts(ruleCounts) {
   const rules = lastConfig?.rules || [];
-  let cohTotal = 0, incTotal = 0;
   rules.forEach(rule => {
     const cnt = ruleCounts[rule.name] || 0;
-    // Mettre à jour le chip individuel de la règle
     document.querySelectorAll(`#filter-dynamic .chip[data-t="${CSS.escape(rule.name)}"]`).forEach(btn => {
       const sp = btn.querySelector('.chip-c');
       if (sp) sp.textContent = cnt;
     });
-    if ((rule.rule_type || 'coherence') === 'coherence') cohTotal += cnt;
-    else incTotal += cnt;
   });
-  const cohEl = document.getElementById('c-coh');
-  const incEl = document.getElementById('c-inc');
-  if (cohEl) cohEl.textContent = cohTotal;
-  if (incEl) incEl.textContent = incTotal;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -300,17 +326,9 @@ function ruleTooltip(rule) {
 }
 
 function buildRuleFilterBar(summary, config) {
-  const dyn  = document.getElementById('filter-dynamic');
+  const dyn   = document.getElementById('filter-dynamic');
   dyn.innerHTML = '';
   const rules = config?.rules || [];
-
-  const hasCoh = rules.some(r => (r.rule_type || 'coherence') === 'coherence');
-  const hasInc = rules.some(r => r.rule_type === 'incoherence');
-  const showGroup = hasCoh || hasInc;
-  document.getElementById('sep-ruletype').style.display  = showGroup ? '' : 'none';
-  document.getElementById('grp-ruletype').style.display  = showGroup ? '' : 'none';
-  document.getElementById('chip-coh').style.display      = hasCoh ? '' : 'none';
-  document.getElementById('chip-inc').style.display      = hasInc ? '' : 'none';
 
   if (!rules.length) { activeRuleFilters = null; return; }
   activeRuleFilters = new Set(rules.map(r => r.name));
@@ -318,23 +336,32 @@ function buildRuleFilterBar(summary, config) {
   const sep = document.createElement('div');
   sep.className = 'filter-sep';
   dyn.appendChild(sep);
+
   const grp = document.createElement('div');
   grp.className = 'filter-group';
   grp.innerHTML = '<span class="filter-group-label">Règles</span>';
 
-  rules.forEach(rule => {
-    const ruleType = rule.rule_type || 'coherence';
-    const btn = document.createElement('button');
-    btn.className = ruleType === 'incoherence' ? 'chip ca on' : 'chip co on';
-    btn.dataset.kind     = 'rule';
-    btn.dataset.t        = rule.name;
-    btn.dataset.ruleType = ruleType;
-    btn.title = ruleTooltip(rule);
+  rules.forEach((rule, idx) => {
+    const color = RULE_COLORS[idx % RULE_COLORS.length];
+    const btn   = document.createElement('button');
+    btn.className      = 'chip cr on';
+    btn.dataset.kind   = 'rule';
+    btn.dataset.t      = rule.name;
+    btn.title          = ruleTooltip(rule);
+    btn.style.cssText  = `--rule-c:${color}`;
     btn.addEventListener('click', function() { toggleChip(this); });
-    btn.innerHTML = `${esc(rule.name)} <span class="chip-c">…</span>`;
+    btn.innerHTML = `<span class="rule-dot" style="background:${color}"></span>${esc(rule.name)} <span class="chip-c">…</span>`;
     grp.appendChild(btn);
   });
   dyn.appendChild(grp);
+
+  // Mettre à jour les labels de présence avec les labels source/cible
+  const rL = WS?.sources?.reference?.label || refLabel || 'Source';
+  const tL = WS?.sources?.target?.label    || tgtLabel || 'Cible';
+  const oaLbl = document.getElementById('chip-lbl-oa');
+  const obLbl = document.getElementById('chip-lbl-ob');
+  if (oaLbl) oaLbl.textContent = rL;
+  if (obLbl) obLbl.textContent = tL;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -348,32 +375,11 @@ function toggleChip(btn) {
 
   if (kind === 'type') {
     if (isOn) activeFilters.delete(t); else activeFilters.add(t);
-  } else if (kind === 'ruletype') {
-    if (!activeRuleFilters) activeRuleFilters = new Set((lastConfig?.rules || []).map(r => r.name));
-    (lastConfig?.rules || []).forEach(r => {
-      if ((r.rule_type || 'coherence') === t) {
-        if (isOn) activeRuleFilters.delete(r.name); else activeRuleFilters.add(r.name);
-      }
-    });
-    document.querySelectorAll(`#filter-dynamic .chip[data-kind="rule"][data-rule-type="${t}"]`).forEach(p => {
-      p.classList.toggle('on', !isOn);
-    });
   } else if (kind === 'rule') {
     if (!activeRuleFilters) activeRuleFilters = new Set((lastConfig?.rules || []).map(r => r.name));
     if (isOn) activeRuleFilters.delete(t); else activeRuleFilters.add(t);
-    _syncRuletypeChips();
   }
   _refresh();
-}
-
-function _syncRuletypeChips() {
-  ['coherence','incoherence'].forEach(rt => {
-    const rulesOfType = (lastConfig?.rules || []).filter(r => (r.rule_type||'coherence') === rt).map(r => r.name);
-    if (!rulesOfType.length) return;
-    const anyOn = rulesOfType.some(n => !activeRuleFilters || activeRuleFilters.has(n));
-    const chip = document.getElementById(rt === 'coherence' ? 'chip-coh' : 'chip-inc');
-    if (chip) chip.classList.toggle('on', anyOn);
-  });
 }
 
 function filterToRule(name) {
@@ -387,7 +393,6 @@ function filterToRule(name) {
   document.querySelectorAll('#filter-dynamic .chip[data-kind="rule"]').forEach(btn => {
     btn.classList.toggle('on', !activeRuleFilters || activeRuleFilters.has(btn.dataset.t));
   });
-  _syncRuletypeChips();
   _refresh();
 }
 
@@ -399,7 +404,7 @@ function setFilterText(v) {
 function setSortCol(col) {
   if (sortCol === col) { sortDir = -sortDir; }
   else { sortCol = col; sortDir = 1; }
-  ['key','type','rule','ref','tgt'].forEach(c => {
+  ['key','type'].forEach(c => {
     const th = document.getElementById('si-' + c)?.parentElement;
     const ic = document.getElementById('si-' + c);
     if (!th || !ic) return;
@@ -413,6 +418,7 @@ function setSortCol(col) {
   _refresh();
 }
 
+// Mapping colonne → champ (pour le tri des données historique plates)
 const _SORT_KEY = { key:'join_key', type:'type_ecart', rule:'rule_name', ref:'valeur_reference', tgt:'valeur_cible' };
 
 function _rowMatchesText(r) {

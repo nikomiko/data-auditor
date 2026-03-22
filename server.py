@@ -24,6 +24,8 @@ from comparator    import compare_with_progress, _build_key_series
 import report
 from report        import save_history, list_history, load_history, to_csv, to_html, to_xlsx
 
+APP_VERSION = "3.5.0"
+
 app = Flask(__name__, static_folder=".", static_url_path="")
 
 # ── Stockage session ──────────────────────────────────────────
@@ -32,6 +34,11 @@ _sessions: dict = {}
 _sessions_lock  = threading.Lock()
 
 MAX_PREVIEW = 500   # lignes max en mémoire pour l'UI
+
+
+@app.route("/api/version")
+def api_version():
+    return jsonify({"version": APP_VERSION})
 
 
 @app.route("/")
@@ -112,8 +119,8 @@ def _run_audit(token: str, ref_bytes: bytes, tgt_bytes: bytes, config: dict):
 
         _push(token, {"event": "progress", "done": 0, "total": 0, "pct": 0,
                       "step": "Normalisation…"})
-        df_ref = normalize_dataframe(df_ref, src_ref)
-        df_tgt = normalize_dataframe(df_tgt, src_tgt)
+        df_ref = normalize_dataframe(df_ref, src_ref, debug=app.debug)
+        df_tgt = normalize_dataframe(df_tgt, src_tgt, debug=app.debug)
 
         if src_ref.get("unpivot"):
             _push(token, {"event": "progress", "done": 0, "total": 0, "pct": 0,
@@ -193,21 +200,108 @@ def apply_filters(df_ref, df_tgt, filters, config):
     Pas de propagation croisée : les orphelins restent visibles dans le comparateur.
     """
     for f in filters:
-        field  = f.get("field")
-        src    = f.get("source", "reference")
-        values = f.get("values")
-        if not field or values is None:
+        field      = f.get("field")
+        src        = f.get("source", "reference")
+        operator   = f.get("operator", "equals")
+        value_type = f.get("value_type", "value")
+        value      = f.get("value", "")
+        # Compat ascendante : ancien format { values: [...] }
+        legacy_values = f.get("values")
+
+        if not field:
             continue
-        values_set = set(str(v) for v in values)
+
+        def _make_mask(fld, op, vt, val, lv):
+            import pandas as _pd
+
+            def _as_str(series):
+                """NaN → '' pour toutes les comparaisons string."""
+                return series.where(series.notna(), other="").astype(str).str.strip()
+
+            def _debug(fld, result, computed_series, raw_series=None, cmp_val=None):
+                if not app.debug:
+                    return
+                true_count  = int(result.sum())
+                false_count = int((~result).sum())
+                label = f"[filter debug] champ={fld!r}  op={op!r}  value_type={vt!r}"
+                if cmp_val is not None:
+                    label += f"  valeur_comparée={cmp_val!r}"
+                print(f"{label}  →  TRUE={true_count}  FALSE={false_count}  TOTAL={true_count+false_count}")
+                print(f"  {'#':>6}  {'valeur brute':30s}  {'notna':5}  {'_as_str':30s}  résultat")
+                print(f"  {'-'*6}  {'-'*30}  {'-'*5}  {'-'*30}  --------")
+                raw_list = list(raw_series) if raw_series is not None else list(computed_series)
+                str_list = list(computed_series)
+                res_list = list(result)
+                for idx, (raw_v, str_v, res_row) in enumerate(zip(raw_list, str_list, res_list)):
+                    notna_v = raw_series is not None and raw_v is not None and raw_v == raw_v
+                    print(f"  {idx:>6}  {repr(raw_v):30s}  {str(notna_v):5}  {repr(str_v):30s}  {'TRUE' if res_row else 'FALSE'}")
+
+            if vt == "empty":
+                def _m(df, _f=fld):
+                    s = df[_f].fillna("").astype(str).str.strip()
+                    r = s == ""
+                    _debug(_f, r, s, raw_series=df[_f])
+                    return r
+                return _m
+            if vt == "not_empty":
+                def _m(df, _f=fld):
+                    s = df[_f].fillna("").astype(str).str.strip()
+                    r = s != ""
+                    _debug(_f, r, s, raw_series=df[_f])
+                    return r
+                return _m
+            # value_type == "value" (ou valeur brute)
+            if lv is not None and not val:
+                vs = set(str(v) for v in lv)
+                def _m(df, _f=fld, _vs=vs):
+                    s = _as_str(df[_f])
+                    r = s.isin(_vs)
+                    _debug(_f, r, s, cmp_val=sorted(_vs))
+                    return r
+                return _m
+            v = str(val).strip() if val is not None else ""
+            if op == "equals":
+                def _m(df, _f=fld, _v=v):
+                    s = _as_str(df[_f]); r = s == _v; _debug(_f, r, s, cmp_val=_v); return r
+                return _m
+            if op == "differs":
+                def _m(df, _f=fld, _v=v):
+                    s = _as_str(df[_f]); r = s != _v; _debug(_f, r, s, cmp_val=_v); return r
+                return _m
+            if op == "greater":
+                def _m(df, _f=fld, _v=v):
+                    n = _pd.to_numeric(df[_f], errors="coerce")
+                    r = n > _pd.to_numeric(_v, errors="coerce")
+                    _debug(_f, r.fillna(False), n.astype(str), cmp_val=_v); return r
+                return _m
+            if op == "less":
+                def _m(df, _f=fld, _v=v):
+                    n = _pd.to_numeric(df[_f], errors="coerce")
+                    r = n < _pd.to_numeric(_v, errors="coerce")
+                    _debug(_f, r.fillna(False), n.astype(str), cmp_val=_v); return r
+                return _m
+            if op == "contains":
+                def _m(df, _f=fld, _v=v):
+                    s = _as_str(df[_f]); r = s.str.contains(_v, regex=False); _debug(_f, r, s, cmp_val=_v); return r
+                return _m
+            if op == "not_contains":
+                def _m(df, _f=fld, _v=v):
+                    s = _as_str(df[_f]); r = ~s.str.contains(_v, regex=False); _debug(_f, r, s, cmp_val=_v); return r
+                return _m
+            def _m(df, _f=fld, _v=v):
+                s = _as_str(df[_f]); r = s == _v; _debug(_f, r, s, cmp_val=_v); return r
+            return _m
+
+        mask = _make_mask(field, operator, value_type, value, legacy_values)
 
         if src == "reference":
             if field not in df_ref.columns:
                 raise ConfigError(f"filters: champ '{field}' introuvable dans la reference.")
-            df_ref = df_ref[df_ref[field].astype(str).isin(values_set)].reset_index(drop=True)
+            df_ref = df_ref[mask(df_ref)].reset_index(drop=True)
         elif src == "target":
             if field not in df_tgt.columns:
                 raise ConfigError(f"filters: champ '{field}' introuvable dans la cible.")
-            df_tgt = df_tgt[df_tgt[field].astype(str).isin(values_set)].reset_index(drop=True)
+            df_tgt = df_tgt[mask(df_tgt)].reset_index(drop=True)
     return df_ref, df_tgt
 
 
@@ -281,13 +375,8 @@ def get_results_meta(token):
 # ─────────────────────────────────────────────────────────────
 #  GET /api/results/<token>  — résultats paginés + filtrés + triés
 # ─────────────────────────────────────────────────────────────
-_SORT_FIELDS = {
-    "key":  "join_key",
-    "type": "type_ecart",
-    "rule": "rule_name",
-    "ref":  "valeur_reference",
-    "tgt":  "valeur_cible",
-}
+_GRAVITY = {"ORPHELIN_A": 0, "ORPHELIN_B": 1, "KO": 2, "DIVERGENT": 2, "OK": 3}
+
 
 @app.route("/api/results/<token>")
 def get_results_page(token):
@@ -306,49 +395,74 @@ def get_results_page(token):
     extra_ref = [c for c in request.args.get("extra_ref", "").split(",") if c]
     extra_tgt = [c for c in request.args.get("extra_tgt", "").split(",") if c]
 
-    results = sess.get("results", [])
+    raw          = sess.get("results", [])
+    active_types = set(types_str.split(",")) if types_str else None
+    active_rules = set(rules_str.split(",")) if rules_str else None
 
-    if types_str:
-        active_types = set(types_str.split(","))
-        results = [r for r in results if r["type_ecart"] in active_types]
+    # ── Grouper par join_key ──────────────────────────────────
+    from collections import OrderedDict
+    grouped: dict = OrderedDict()
+    for r in raw:
+        k = r.get("join_key", "")
+        if k not in grouped:
+            grouped[k] = {"join_key": k, "ecarts": []}
+        grouped[k]["ecarts"].append({
+            "type_ecart":       r["type_ecart"],
+            "rule_name":        r.get("rule_name"),
+            "champ":            r.get("champ", ""),
+            "valeur_reference": r.get("valeur_reference", ""),
+            "valeur_cible":     r.get("valeur_cible", ""),
+        })
 
-    if rules_str:
-        active_rules = set(rules_str.split(","))
-        results = [r for r in results if (
-            r["type_ecart"] in ("ORPHELIN_A", "ORPHELIN_B") or
-            r.get("rule_name", "") in active_rules
-        )]
+    # ── Filtrer ──────────────────────────────────────────────
+    def key_matches(row):
+        for e in row["ecarts"]:
+            t = e["type_ecart"]
+            if active_types is not None and t not in active_types:
+                continue
+            if active_rules is not None and t not in ("ORPHELIN_A", "ORPHELIN_B"):
+                if e.get("rule_name") not in active_rules:
+                    continue
+            return True
+        return False
+
+    rows = list(grouped.values())
+    if active_types is not None:
+        rows = [r for r in rows if key_matches(r)]
 
     if q:
-        results = [r for r in results if (
-            q in str(r.get("join_key",          "")).lower() or
-            q in str(r.get("valeur_reference",  "")).lower() or
-            q in str(r.get("valeur_cible",      "")).lower()
-        )]
+        rows = [r for r in rows if q in str(r["join_key"]).lower()]
 
-    if sort_col in _SORT_FIELDS:
-        field   = _SORT_FIELDS[sort_col]
-        reverse = (sort_dir == "desc")
-        results = sorted(results, key=lambda r: str(r.get(field, "")).lower(), reverse=reverse)
+    # ── Tri ──────────────────────────────────────────────────
+    reverse = (sort_dir == "desc")
+    if sort_col == "key":
+        rows.sort(key=lambda r: str(r["join_key"]).lower(), reverse=reverse)
+    elif sort_col == "type":
+        rows.sort(
+            key=lambda r: min((_GRAVITY.get(e["type_ecart"], 99) for e in r["ecarts"]), default=99),
+            reverse=reverse,
+        )
 
-    total  = len(results)
+    # ── Pagination ───────────────────────────────────────────
+    total  = len(rows)
     pages  = max(1, (total + size - 1) // size)
     page   = min(page, pages)
-    page_r = results[(page - 1) * size : page * size]
+    page_r = rows[(page - 1) * size : page * size]
 
+    # ── Enrichissement colonnes extra ────────────────────────
     if extra_ref or extra_tgt:
         ref_rows_map = sess.get("ref_rows_map", {})
         tgt_rows_map = sess.get("tgt_rows_map", {})
-        enriched = []
+        result_rows = []
         for r in page_r:
-            er  = dict(r)
-            key = r.get("join_key", "")
+            key = r["join_key"]
+            row = {"join_key": key, "ecarts": r["ecarts"]}
             if extra_ref:
-                er["_ref"] = {c: ref_rows_map.get(key, {}).get(c, "") for c in extra_ref}
+                row["_ref"] = {c: ref_rows_map.get(key, {}).get(c, "") for c in extra_ref}
             if extra_tgt:
-                er["_tgt"] = {c: tgt_rows_map.get(key, {}).get(c, "") for c in extra_tgt}
-            enriched.append(er)
-        page_r = enriched
+                row["_tgt"] = {c: tgt_rows_map.get(key, {}).get(c, "") for c in extra_tgt}
+            result_rows.append(row)
+        page_r = result_rows
 
     return jsonify({"total": total, "page": page, "size": size, "pages": pages, "results": page_r})
 
@@ -418,8 +532,8 @@ def test_join():
         ref_bytes = request.files["file_ref"].read()
         tgt_bytes = request.files["file_tgt"].read()
 
-        df_ref = normalize_dataframe(parse_file(ref_bytes, src_ref), src_ref)
-        df_tgt = normalize_dataframe(parse_file(tgt_bytes, src_tgt), src_tgt)
+        df_ref = normalize_dataframe(parse_file(ref_bytes, src_ref), src_ref, debug=app.debug)
+        df_tgt = normalize_dataframe(parse_file(tgt_bytes, src_tgt), src_tgt, debug=app.debug)
 
         if src_ref.get("unpivot"):
             df_ref = unpivot_dataframe(df_ref, src_ref["unpivot"])
@@ -475,6 +589,51 @@ def test_join():
             "keys_ref":    sorted(ref_map.keys())[:20],
             "keys_tgt":    sorted(tgt_map.keys())[:20],
         })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 422
+
+
+# ─────────────────────────────────────────────────────────────
+#  POST /api/test-filters  — test des filtres (wizard)
+# ─────────────────────────────────────────────────────────────
+@app.route("/api/test-filters", methods=["POST"])
+def test_filters():
+    from config_loader import _Loader as _YamlLoader
+    import yaml as pyyaml
+    if "file" not in request.files:
+        return jsonify({"error": "Fichier manquant."}), 400
+    config_yaml = request.form.get("config_yaml", "")
+    which = request.form.get("source", "reference")  # "reference" ou "target"
+    if not config_yaml.strip():
+        return jsonify({"error": "config_yaml manquant."}), 400
+    try:
+        config = pyyaml.load(config_yaml, Loader=_YamlLoader)
+    except Exception as e:
+        return jsonify({"error": f"YAML invalide : {e}"}), 422
+
+    try:
+        src_key = "reference" if which == "reference" else "target"
+        src_cfg = config.get("sources", {}).get(src_key, {})
+        filters = config.get("filters", [])
+
+        file_bytes = request.files["file"].read()
+        df = normalize_dataframe(parse_file(file_bytes, src_cfg), src_cfg, debug=app.debug)
+
+        if src_cfg.get("unpivot"):
+            df = unpivot_dataframe(df, src_cfg["unpivot"])
+
+        total = len(df)
+
+        # Appliquer les filtres pour cette source uniquement
+        dummy_other = df.iloc[0:0].copy()  # DataFrame vide pour l'autre source
+        if which == "reference":
+            df_ref, _ = apply_filters(df, dummy_other, filters, config)
+            filtered = len(df_ref)
+        else:
+            _, df_tgt = apply_filters(dummy_other, df, filters, config)
+            filtered = len(df_tgt)
+
+        return jsonify({"total": total, "filtered": filtered})
     except Exception as e:
         return jsonify({"error": str(e)}), 422
 
@@ -577,8 +736,16 @@ def delete_all_history():
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--debug", action="store_true", help="Active les logs de debug filtres")
+    args = parser.parse_args()
     print("=" * 55)
-    print("  DataAuditor v2 — serveur Flask")
+    print("  DataAuditor — serveur Flask")
+    if args.debug:
+        import os
+        os.environ["DA_DEBUG"] = "1"
+        print("  ⚠  mode DEBUG actif — logs filtres dans le terminal")
     print("  → http://localhost:5000")
     print("=" * 55)
-    app.run(debug=False, host="0.0.0.0", port=5000, threaded=True)
+    app.run(debug=args.debug, host="0.0.0.0", port=5000, threaded=True)

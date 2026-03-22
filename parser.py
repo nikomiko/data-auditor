@@ -46,7 +46,9 @@ def parse_file(file_bytes: bytes, src_cfg: dict) -> pd.DataFrame:
     encoding = src_cfg.get("encoding", "utf-8")
     try:
         if fmt == "json":
-            return _parse_json(file_bytes, encoding)
+            return _parse_json(file_bytes, encoding, src_cfg)
+        if fmt == "jsonl":
+            return _parse_jsonl(file_bytes, encoding, src_cfg)
         if fmt == "xlsx":
             return _parse_xlsx(file_bytes, src_cfg)
         return _parse_text(file_bytes, src_cfg, encoding)
@@ -56,23 +58,74 @@ def parse_file(file_bytes: bytes, src_cfg: dict) -> pd.DataFrame:
         raise ConfigError(f"Erreur de parsing ({src_cfg.get('label','?')}) : {e}")
 
 
-# ── JSON ──────────────────────────────────────────────────────
-def _parse_json(data: bytes, encoding: str) -> pd.DataFrame:
+# ── JSON / JSONL ──────────────────────────────────────────────
+def _dot_get(obj, path: str):
+    """Descend dans obj en suivant un chemin dot-notation ('a.b.c')."""
+    for key in path.lstrip(".").split("."):
+        if not key or not isinstance(obj, dict):
+            return None
+        obj = obj.get(key)
+        if obj is None:
+            return None
+    return obj
+
+
+def _apply_fields(records: list, fields_cfg: list) -> pd.DataFrame:
+    """Construit un DataFrame en extrayant les champs configurés depuis les enregistrements."""
+    if not fields_cfg:
+        return pd.DataFrame(records)
+    rows = []
+    for rec in records:
+        row = {}
+        for fc in fields_cfg:
+            name  = fc["name"]
+            fpath = fc.get("path") or name
+            row[name] = _dot_get(rec, fpath) if "." in fpath else rec.get(fpath)
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def _decode_text(data: bytes, encoding: str) -> str:
     for enc in _encoding_candidates(encoding):
         try:
-            text = data.decode(enc).lstrip("\ufeff")
-            break
+            return data.decode(enc).lstrip("\ufeff")
         except (UnicodeDecodeError, LookupError):
             continue
-    else:
-        text = data.decode("latin-1")
+    return data.decode("latin-1")
+
+
+def _parse_json(data: bytes, encoding: str, src_cfg: dict = None) -> pd.DataFrame:
+    src_cfg = src_cfg or {}
+    text = _decode_text(data, encoding)
     obj = json.loads(text)
-    if isinstance(obj, list):
-        return pd.DataFrame(obj)
-    for key in ("records", "data", "items", "rows"):
-        if key in obj and isinstance(obj[key], list):
-            return pd.DataFrame(obj[key])
-    return pd.DataFrame([obj])
+
+    json_path = src_cfg.get("json_path", "")
+    if json_path:
+        records = _dot_get(obj, json_path)
+        if not isinstance(records, list):
+            raise ConfigError(f"json_path '{json_path}' ne pointe pas vers un tableau JSON.")
+    elif isinstance(obj, list):
+        records = obj
+    else:
+        records = next(
+            (obj[k] for k in ("records", "data", "items", "rows") if isinstance(obj.get(k), list)),
+            [obj],
+        )
+    return _apply_fields(records, src_cfg.get("fields") or [])
+
+
+def _parse_jsonl(data: bytes, encoding: str, src_cfg: dict = None) -> pd.DataFrame:
+    src_cfg = src_cfg or {}
+    text = _decode_text(data, encoding)
+    records = []
+    for line in text.splitlines():
+        line = line.strip()
+        if line:
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass  # ligne invalide ignorée
+    return _apply_fields(records, src_cfg.get("fields") or [])
 
 
 # ── XLSX ──────────────────────────────────────────────────────
@@ -196,17 +249,35 @@ def _parse_text(data: bytes, cfg: dict, encoding: str) -> pd.DataFrame:
                 )
             col_idx = {name: i for i, name in enumerate(wanted)}
 
-        records = []
-        for line in lines[1:]:
+        records    = []
+        _dbg_shown = 0  # lignes problématiques affichées
+        for line_no, line in enumerate(lines[1:]):
             cells = _split_line(line, delimiter, limit)
             row   = {}
+            _missing = []
             for name in wanted:
                 idx = col_idx[name]
-                row[name] = cells[idx].strip() if idx < len(cells) else ""
+                if idx < len(cells):
+                    row[name] = cells[idx].strip()
+                else:
+                    row[name] = ""
+                    _missing.append((name, idx))
+            if _missing and _dbg_shown < 3:
+                import os
+                if os.environ.get("FLASK_DEBUG") or os.environ.get("DA_DEBUG"):
+                    print(f"[parser debug] ligne {line_no+2}  n_cells={len(cells)}  limit={limit}  n_hdr={n_hdr}")
+                    print(f"  champs manquants (idx >= n_cells) : {_missing}")
+                    print(f"  début ligne : {repr(line[:120])}")
+                    print(f"  cells[:{min(len(cells),8)}] : {cells[:8]}")
+                    _dbg_shown += 1
             records.append(row)
         return pd.DataFrame(records)
     else:
         positions = cfg.get("column_positions", [])
+        if not positions:
+            # Pas de column_positions → utiliser fields comme mapping positionnel (0-indexé)
+            positions = [{"name": f["name"], "position": i}
+                         for i, f in enumerate(cfg.get("fields", []))]
         records   = []
         for line in lines:
             cells = _split_line(line, delimiter, None)
@@ -219,23 +290,40 @@ def _parse_text(data: bytes, cfg: dict, encoding: str) -> pd.DataFrame:
 
 
 def _split_line(line: str, delimiter: str, limit: int | None) -> list[str]:
-    """Split CSV avec gestion des guillemets et limite de colonnes."""
-    result = []
-    cur    = ""
-    in_q   = False
+    """Split CSV avec gestion des guillemets et limite de colonnes.
+
+    Conforme à la spec RFC 4180 : un champ est quoté uniquement s'il commence
+    immédiatement par '"' (juste après un délimiteur ou en début de ligne).
+    Un '"' apparaissant au milieu d'un champ non quoté est traité comme un
+    caractère ordinaire — ce qui évite de rentrer en mode in_q sur un blob
+    JSON/texte libre qui contient des guillemets internes.
+    """
+    result    = []
+    cur       = ""
+    in_q      = False
+    field_start = True   # True juste après un délimiteur (ou au début)
+
     for i, ch in enumerate(line):
-        if ch == '"':
-            if in_q and i + 1 < len(line) and line[i + 1] == '"':
-                cur += '"'
+        if ch == '"' and field_start:
+            # Ouverture d'un champ quoté (guillemet en tout début de champ)
+            in_q = True
+            field_start = False
+        elif ch == '"' and in_q:
+            # À l'intérieur d'un champ quoté : guillemet doublé ou fermeture
+            if i + 1 < len(line) and line[i + 1] == '"':
+                cur += '"'          # guillemet littéral ""
             else:
-                in_q = not in_q
+                in_q = False        # fermeture du champ quoté
         elif ch == delimiter and not in_q:
             if limit and len(result) >= limit - 1:
-                cur += line[i:]   # absorber le reste
+                cur += line[i:]     # absorber le reste de la ligne
                 break
             result.append(cur)
             cur = ""
+            field_start = True
         else:
             cur += ch
+            field_start = False
+
     result.append(cur)
     return result

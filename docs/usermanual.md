@@ -1,6 +1,6 @@
 # DataAuditor — Manuel utilisateur
 
-**Version 3.0.2 · data/auditor server**
+**Version 3.5.0 · data/auditor server**
 
 ---
 
@@ -21,16 +21,16 @@
 
 ## 1. Vue d'ensemble
 
-DataAuditor est un outil d'audit de cohérence de données entre deux sources hétérogènes. Il compare, ligne par ligne, des fichiers de référence et des fichiers cibles afin de détecter :
+DataAuditor est un outil d'audit de cohérence de données entre deux sources hétérogènes. Il compare les enregistrements de deux fichiers (référence et cible) pour détecter :
 
 | Type d'écart | Signification |
 |---|---|
 | **ORPHELIN_A** | Enregistrement présent dans la référence, absent dans la cible |
 | **ORPHELIN_B** | Enregistrement présent dans la cible, absent dans la référence |
-| **KO** | Enregistrement commun mais condition de la règle déclenchée |
+| **KO** | Enregistrement commun, condition d'une règle déclenchée |
 | **OK** | Enregistrement commun et conforme (affiché si `show_matching: true`) |
 
-Le flux de résultats est diffusé en temps réel (Server-Sent Events) pendant l'audit.
+Les résultats sont diffusés en temps réel (Server-Sent Events) et affichés **une ligne par clé** — plusieurs règles peuvent se déclencher sur la même clé et apparaissent sous forme de badges colorés.
 
 ---
 
@@ -63,9 +63,9 @@ python server.py
 
 ### Persistance de session
 
-À chaque fermeture ou rechargement, DataAuditor sauvegarde automatiquement dans votre navigateur :
+À chaque fermeture ou rechargement, DataAuditor sauvegarde automatiquement dans le navigateur :
 - Le contenu de la dernière configuration YAML
-- Les noms des derniers fichiers utilisés (référence et cible)
+- Les noms des derniers fichiers utilisés
 
 Ces informations sont restaurées à l'ouverture suivante.
 
@@ -73,17 +73,19 @@ Ces informations sont restaurées à l'ouverture suivante.
 
 ## 3. Workflow en 7 étapes
 
-Le bandeau en haut de l'écran guide l'utilisateur à travers 7 étapes numérotées. Les étapes se déverrouillent progressivement.
+Le bandeau en haut guide à travers 7 étapes numérotées. Les étapes se déverrouillent progressivement.
 
 ```
-⓪ Config → ① Référence → ② Cible → ③ Jointure → ④ Règles → ⑤ Filtres & Rapport → ⑥ Résultats
+⓪ Config → ① Référence → ② Cible → ③ Jointure → ④ Règles → ⑤ Filtres → ⑥ Résultats
 ```
+
+---
 
 ### ⓪ Config *(optionnel)*
 
 Chargez un fichier YAML existant pour **pré-remplir automatiquement** toutes les étapes suivantes. Glissez-déposez le fichier `.yaml` ou `.yml` dans la zone prévue.
 
-> Les fichiers YAML encodés en ANSI/Windows-1252 sont automatiquement détectés et correctement décodés.
+> Les fichiers YAML encodés en ANSI/Windows-1252 sont automatiquement détectés.
 
 > Vous pouvez ignorer cette étape et configurer manuellement à partir de l'étape ①.
 
@@ -93,12 +95,19 @@ Chargez un fichier YAML existant pour **pré-remplir automatiquement** toutes le
 
 Chargez le fichier **source de référence** (ex. : export WMS, fichier comptable).
 
-- Formats acceptés : CSV, TXT, DAT, JSON, XLSX
-- Après chargement, configurez la source :
-  - **Encodage** : sélectionnez dans la liste (UTF-8, UTF-8 avec BOM, Windows-1252, Latin-1). Changer l'encodage re-parse automatiquement le fichier et met à jour la liste des colonnes.
-  - **Colonnes** : renseignez les noms et types de chaque champ. Si les noms déclarés diffèrent des en-têtes du fichier, un **mapping positionnel** est appliqué automatiquement (colonne 1 → champ 1, colonne 2 → champ 2, etc.).
-- Le bouton **Prévisualiser** affiche les premières lignes du fichier
-- Le bouton **Vérifier les colonnes** valide la compatibilité entre le fichier et la configuration déclarée
+- Formats acceptés : **CSV, TXT, JSON, JSONL, XLSX**
+- Nommez la source (ex. : "Stock WMS") — ce nom s'affiche dans la barre de synthèse et les filtres
+- Configurez le format dans la section **Colonnes** :
+  - **CSV** : délimité, avec détection automatique possible (bouton **🔍 Détecter la structure**)
+  - **Positionnel** : colonnes à largeur fixe (position + largeur de chaque champ)
+  - **JSON** / **JSONL** : avec configuration optionnelle des champs et chemins (voir §4)
+  - **XLSX** : colonnes détectées automatiquement
+
+**Boutons disponibles après chargement :**
+- **Prévisualiser** : affiche les premières lignes du fichier brut
+- **Vérifier les colonnes** : valide la compatibilité entre le fichier et la configuration déclarée
+
+**Encodage** : UTF-8, UTF-8 avec BOM, Windows-1252, Latin-1. Changer l'encodage re-parse et met à jour les colonnes détectées.
 
 ---
 
@@ -112,15 +121,13 @@ Même fonctionnement qu'à l'étape ①.
 
 ### ③ Jointure
 
-Définissez les **clés de jointure** : les colonnes qui permettent d'identifier et d'apparier les lignes entre les deux sources.
+Définissez les **clés de jointure** : les colonnes qui permettent d'apparier les enregistrements entre les deux sources.
 
 Exemple : `SKU` (référence) ↔ `sku` (cible), `Site` (référence) ↔ `site` (cible)
 
 > Au moins une clé de jointure est obligatoire. Vous pouvez en définir plusieurs (clé composite).
 
-> Lorsque le **dépivotage** est activé sur une source, les colonnes disponibles dans les sélecteurs de clé reflètent la structure post-dépivotage (colonnes d'ancrage + champ clé généré + champ valeur généré). Tous les champs de `join.keys` doivent exister dans les DataFrames après dépivotage.
-
-Le bouton **Tester la jointure** vérifie le taux de couverture avant de lancer l'audit complet.
+Le bouton **Tester la jointure** affiche un aperçu du taux de couverture (paires matchées, orphelins A et B) avant de lancer l'audit complet.
 
 ---
 
@@ -130,77 +137,107 @@ Définissez les **règles de contrôle** appliquées sur les enregistrements app
 
 Chaque règle a :
 - Un **nom** libre
-- Une **logique** : `AND` (toutes les conditions doivent être satisfaites pour déclencher) ou `OR`
-- Un **type** : `coherence` (règle verte) ou `incoherence` (règle rouge) — voir [§6](#6-règles-de-contrôle)
+- Une **logique** : `AND` ou `OR`
+- Un **type** : `incoherence` (KO si la condition est vraie) ou `coherence` (KO si la condition est fausse)
 - Un ou plusieurs **champs** à comparer, avec opérateur et tolérance optionnelle
 
-Un tooltip sur chaque règle (dans la barre de filtre des résultats) rappelle les contrôles effectués.
+Chaque règle reçoit automatiquement une **couleur distincte** visible dans le tableau des résultats.
 
 ---
 
 ### ⑤ Filtres & Rapport
 
-- **Filtres** : restreignez l'audit à un sous-ensemble de lignes (ex. : site = "PAR")
-- **Rapport** : activez/désactivez l'affichage des lignes conformes, ajustez le nombre max de lignes prévisualisées
+- **Filtres** : restreignez l'audit à un sous-ensemble de lignes (par valeur d'un champ)
+- **Rapport** : `show_matching` active l'affichage des lignes conformes ; `max_diff_preview` limite la pagination
 - **Méta** : nommez et versionnez votre configuration
-- **‹/› YAML** : ouvre l'éditeur YAML complet pour édition directe de la configuration
+- **`</> YAML`** : ouvre l'éditeur YAML complet pour édition directe
 
-Cliquez sur **▶ Lancer l'audit** : l'application bascule immédiatement sur la page résultats avec la barre de progression. Les erreurs éventuelles (configuration invalide, erreur réseau) s'affichent également sur cette page.
+Cliquez **▶ Lancer l'audit** : l'application bascule sur la page résultats avec barre de progression.
 
 ---
 
 ### ⑥ Résultats
 
-Affichage en streaming des résultats pendant l'audit :
+Affichage en streaming des résultats, **une ligne par clé** :
 
-- **Barre de filtres** : filtrez par type d'orphelin, par type de contrôle (Cohérence / Incohérence), par règle individuelle. Un tooltip sur chaque chip de règle affiche le détail des contrôles.
-- **Clic sur une règle** dans le tableau : isole les lignes de cette règle (clic à nouveau pour tout réafficher)
-- **Clic sur l'œil** 👁 : ouvre le panneau de revue côte à côte (enregistrement référence vs cible, avec contexte)
-- **Exporter CSV / XLS / HTML** : télécharge les résultats dans le format choisi
+**Barre de synthèse** (texte narratif) :
+```
+Source (WMS) : 98 enr. dont 2 absents de la cible  |  Cible (ERP) : 99 enr. dont 1 absent de la source
+```
+
+**Barre de filtres** :
+- **Uniquement dans Source** : orphelins absents de la cible (ORPHELIN_A)
+- **Présence dans les deux** : enregistrements appariés ayant au moins un résultat KO ou OK
+- **Uniquement dans Cible** : orphelins absents de la référence (ORPHELIN_B)
+- **Chips de règle** : filtre par règle individuelle (clic pour isoler, clic à nouveau pour tout réafficher)
+- **Recherche texte** : filtre sur la clé de jointure
+
+**Tableau** :
+
+| Colonne | Description |
+|---|---|
+| 👁 | Ouvre la revue côte à côte |
+| Clé | Valeur(s) de la clé de jointure |
+| Règles | Badges colorés des règles déclenchées. Survol = détail (valeur réf. / valeur cible) |
+
+> Les badges grisés correspondent aux règles non sélectionnées dans les filtres.
+
+**Colonnes supplémentaires** : via le sélecteur de colonnes, ajoutez des champs bruts de la référence et/ou de la cible.
+
+**Pagination serveur** : navigation par pages (taille configurable).
+
+---
+
+### Revue côte à côte (👁)
+
+Ouvrez la revue d'un enregistrement :
+- **En-tête** : clé de l'enregistrement + navigation entre enregistrements voisins
+- **Deux panneaux** : référence (gauche) et cible (droite)
+- Les champs impliqués dans au moins une règle active sont **mis en évidence** (fond jaune)
+- Des **points colorés** identifient les règles liées à chaque champ (même couleur que les badges dans le tableau)
 
 ---
 
 ## 4. Formats de fichiers supportés
 
-### CSV / TXT / DAT
+### CSV (et fichiers délimités)
 
-| Paramètre | Description | Exemple |
+Accepte les extensions `.csv` et `.txt`. Le parsing est compatible RFC 4180.
+
+| Paramètre YAML | Description | Exemple |
 |---|---|---|
+| `format` | Format du fichier | `csv` |
 | `delimiter` | Séparateur de colonnes | `;`, `,`, `\|`, `\t` |
 | `encoding` | Encodage | `utf-8`, `utf-8-sig`, `windows-1252`, `latin-1` |
 | `has_header` | Première ligne = en-tête | `true` / `false` |
-| `skip_rows` | Nombre de lignes à ignorer avant l'en-tête | `0`, `1`, `2`… |
-| `record_filter.marker` | Regex de filtrage des lignes (ex. : lignes commençant par `1`) | `^1` |
+| `skip_rows` | Lignes à ignorer avant l'en-tête | `0`, `1`, `2`… |
+| `record_filter.marker` | Regex de filtrage de lignes | `^1` |
 | `max_columns` | Limite du nombre de colonnes lors du split | entier |
-
-#### Encodages supportés
-
-| Valeur YAML | Description |
-|---|---|
-| `utf-8` | Unicode standard (défaut) |
-| `utf-8-sig` | UTF-8 avec BOM (fichiers exportés depuis Excel) |
-| `windows-1252` | ANSI Western European (Windows) |
-| `latin-1` | ISO-8859-1 |
-
-> Si l'encodage déclaré échoue, DataAuditor essaie automatiquement les autres encodages dans l'ordre.
 
 #### Mapping des colonnes
 
-Deux comportements selon la correspondance entre les noms déclarés et les en-têtes du fichier :
+- **Lookup par nom** : si tous les noms config se retrouvent dans l'en-tête → chaque champ est sélectionné par son nom (permet de ne déclarer qu'un sous-ensemble d'un fichier large)
+- **Mapping positionnel** : si au moins un nom ne correspond à aucun en-tête → les champs sont mappés dans l'ordre des colonnes du fichier
 
-- **Lookup par nom** (par défaut) : si tous les noms config se retrouvent dans l'en-tête → chaque champ est sélectionné par son nom. Permet de ne déclarer qu'un sous-ensemble de colonnes d'un fichier large.
-- **Mapping positionnel** : si au moins un nom ne correspond à aucun en-tête → les champs de la config sont mappés dans l'ordre des colonnes du fichier (champ 1 → colonne 1, etc.). Les noms de la config sont utilisés comme noms définitifs.
+#### Détection automatique
 
-### Format positionnel (fixed_width)
+Le bouton **🔍 Détecter la structure** lit l'en-tête du fichier et propose la liste des colonnes. Les types restent à renseigner manuellement.
 
-Utilisez `fixed_width: true` et déclarez les colonnes avec `column_positions` :
+---
+
+### Positionnel (fixed_width)
+
+Format à largeur fixe où chaque champ occupe un nombre exact de caractères.
+
+Sélectionnez le format **Positionnel** dans le wizard. La table de colonnes affiche les champs **Position** et **Largeur** :
 
 ```yaml
+format: csv
 fixed_width: true
 column_positions:
   - name: SKU
-    position: 7   # position du premier caractère (0-indexé)
-    width: 10     # nombre de caractères
+    position: 7     # position du premier caractère (0-indexé)
+    width: 10       # nombre de caractères
     type: string
   - name: Qty
     position: 38
@@ -208,9 +245,88 @@ column_positions:
     type: integer
 ```
 
+> Le wizard génère automatiquement le YAML `fixed_width: true` + `column_positions` lorsque le format **Positionnel** est sélectionné.
+
+---
+
 ### JSON
 
-L'auto-détection des colonnes est effectuée au parsing. Aucune déclaration de colonnes requise.
+Format JSON classique — un fichier, un objet ou un tableau racine.
+
+```yaml
+format: json
+json_path: data.records   # optionnel : chemin dot-notation vers le tableau d'enregistrements
+fields:
+  - name: id
+  - name: customer_name
+    path: customer.name   # chemin dot-notation depuis chaque enregistrement
+  - name: amount
+    type: decimal
+```
+
+#### `json_path` — naviguer vers le tableau
+
+Si le fichier JSON contient le tableau d'enregistrements à l'intérieur d'un objet imbriqué, utilisez `json_path` pour y accéder :
+
+| Structure JSON | `json_path` |
+|---|---|
+| `[{...}, {...}]` | *(laisser vide)* |
+| `{"records": [{...}]}` | *(laisser vide, auto-détecté)* |
+| `{"data": {"items": [{...}]}}` | `data.items` |
+| `{"payload": {"results": [{...}]}}` | `payload.results` |
+
+Auto-détection des clés : si `json_path` est absent, DataAuditor cherche un tableau dans les clés `records`, `data`, `items`, `rows`.
+
+#### `path` — extraire des champs imbriqués
+
+Le `path` dot-notation permet d'extraire un champ imbriqué dans chaque enregistrement :
+
+```json
+{"id": "A01", "customer": {"name": "Dupont", "city": "Paris"}, "amount": 10.5}
+```
+```yaml
+fields:
+  - name: id                        # accès direct → rec["id"]
+  - name: customer_name
+    path: customer.name             # accès imbriqué → rec["customer"]["name"]
+  - name: city
+    path: customer.city
+```
+
+Si `path` est absent, le champ `name` est utilisé comme clé directe.
+
+#### Champs optionnels
+
+Si aucun champ n'est déclaré, **toutes les colonnes** du JSON sont chargées (comportement par défaut).
+
+#### Détection automatique
+
+Le bouton **🔍 Détecter la structure** lit les premières lignes du fichier :
+- Applique `json_path` si renseigné
+- Lit le premier enregistrement et propose toutes ses clés
+- Les champs imbriqués à un niveau de profondeur sont proposés avec leur `path` pré-rempli
+
+---
+
+### JSONL (JSON Lines)
+
+Format où **chaque ligne** est un objet JSON indépendant (`.jsonl`, `.ndjson`).
+
+```yaml
+format: jsonl
+fields:
+  - name: id
+  - name: amount
+    type: decimal
+  - name: customer_name
+    path: customer.name
+```
+
+> Le `json_path` ne s'applique pas au JSONL (chaque ligne est déjà un enregistrement). Les champs avec `path` imbriqué fonctionnent de la même façon qu'en JSON.
+
+Les lignes vides ou invalides sont ignorées silencieusement.
+
+---
 
 ### XLSX (Excel)
 
@@ -219,11 +335,13 @@ format: xlsx
 sheet_name: Feuil1   # optionnel, 1ère feuille par défaut
 ```
 
+Les colonnes sont détectées automatiquement depuis la première ligne (en-tête). Aucune déclaration de champs requise.
+
 ---
 
 ## 5. Configuration YAML
 
-La configuration est générée automatiquement par l'interface. Vous pouvez l'éditer directement via **‹/› YAML**.
+La configuration est générée automatiquement par le wizard. Vous pouvez l'éditer directement via **`</> YAML`**.
 
 ### Schéma complet
 
@@ -235,20 +353,31 @@ meta:
 sources:
   reference:
     label: "Nom affiché de la source A"
-    format: csv            # csv | txt | dat | json | xlsx
-    encoding: utf-8        # utf-8 | utf-8-sig | windows-1252 | latin-1
+    format: csv              # csv | positionnel → json | jsonl | xlsx
+    encoding: utf-8          # utf-8 | utf-8-sig | windows-1252 | latin-1
     delimiter: ";"
     has_header: true
-    skip_rows: 0           # lignes à ignorer avant l'en-tête
-    fixed_width: false
+    skip_rows: 0
+    max_columns: 5           # optionnel : limite le split des colonnes
     record_filter:
-      marker: "^1"         # regex filtre de lignes
+      marker: "^1"           # regex de filtrage de lignes
+    # CSV avec largeur fixe :
+    fixed_width: true
+    column_positions:
+      - { name: SKU,  position: 7,  width: 10, type: string  }
+      - { name: Qty,  position: 38, width: 7,  type: integer }
+    # CSV sans largeur fixe :
     fields:
       - { name: SKU,   type: string  }
-      - { name: Qty,   type: integer }
       - { name: Prix,  type: decimal }
-      - { name: Date,  type: date,   date_format: "%Y-%m-%d" }
-    unpivot:               # dépivotage (format large → long)
+      - { name: Date,  type: date, date_format: "%Y-%m-%d" }
+    # JSON / JSONL (optionnel) :
+    json_path: data.records
+    fields:
+      - { name: id }
+      - { name: customer_name, path: customer.name }
+    # Dépivotage (format large → long) :
+    unpivot:
       anchor_fields: [SKU]
       location_field: depot
       value_field: qty
@@ -261,16 +390,17 @@ sources:
 
 join:
   keys:
-    - { source_field: SKU, target_field: sku }
+    - { source_field: SKU,  target_field: sku  }
     - { source_field: Site, target_field: site }   # clé composite
 
 filters:
   - field: Site
     source: reference
-    values: [PAR, LYO, MAR]
+    operator: equals
+    value: PAR
 
 rules:
-  - name: "Stock incohérent"
+  - name: "Quantité incohérente"
     logic: AND
     rule_type: incoherence
     fields:
@@ -279,15 +409,12 @@ rules:
         operator: differs
         tolerance: 0
 
-comparison:            # syntaxe legacy (préférer rules)
-  fields:
-    - { source_field: Qty, target_field: qty, tolerance: 0 }
-  ignore_fields: [RecordType]
-
 report:
   show_matching: false
   max_diff_preview: 500
 ```
+
+---
 
 ### Types de champs
 
@@ -295,9 +422,10 @@ report:
 |---|---|
 | `string` | Chaîne de caractères (défaut) |
 | `integer` | Entier |
-| `decimal` | Décimal (float) |
-| `date` | Date — nécessite `date_format` (ex. `%Y%m%d`) |
+| `decimal` | Décimal (virgule flottante) |
+| `date` | Date — nécessite `date_format` (ex. `%Y%m%d`, `%d/%m/%Y`) |
 | `boolean` | Booléen |
+| `skip` | Lu mais ignoré — utile pour ne pas décaler les colonnes positionnelles |
 
 ---
 
@@ -305,32 +433,36 @@ report:
 
 ### Opérateurs disponibles
 
-| Opérateur YAML | Symbole | Condition vraie quand… |
+| Opérateur YAML | Condition vraie quand… |
+|---|---|
+| `equals` | A = B |
+| `differs` | A ≠ B |
+| `greater` | A > B |
+| `less` | A < B |
+| `contains` | B est contenu dans A |
+| `not_contains` | B n'est pas contenu dans A |
+
+> Alias legacy acceptés dans les YAML existants : `=` → `equals`, `<>` → `differs`.
+
+---
+
+### `rule_type` : logique KO / OK
+
+| Valeur | Produit KO quand… | Usage typique |
 |---|---|---|
-| `equals` | = | A = B |
-| `differs` | ≠ | A ≠ B |
-| `greater` | > | A > B |
-| `less` | < | A < B |
-| `contains` | ∋ | B est contenu dans A |
-| `not_contains` | ∌ | B n'est pas contenu dans A |
+| `incoherence` | La condition est **vraie** | Détecter des différences (A ≠ B) |
+| `coherence` | La condition est **fausse** | Confirmer une conformité (A = B) |
 
-> **Compatibilité** : les anciens symboles `=`, `<>`, `>`, `<` sont encore acceptés dans les fichiers YAML existants.
+> Une règle `coherence` ne produit **jamais de KO** dans le sens d'une erreur métier — elle confirme la conformité. Pour détecter des différences, utilisez `incoherence`.
 
-### rule_type : logique KO / OK
-
-Le `rule_type` détermine **quand la règle produit un KO** :
-
-| Valeur | Couleur | Produit KO quand… |
-|---|---|---|
-| `incoherence` | 🔴 Rouge | La condition de la règle est **vraie** (incohérence détectée) |
-| `coherence` | 🟢 Vert | La condition de la règle est **fausse** (cohérence violée) |
-
-Exemple : une règle `incoherence` avec `operator: differs` produit KO si A ≠ B. Une règle `coherence` avec `operator: equals` produit KO si A ≠ B également — mais sémantiquement, elle vérifie que les valeurs *devraient* être identiques.
+---
 
 ### Logique AND / OR
 
-- **AND** : la règle se déclenche si **toutes** les conditions de ses champs sont satisfaites
+- **AND** : la règle se déclenche si **toutes** les conditions sont satisfaites
 - **OR** : la règle se déclenche si **au moins une** condition est satisfaite
+
+---
 
 ### Tolérance numérique
 
@@ -340,6 +472,8 @@ Exemple : une règle `incoherence` avec `operator: differs` produit KO si A ≠ 
   operator: equals
   tolerance: 0.05   # écart acceptable de ±0,05
 ```
+
+---
 
 ### Normalisation textuelle
 
@@ -351,19 +485,26 @@ Exemple : une règle `incoherence` avec `operator: differs` produit KO si A ≠ 
 
 Options : `none` (défaut), `lowercase`, `trim`, `both`
 
-### Syntaxe longue (source_data / target_data)
+---
 
-Pour des comparaisons avec valeur fixe ou normalisation asymétrique :
+### Valeur fixe côté référence ou cible
 
 ```yaml
 - source_data:
-    field: Libelle
-    normalize: both
+    field: Statut
+    normalize: trim
   target_data:
-    field: libelle
-    value: "ACTIF"   # valeur fixe côté cible
-    tolerance: 0
+    value: "ACTIF"    # valeur fixe attendue côté cible
 ```
+
+---
+
+### Couleurs des règles
+
+Chaque règle reçoit automatiquement une couleur unique (palette de 10 couleurs cycliques). Cette couleur est utilisée :
+- Dans les **badges** du tableau des résultats
+- Dans les **chips** de filtre règle
+- Dans les **points** de la revue côte à côte (champs impliqués)
 
 ---
 
@@ -374,24 +515,31 @@ Les filtres restreignent l'audit à un sous-ensemble de lignes **avant la jointu
 ```yaml
 filters:
   - field: Site
-    source: reference
-    values: [PAR, LYO, MAR]
-  - field: site
-    source: target
-    values: [PAR, LYO, MAR]
+    source: reference       # reference | target
+    operator: equals        # equals | differs | contains | not_contains | greater | less
+    value: PAR
 ```
 
-- `source` : `reference` ou `target`
-- `values` : liste de valeurs à conserver (liste blanche)
-- Si `values` est absent : le filtre est déclaré comme pill UI sans filtrage de lignes
+### Opérateurs de filtre
 
-> Les orphelins restent détectables après filtrage : une clé filtrée dans A mais pas dans B apparaît en ORPHELIN_A.
+| Opérateur | Comportement |
+|---|---|
+| `equals` | Conserve les lignes où `field` = `value` |
+| `differs` | Conserve les lignes où `field` ≠ `value` |
+| `contains` | Conserve les lignes où `field` contient `value` |
+| `not_contains` | Conserve les lignes où `field` ne contient pas `value` |
+| `greater` | Conserve les lignes où `field` > `value` |
+| `less` | Conserve les lignes où `field` < `value` |
+
+> Compat ascendante : l'ancien format `values: [PAR, LYO]` est automatiquement converti en filtre `equals` avec la première valeur.
+
+> Les orphelins restent détectables après filtrage : une clé filtrée dans A mais présente dans B apparaît quand même en ORPHELIN_B.
 
 ---
 
 ## 8. Dépivotage (unpivot)
 
-Le dépivotage transforme un fichier au **format large** (une colonne par dépôt, par période…) en **format long** (une ligne par combinaison clé/valeur) avant la comparaison.
+Le dépivotage transforme un fichier **large** (une colonne par dépôt, période…) en format **long** (une ligne par combinaison) avant la comparaison.
 
 ```yaml
 sources:
@@ -402,24 +550,24 @@ sources:
       - { name: qty_B, type: integer }
       - { name: qty_C, type: integer }
     unpivot:
-      anchor_fields: [SKU]        # colonnes conservées sur chaque ligne générée
-      location_field: depot       # nouvelle colonne contenant le nom du dépôt
-      value_field: qty            # nouvelle colonne contenant la valeur dépivotée
+      anchor_fields: [SKU]          # colonnes conservées sur chaque ligne générée
+      location_field: depot         # nouvelle colonne : nom du dépôt
+      value_field: qty              # nouvelle colonne : valeur dépivotée
       pivot_fields:
         - { source: qty_A, location: depot_A }
         - { source: qty_B, location: depot_B }
         - { source: qty_C, location: depot_C }
 ```
 
-Après dépivotage, chaque ligne `SKU001, qty_A=100, qty_B=200` devient :
+Résultat : chaque ligne `SKU001, qty_A=100, qty_B=200` devient :
 ```
 SKU001 | depot_A | 100
 SKU001 | depot_B | 200
 ```
 
-### Clés de jointure avec dépivotage
+### Jointure avec dépivotage
 
-Incluez dans `join.keys` les champs d'ancrage **et** le `location_field` :
+Incluez `location_field` dans `join.keys` :
 
 ```yaml
 join:
@@ -428,40 +576,57 @@ join:
     - { source_field: depot, target_field: depot }
 ```
 
-> **Important** : tous les champs de `anchor_fields` qui sont utilisés comme clé de jointure doivent être listés dans `anchor_fields`. Un champ manquant dans `anchor_fields` ne sera pas présent dans le DataFrame post-dépivotage. En cas d'erreur, DataAuditor indique les colonnes disponibles après dépivotage.
-
 ---
 
 ## 9. Résultats et exports
 
-### Tableau des résultats
+### Tableau — une ligne par clé
 
-| Colonne | Description |
+Le tableau affiche **une ligne par clé de jointure**. Toutes les règles déclenchées sur une clé apparaissent comme des **badges colorés** dans la colonne *Règles* :
+
+- **Badge ORPHELIN_A / ORPHELIN_B** : présence uniquement dans une source
+- **Badge règle** (coloré) : nom de la règle déclenchée. Survol → détail (valeur réf. / valeur cible)
+- **Badge grisé** : règle non sélectionnée dans les filtres actifs
+
+### Filtres de résultats
+
+| Chip | Contenu affiché |
 |---|---|
-| Clé de jointure | Valeur(s) de la clé qui identifient l'enregistrement. Pour une clé composite, les valeurs sont séparées par `§`. |
-| Type | ORPHELIN_A, ORPHELIN_B, KO, OK |
-| Règle | Nom de la règle déclenchée |
-| Valeur référence | Valeur du champ dans la source A |
-| Valeur cible | Valeur du champ dans la source B |
-| 👁 | Ouvre la revue côte à côte |
+| Uniquement dans Source | Clés ORPHELIN_A (absentes de la cible) |
+| Présence dans les deux | Clés ayant au moins un résultat KO ou OK |
+| Uniquement dans Cible | Clés ORPHELIN_B (absentes de la référence) |
+| *Chip règle individuelle* | Clés ayant au moins un résultat pour cette règle |
+
+Les filtres sont combinables. La recherche texte filtre sur la valeur de clé.
+
+### Colonnes supplémentaires
+
+Le sélecteur **Colonnes** permet d'ajouter des champs bruts de la source A (préfixe *Source :*) ou de la source B (préfixe *Cible :*).
+
+### Pagination
+
+Les résultats sont paginés côté serveur. La taille de page est configurable.
 
 ### Revue côte à côte
 
-Le panneau de revue affiche l'enregistrement complet (référence + cible) avec les enregistrements voisins (contexte configurable : 0 à 10 lignes avant/après).
+Cliquez sur 👁 pour ouvrir le panneau de revue d'un enregistrement :
+- Navigation entre enregistrements voisins (contexte : 0 à 10 lignes)
+- **Points colorés** à côté des champs impliqués dans au moins une règle
+- **Fond jaune** sur les valeurs des champs impliqués dans une règle actuellement sélectionnée
 
-### Export
+### Exports
 
 | Format | Description |
 |---|---|
 | **CSV** | Toutes les colonnes, encodage UTF-8 avec BOM (compatible Excel) |
-| **XLS** | Classeur Excel avec 2 feuilles : *Résumé* (totaux) et *Résultats* (lignes colorées par type d'écart) |
-| **HTML** | Rapport interactif auto-contenu : chips de filtre cliquables, recherche texte, colonnes triables — utilisable sans serveur |
+| **XLSX** | Classeur Excel avec feuille *Résumé* (totaux) et feuille *Résultats* (lignes colorées) |
+| **HTML** | Rapport interactif auto-contenu (chips, recherche, tri) — utilisable sans serveur |
 
-> Le bouton **HTML** reste actif même depuis l'historique. Les boutons **CSV** et **XLS** nécessitent un audit en cours de session.
+> **CSV** et **XLSX** nécessitent un audit en cours de session. **HTML** reste disponible depuis l'historique.
 
 ### Historique
 
-L'onglet **Historique** liste les audits précédents. Chaque audit est sauvegardé automatiquement dans `reports/`. Vous pouvez supprimer des entrées individuellement ou tout effacer.
+L'onglet **Historique** liste les audits précédents enregistrés dans `reports/`. Chaque audit peut être relu, supprimé ou purgé en masse.
 
 ---
 
@@ -469,36 +634,37 @@ L'onglet **Historique** liste les audits précédents. Chaque audit est sauvegar
 
 Téléchargez les fichiers ci-dessous pour tester DataAuditor immédiatement :
 
-| Fichier | Description | Télécharger |
-|---|---|---|
-| `test_audit_demo.yaml` | Configuration complète — audit positionnel vs CSV | [⬇ Télécharger](/sample/test_audit_demo.yaml) |
-| `test_reference.dat` | Fichier de référence — format positionnel 65 caractères, 100 lignes | [⬇ Télécharger](/sample/test_reference.dat) |
-| `test_target.csv` | Fichier cible — CSV délimité `;`, 100 lignes | [⬇ Télécharger](/sample/test_target.csv) |
+| Fichier | Description |
+|---|---|
+| `test_audit_demo.yaml` | Configuration complète — audit positionnel vs CSV avec règles et filtres |
+| `test_reference.dat` | Fichier de référence — format positionnel 65 caractères, 100 lignes |
+| `test_target.csv` | Fichier cible — CSV délimité `;`, 100 lignes |
 
-### Anomalies injectées dans les exemples
+### Anomalies injectées
 
-| SKU | Type attendu | Description |
+| Clé | Type attendu | Description |
 |---|---|---|
-| SKU00006 | ORPHELIN_A | Absent du fichier CSV |
-| SKU99999 | ORPHELIN_B | Absent du fichier DAT |
+| SKU00006 | ORPHELIN_A | Absent du fichier CSV cible |
+| SKU99999 | ORPHELIN_B | Absent du fichier DAT référence |
+| SKU00056 | *filtré* | Site = ZZZ — exclu par le filtre de source |
 | SKU00016 | KO | Quantité +10 |
 | SKU00021 | KO | Quantité = -999 |
 | SKU00026 | KO | Statut = 99 |
-| SKU00031 | OK | Prix +0,03 (dans tolérance) |
+| SKU00031 | OK | Prix +0,03 (dans la tolérance de 0,05) |
 | SKU00036 | KO | Prix +2,50 (hors tolérance) |
-| SKU00041 | KO | EAN décalé |
+| SKU00041 | KO | EAN décalé d'une position |
 | SKU00046 | KO | Type invalide |
-| SKU00051 | KO | Statut + Qty (multi-champs) |
+| SKU00051 | KO | Statut + Quantité simultanément (multi-champs AND) |
 
 ### Procédure de test
 
-1. Étape ⓪ : chargez `test_audit_demo.yaml`
-2. Étape ① : chargez `test_reference.dat`
-3. Étape ② : chargez `test_target.csv`
-4. Étapes ③–⑤ : la configuration est déjà pré-remplie, cliquez **Suivant**
-5. Étape ⑤ : cliquez **▶ Lancer l'audit** — l'application bascule automatiquement sur la page résultats
-6. Étape ⑥ : vérifiez que les anomalies listées ci-dessus sont détectées
+1. **⓪** : chargez `test_audit_demo.yaml`
+2. **①** : chargez `test_reference.dat`
+3. **②** : chargez `test_target.csv`
+4. **③ – ⑤** : la configuration est pré-remplie, cliquez **Suivant**
+5. **⑤** : cliquez **▶ Lancer l'audit**
+6. **⑥** : vérifiez les anomalies listées ci-dessus
 
 ---
 
-*DataAuditor v3.0.2 — [Signaler un problème](https://github.com/nikomiko/data-auditor/issues)*
+*DataAuditor v3.5.0 — [Signaler un problème](https://github.com/nikomiko/data-auditor/issues)*
