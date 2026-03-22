@@ -457,8 +457,8 @@ function renderValidationCols(which, lines) {
   const srcKey = which === 'ref' ? 'reference' : 'target';
   const src    = WS.sources[srcKey];
 
-  // JSON/XLSX : colonnes auto-détectées
-  if (['json','xlsx'].includes(src.format)) {
+  // JSON / JSONL / XLSX : colonnes auto-détectées au parsing, pas de validation ligne par ligne
+  if (['json','jsonl','xlsx'].includes(src.format)) {
     wrap.innerHTML = '<div class="preview-na">Format ' + src.format + ' : colonnes détectées automatiquement au parsing, pas de validation possible ici.</div>';
     _updateValBadge(which, null);
     return;
