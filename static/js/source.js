@@ -325,6 +325,15 @@ async function detectAndApply(srcKey) {
   const file = srcKey === 'reference' ? fileRef : fileTgt;
   if (!file) return;
   const src = WS.sources[srcKey];
+
+  // JSON / JSONL : déléguer à _autoDetectJson puis re-rendre
+  if (src.format === 'json' || src.format === 'jsonl') {
+    await _autoDetectJson(srcKey, file);
+    if (srcKey === 'reference') onEnterRef();
+    else onEnterTgt();
+    return;
+  }
+
   try {
     const buf = await file.slice(0, 65536).arrayBuffer();
     let text;
