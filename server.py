@@ -507,8 +507,70 @@ def get_results_page(token):
 
 
 # ─────────────────────────────────────────────────────────────
-#  GET /api/export  — CSV ou HTML
+#  GET /api/export  — CSV / XLSX / HTML
 # ─────────────────────────────────────────────────────────────
+
+def _filter_results_flat(results, active_types, active_rules, rule_logic,
+                         q, extra_ref, extra_tgt, ref_rows_map, tgt_rows_map):
+    """Filtre une liste plate d'écarts (même logique que api_results)."""
+    if active_types is None and active_rules is None and not q:
+        return results
+
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for r in results:
+        grouped[r.get("join_key", "")].append(r)
+
+    out = []
+    for key, ecarts in grouped.items():
+        if active_types is not None:
+            ecarts = [e for e in ecarts if e.get("type_ecart") in active_types]
+        if not ecarts:
+            continue
+
+        if active_rules is not None:
+            rule_e = [e for e in ecarts
+                      if e.get("type_ecart") not in ("ORPHELIN_A", "ORPHELIN_B")
+                      and e.get("rule_name") in active_rules]
+            orph_e = [e for e in ecarts
+                      if e.get("type_ecart") in ("ORPHELIN_A", "ORPHELIN_B")]
+            if rule_logic == "AND":
+                matched = {e.get("rule_name") for e in rule_e}
+                if not active_rules.issubset(matched):
+                    out.extend(orph_e)
+                    continue
+                ecarts = rule_e + orph_e
+            else:
+                if not rule_e and not orph_e:
+                    continue
+                ecarts = rule_e + orph_e
+
+        if q:
+            match = q in str(key).lower()
+            if not match:
+                for e in ecarts:
+                    if any(q in str(e.get(f) or "").lower()
+                           for f in ("rule_name", "valeur_reference",
+                                     "valeur_cible", "champ")):
+                        match = True
+                        break
+            if not match:
+                for c in extra_ref:
+                    if q in str(ref_rows_map.get(key, {}).get(c, "")).lower():
+                        match = True
+                        break
+            if not match:
+                for c in extra_tgt:
+                    if q in str(tgt_rows_map.get(key, {}).get(c, "")).lower():
+                        match = True
+                        break
+            if not match:
+                continue
+
+        out.extend(ecarts)
+    return out
+
+
 @app.route("/api/export")
 def export():
     token  = request.args.get("token", "")
@@ -516,31 +578,69 @@ def export():
     with _sessions_lock:
         sess = _sessions.get(token, {})
 
-    results = sess.get("results", [])
-    summary = sess.get("summary", {})
-    config  = sess.get("config", {})
+    results      = sess.get("results", [])
+    summary      = sess.get("summary", {})
+    config       = sess.get("config", {})
+    ref_rows_map = sess.get("ref_rows_map", {})
+    tgt_rows_map = sess.get("tgt_rows_map", {})
+
+    extra_ref = [c for c in request.args.get("extra_ref", "").split(",") if c]
+    extra_tgt = [c for c in request.args.get("extra_tgt", "").split(",") if c]
+
+    src_ref   = config.get("sources", {}).get("reference", {})
+    src_tgt   = config.get("sources", {}).get("target", {})
+    ref_label = src_ref.get("label", "Référence")
+    tgt_label = src_tgt.get("label", "Cible")
+    ref_fmt   = src_ref.get("format", "")
+    tgt_fmt   = src_tgt.get("format", "")
+
+    audit_name = config.get("meta", {}).get("name", "audit").replace(" ", "_")
 
     if fmt == "csv":
-        content = "\ufeff" + to_csv(results)   # BOM pour Excel
+        # Tous les résultats — format pivot-friendly
+        content = "\ufeff" + to_csv(results, extra_ref, extra_tgt,
+                                    ref_rows_map, tgt_rows_map,
+                                    ref_label, tgt_label)
         return send_file(
             io.BytesIO(content.encode("utf-8")),
             mimetype="text/csv", as_attachment=True,
-            download_name="rapport_audit.csv"
+            download_name=f"audit_{audit_name}.csv"
         )
-    elif fmt == "html":
-        content = to_html(results, summary, config)
-        return send_file(
-            io.BytesIO(content.encode("utf-8")),
-            mimetype="text/html", as_attachment=True,
-            download_name="rapport_audit.html"
-        )
+
     elif fmt == "xlsx":
-        content = to_xlsx(results, summary, config)
+        # Tous les résultats — onglets DATA + PIVOT
+        content = to_xlsx(results, summary, config,
+                          extra_ref, extra_tgt, ref_rows_map, tgt_rows_map,
+                          ref_label, tgt_label, ref_fmt, tgt_fmt)
         return send_file(
             io.BytesIO(content),
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            as_attachment=True, download_name="rapport_audit.xlsx"
+            as_attachment=True, download_name=f"audit_{audit_name}.xlsx"
         )
+
+    elif fmt == "html":
+        # Vue courante filtrée — filtres dynamiques conservés dans le HTML
+        types_str  = request.args.get("types", "")
+        rules_str  = request.args.get("rules", "")
+        rule_logic = request.args.get("rule_logic", "OR").upper()
+        q          = request.args.get("q", "").lower().strip()
+
+        active_types = set(types_str.split(",")) if types_str else None
+        active_rules = set(rules_str.split(",")) if rules_str else None
+
+        filtered = _filter_results_flat(
+            results, active_types, active_rules, rule_logic, q,
+            extra_ref, extra_tgt, ref_rows_map, tgt_rows_map
+        )
+        content = to_html(filtered, summary, config,
+                          extra_ref, extra_tgt, ref_rows_map, tgt_rows_map,
+                          ref_label, tgt_label, ref_fmt, tgt_fmt)
+        return send_file(
+            io.BytesIO(content.encode("utf-8")),
+            mimetype="text/html", as_attachment=True,
+            download_name=f"audit_{audit_name}.html"
+        )
+
     return jsonify({"error": "Format invalide."}), 400
 
 

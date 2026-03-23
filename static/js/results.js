@@ -528,11 +528,24 @@ function _rowMatchesText(r) {
 //  EXPORT
 // ═══════════════════════════════════════════════════════════
 function exportReport(fmt) {
-  if (currentToken && (fmt === 'csv' || fmt === 'xlsx' || fmt === 'html')) {
-    window.location.href = `/api/export?token=${currentToken}&format=${fmt}`;
-  } else {
-    exportHTMLDynamic();   // historique : rendu client
+  if (!currentToken) { exportHTMLDynamic(); return; }
+
+  const p = new URLSearchParams({ token: currentToken, format: fmt });
+
+  // Colonnes supplémentaires actuellement sélectionnées
+  if (extraRefCols.length) p.set('extra_ref', extraRefCols.join(','));
+  if (extraTgtCols.length) p.set('extra_tgt', extraTgtCols.join(','));
+
+  if (fmt === 'html') {
+    // HTML = vue courante : filtres + recherche en cours
+    if (activeFilters.size) p.set('types', [...activeFilters].join(','));
+    if (activeRuleFilters !== null) p.set('rules', [...activeRuleFilters].join(','));
+    if (ruleFilterLogic !== 'OR') p.set('rule_logic', ruleFilterLogic);
+    if (filterText) p.set('q', filterText);
   }
+  // CSV et XLSX : tous les résultats (pas de filtre), extra cols seulement
+
+  window.location.href = `/api/export?${p}`;
 }
 
 function _getVisibleRows() {
