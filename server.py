@@ -69,6 +69,24 @@ def serve_docs(filename):
     return send_from_directory(os.path.join(_BASE_DIR, "docs"), filename)
 
 
+@app.route("/sw.js")
+def service_worker():
+    """Service Worker servi depuis la racine (scope = /) pour couvrir toute l'app."""
+    return send_from_directory(
+        os.path.join(_BASE_DIR, "static"), "sw.js",
+        mimetype="application/javascript",
+    )
+
+
+@app.route("/manifest.json")
+def manifest():
+    """Alias racine → /static/manifest.json (pratique pour les PWA scanners)."""
+    return send_from_directory(
+        os.path.join(_BASE_DIR, "static"), "manifest.json",
+        mimetype="application/manifest+json",
+    )
+
+
 @app.route("/sample/<path:filename>")
 def serve_sample(filename):
     """Téléchargement des fichiers exemples."""

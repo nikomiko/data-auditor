@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DataAuditor</title>
+<!-- PWA -->
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#2563eb">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="DataAuditor">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+<!-- Icône -->
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -28,6 +37,7 @@
     <button class="wf-chev" id="wfs-6" onclick="goWFStep(6)" disabled><span class="wf-chev-num">⑥</span><span class="wf-chev-lbl">Résultats</span></button>
   </div>
   <button class="tab-btn" id="tab-history" onclick="goWFStep(7); loadHistory()">Historique</button>
+  <button class="btn-help" id="pwa-install-btn" onclick="installPWA()" title="Installer l'application" style="display:none">⬇</button>
   <button class="btn-help" onclick="openHelp()" title="Manuel utilisateur">?</button>
 </header>
 
@@ -438,6 +448,13 @@ document.addEventListener('keydown', e => {
   </div>
 </div>
 
+<!-- ── Notification mise à jour SW ── -->
+<div id="sw-update-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#1e40af;color:#fff;text-align:center;padding:10px 16px;font-size:.875rem;align-items:center;justify-content:center;gap:12px">
+  <span>Une nouvelle version est disponible.</span>
+  <button onclick="window.location.reload()" style="background:#fff;color:#1e40af;border:none;border-radius:4px;padding:4px 12px;font-size:.875rem;font-weight:600;cursor:pointer">Recharger</button>
+  <button onclick="document.getElementById('sw-update-bar').style.display='none'" style="background:transparent;color:#fff;border:none;font-size:1.1rem;cursor:pointer;line-height:1">✕</button>
+</div>
+
 <!-- ── Modal YAML ── -->
 <div class="modal-backdrop" id="yaml-modal" style="display:none" onclick="closeYamlModal(event)">
   <div class="yaml-modal" onclick="event.stopPropagation()">
@@ -451,5 +468,43 @@ document.addEventListener('keydown', e => {
   </div>
 </div>
 
+<!-- ── PWA : Service Worker + invite d'installation ── -->
+<script>
+(function () {
+  // Service Worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').then(function () {
+      navigator.serviceWorker.addEventListener('message', function (e) {
+        if (e.data && e.data.type === 'SW_UPDATED') {
+          var bar = document.getElementById('sw-update-bar');
+          if (bar) bar.style.display = 'flex';
+        }
+      });
+    }).catch(function (err) {
+      console.warn('[PWA] SW registration failed:', err);
+    });
+  }
+
+  // Invite d'installation
+  var _pwaPrompt = null;
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    _pwaPrompt = e;
+    var btn = document.getElementById('pwa-install-btn');
+    if (btn) btn.style.display = '';
+  });
+  window.addEventListener('appinstalled', function () {
+    var btn = document.getElementById('pwa-install-btn');
+    if (btn) btn.style.display = 'none';
+    _pwaPrompt = null;
+  });
+  window.installPWA = function () {
+    if (_pwaPrompt) {
+      _pwaPrompt.prompt();
+      _pwaPrompt.userChoice.then(function () { _pwaPrompt = null; });
+    }
+  };
+})();
+</script>
 </body>
 </html>
