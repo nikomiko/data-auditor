@@ -624,8 +624,10 @@ function wizColRows(srcKey, s) {
     const typeSelHtml = `<select class="wiz-select" id="w-ct-${srcKey}-${i}" onchange="wizToggleDateFmt('${srcKey}',${i},this.value)">`
       + typeOpts.map(([v,l]) => `<option value="${v}"${v===type?' selected':''}>${l}</option>`).join('')
       + `</select>`;
+    const dfPreview = (type === 'date' && f.date_format) ? '\u2192\u00a0' + _fmtDatePreview(f.date_format) : '';
     const dfHtml = `<div id="w-df-wrap-${srcKey}-${i}" style="${type !== 'date' ? 'display:none' : ''}">`
-      + wizInput(`w-df-${srcKey}-${i}`, f.date_format || '', '%Y-%m-%d')
+      + `<input class="wiz-input" id="w-df-${srcKey}-${i}" value="${esc(String(f.date_format??''))}" placeholder="%Y-%m-%d" oninput="wizUpdateDatePreview('${srcKey}',${i})">`
+      + `<span id="w-df-preview-${srcKey}-${i}" style="font-size:.7rem;color:var(--muted);margin-left:.4rem">${dfPreview}</span>`
       + `</div>`;
     const ignHtml = `<input type="checkbox" id="w-ig-${srcKey}-${i}" title="Ignorer ce champ"${f.ignored?' checked':''} style="cursor:pointer">`;
     if (s.fixed_width) {
@@ -662,6 +664,34 @@ function wizColRows(srcKey, s) {
 function wizToggleDateFmt(srcKey, i, type) {
   const wrap = document.getElementById(`w-df-wrap-${srcKey}-${i}`);
   if (wrap) wrap.style.display = type === 'date' ? '' : 'none';
+  if (type === 'date') wizUpdateDatePreview(srcKey, i);
+}
+
+function _fmtDatePreview(fmt) {
+  const d = new Date();
+  const pad = (n, w=2) => String(n).padStart(w, '0');
+  const ms = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+  const ml = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  const doy = Math.round((d - new Date(d.getFullYear(),0,0)) / 86400000);
+  return fmt
+    .replace('%Y', d.getFullYear())
+    .replace('%y', pad(d.getFullYear() % 100))
+    .replace('%m', pad(d.getMonth() + 1))
+    .replace('%d', pad(d.getDate()))
+    .replace('%H', pad(d.getHours()))
+    .replace('%M', pad(d.getMinutes()))
+    .replace('%S', pad(d.getSeconds()))
+    .replace('%j', pad(doy, 3))
+    .replace('%b', ms[d.getMonth()])
+    .replace('%B', ml[d.getMonth()]);
+}
+
+function wizUpdateDatePreview(srcKey, i) {
+  const inp = document.getElementById(`w-df-${srcKey}-${i}`);
+  const pre = document.getElementById(`w-df-preview-${srcKey}-${i}`);
+  if (!pre) return;
+  const fmt = inp?.value || '';
+  pre.textContent = fmt ? '\u2192\u00a0' + _fmtDatePreview(fmt) : '';
 }
 
 function wizPivotRows(srcKey, s) {

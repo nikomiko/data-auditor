@@ -23,7 +23,7 @@
 <header>
   <div class="logo">data<em>/</em>auditor
     <span class="logo-tag">server</span>
-    <span class="logo-ver" id="logo-ver">v3.8.4</span>
+    <span class="logo-ver" id="logo-ver">v3.10.0</span>
     <span id="version-mismatch" style="display:none" title="" class="version-mismatch-badge">⚠ version</span>
   </div>
   <div class="wf-steps" id="wf-steps">
@@ -99,6 +99,30 @@
         <input type="file" id="f-yaml" accept=".yaml,.yml" style="display:none">
       </div>
       <div id="yaml-loaded-summary" style="display:none;background:var(--ok-bg);border:1px solid var(--ok-bd);border-radius:var(--r);padding:.65rem 1rem;font-size:.78rem;color:var(--ok);max-width:480px;width:100%"></div>
+
+      <!-- ── Paramètres généraux ── -->
+      <details id="settings-panel" style="width:min(520px,92%);margin-top:.5rem">
+        <summary style="cursor:pointer;font-size:.8rem;font-weight:600;color:var(--acc);padding:.4rem 0;list-style:none;display:flex;align-items:center;gap:.4rem">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Paramètres généraux
+        </summary>
+        <div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:1rem;margin-top:.4rem;display:flex;flex-direction:column;gap:.75rem">
+          <div style="font-size:.72rem;color:var(--muted);line-height:1.5">Chemins relatifs au serveur. Le dossier <code>exports</code> reçoit une copie de chaque export (CSV, XLSX, HTML).</div>
+          <div style="display:grid;grid-template-columns:1fr 2fr;align-items:center;gap:.4rem .75rem">
+            <label style="font-size:.78rem;font-weight:500">Jeux de données</label>
+            <input id="cfg-datasets" type="text" class="wiz-input" placeholder="./datasets" style="font-family:var(--mono);font-size:.75rem">
+            <label style="font-size:.78rem;font-weight:500">Exports</label>
+            <input id="cfg-exports" type="text" class="wiz-input" placeholder="./exports" style="font-family:var(--mono);font-size:.75rem">
+            <label style="font-size:.78rem;font-weight:500;color:var(--muted)">Configurations YAML</label>
+            <input id="cfg-configs" type="text" class="wiz-input" placeholder="vide = même que Jeux de données" style="font-family:var(--mono);font-size:.75rem;color:var(--muted)">
+          </div>
+          <div style="display:flex;align-items:center;gap:.75rem">
+            <button class="btn-nav btn-nav-sec" onclick="saveAppSettings()" style="padding:.35rem .9rem;font-size:.78rem">Enregistrer</button>
+            <span id="settings-saved" style="display:none;font-size:.75rem;color:var(--ok)">✓ Enregistré</span>
+          </div>
+        </div>
+      </details>
+
       <div class="file-step-nav">
         <button class="btn-nav" onclick="goWFStep(1)">Suivant : <span id="nav-lbl-ref0">Référence</span> →</button>
       </div>
@@ -251,8 +275,7 @@
           <thead>
             <tr>
             <th id="th-eye"></th>
-            <th class="sortable" onclick="setSortCol('key')">Clé<span class="sort-ic" id="si-key">↕</span></th>
-            <th class="sortable" onclick="setSortCol('type')">Règles<span class="sort-ic" id="si-type">↕</span></th>
+            <th id="th-rules" class="sortable" onclick="setSortCol('type')">Règles<span class="sort-ic" id="si-type">↕</span></th>
             <th id="th-fs" class="th-fs-col"><button class="th-fs-btn" onclick="toggleResultsFS()" title="Plein écran"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button></th>
           </tr>
           </thead>
@@ -331,7 +354,37 @@ document.getElementById('f-yaml').addEventListener('change', async e => {
   e.target.value = '';
 });
 
-document.addEventListener('DOMContentLoaded', sessionRestore);
+document.addEventListener('DOMContentLoaded', () => {
+  sessionRestore();
+  loadAppSettings();
+});
+
+async function loadAppSettings() {
+  try {
+    const s = await fetch('/api/settings').then(r => r.json());
+    document.getElementById('cfg-datasets').value = s.folder_default_datasets || '';
+    document.getElementById('cfg-exports').value  = s.folder_default_reports  || '';
+    document.getElementById('cfg-configs').value  = s.folder_default_configs  || '';
+  } catch(_) {}
+}
+
+async function saveAppSettings() {
+  const data = {
+    folder_default_datasets: document.getElementById('cfg-datasets').value.trim(),
+    folder_default_reports:  document.getElementById('cfg-exports').value.trim(),
+    folder_default_configs:  document.getElementById('cfg-configs').value.trim(),
+  };
+  try {
+    await fetch('/api/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data),
+    });
+    const msg = document.getElementById('settings-saved');
+    msg.style.display = 'inline';
+    setTimeout(() => { msg.style.display = 'none'; }, 2200);
+  } catch(_) {}
+}
 
 document.addEventListener('keydown', e => {
   const modal = document.getElementById('ctx-modal');
@@ -449,10 +502,10 @@ document.addEventListener('keydown', e => {
 </div>
 
 <!-- ── Notification mise à jour SW ── -->
-<div id="sw-update-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#1e40af;color:#fff;text-align:center;padding:10px 16px;font-size:.875rem;align-items:center;justify-content:center;gap:12px">
+<div id="sw-update-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#dc2626;color:#fde047;text-align:center;padding:10px 16px;font-size:.875rem;align-items:center;justify-content:center;gap:12px">
   <span>Une nouvelle version est disponible.</span>
-  <button onclick="window.location.reload()" style="background:#fff;color:#1e40af;border:none;border-radius:4px;padding:4px 12px;font-size:.875rem;font-weight:600;cursor:pointer">Recharger</button>
-  <button onclick="document.getElementById('sw-update-bar').style.display='none'" style="background:transparent;color:#fff;border:none;font-size:1.1rem;cursor:pointer;line-height:1">✕</button>
+  <button onclick="window.location.reload()" style="background:#fde047;color:#dc2626;border:none;border-radius:4px;padding:4px 12px;font-size:.875rem;font-weight:600;cursor:pointer">Recharger</button>
+  <button onclick="document.getElementById('sw-update-bar').style.display='none'" style="background:transparent;color:#fde047;border:none;font-size:1.1rem;cursor:pointer;line-height:1">✕</button>
 </div>
 
 <!-- ── Modal YAML ── -->

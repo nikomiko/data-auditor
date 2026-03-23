@@ -107,7 +107,9 @@ function _appendPageRow(r) {
   }).join('');
 
   let html = `<td class="td-eye"><button class="eye-btn" title="Voir le contexte">${_EYE_SVG}</button></td>`;
-  html    += `<td class="tk">${esc(r.join_key)}</td>`;
+  const _kParts = (r.join_key || '').split('§');
+  const _nKeys  = Math.max(1, (lastConfig?.join?.keys || []).length);
+  for (let _ki = 0; _ki < _nKeys; _ki++) html += `<td class="tk">${esc(_kParts[_ki] ?? '')}</td>`;
   html    += `<td><div class="td-ecarts">${badges}</div></td>`;
 
   _extraColOrder.forEach(({side, col}) => {
@@ -129,6 +131,23 @@ function _typeLabel(t) {
   if (t === 'ORPHELIN_A') return 'Absent cible';
   if (t === 'ORPHELIN_B') return 'Absent source';
   return t;
+}
+
+// ── En-têtes colonnes clé (dynamiques) ─────────────────────
+function _rebuildKeyHeaders() {
+  const tr = document.querySelector('#wfv-6 table thead tr');
+  if (!tr) return;
+  tr.querySelectorAll('.th-key').forEach(th => th.remove());
+  const keys   = (lastConfig?.join?.keys || []);
+  const labels = keys.length ? keys.map(k => k.source_field || 'Clé') : ['Clé'];
+  const anchor = document.getElementById('th-rules');
+  labels.forEach((label, i) => {
+    const th = document.createElement('th');
+    th.className = 'sortable th-key';
+    th.setAttribute('onclick', "setSortCol('key')");
+    th.innerHTML = `${esc(label)}<span class="sort-ic"${i === 0 ? ' id="si-key"' : ''}>↕</span>`;
+    tr.insertBefore(th, anchor);
+  });
 }
 
 // ── En-têtes colonnes supplémentaires ─────────────────────
@@ -294,8 +313,12 @@ function appendRow(r) {
   if (!_rowMatchesText(r)) return;
   const tbody = document.getElementById('tbody');
   const tr    = document.createElement('tr');
+  const _kPartsH = (r.join_key || '').split('§');
+  const _nKeysH  = Math.max(1, (lastConfig?.join?.keys || []).length);
+  let _keyHtml = '';
+  for (let _ki = 0; _ki < _nKeysH; _ki++) _keyHtml += `<td class="tk">${esc(_kPartsH[_ki] ?? '')}</td>`;
   tr.innerHTML = `
-    <td class="tk">${esc(r.join_key)}</td>
+    ${_keyHtml}
     <td><span class="badge badge-${r.type_ecart}">${r.type_ecart}</span></td>
     <td>${r.rule_name ? `<button class="rule-chip">${esc(r.rule_name)}</button>` : ''}</td>
     <td class="tv r" title="${esc(r.valeur_reference)}">${esc(r.valeur_reference)}</td>
@@ -566,12 +589,14 @@ function _getVisibleRows() {
 }
 
 function exportHTMLDynamic() {
-  const all   = allResults;
-  const s     = lastSummary;
-  const name  = lastConfig?.meta?.name || 'Audit';
-  const rules = lastConfig?.rules || [];
-  const now   = new Date().toLocaleString('fr-FR');
-  const esc2  = v => String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const all      = allResults;
+  const s        = lastSummary;
+  const name     = lastConfig?.meta?.name || 'Audit';
+  const rules    = lastConfig?.rules || [];
+  const now      = new Date().toLocaleString('fr-FR');
+  const esc2     = v => String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const cfgKeys  = (lastConfig?.join?.keys || []);
+  const keyFields= cfgKeys.length ? cfgKeys.map(k => k.source_field || 'Clé') : ['Clé'];
 
   const ruleChips = rules.length
     ? `<div class="filter-sep"></div><span class="fl">Règles</span>` +
@@ -642,7 +667,7 @@ th.sort-asc .sort-ic,th.sort-desc .sort-ic{opacity:1;color:#3b82f6}
 </div>
 <div class="tbl-wrap"><table>
 <thead><tr>
-  <th onclick="sortBy('join_key')">Cl\xe9<span class="sort-ic" id="si-key">\u2195</span></th>
+  ${keyFields.map((f,i)=>`<th onclick="sortBy('join_key')">${esc2(f)}<span class="sort-ic"${i===0?' id="si-key"':''}>\u2195</span></th>`).join('')}
   <th onclick="sortBy('type_ecart')">Type<span class="sort-ic" id="si-type">\u2195</span></th>
   <th onclick="sortBy('rule_name')">R\xe8gle<span class="sort-ic" id="si-rule">\u2195</span></th>
   <th onclick="sortBy('champ')">Champ<span class="sort-ic" id="si-champ">\u2195</span></th>
@@ -655,6 +680,7 @@ th.sort-asc .sort-ic,th.sort-desc .sort-ic{opacity:1;color:#3b82f6}
 </div>
 <script>
 const ALL=${JSON.stringify(all)};
+const KF=${JSON.stringify(keyFields)};
 let aT=new Set(ALL.map(r=>r.type_ecart));
 let aR=new Set(ALL.filter(r=>r.rule_name).map(r=>r.rule_name));
 let sC=null,sD=1;
@@ -695,15 +721,15 @@ function render(){
   const em=document.getElementById('empty');
   if(!rows.length){tb.innerHTML='';em.style.display='block';return;}
   em.style.display='none';
-  tb.innerHTML=rows.map(r=>'<tr>'+
-    '<td class="tk">'+esc(r.join_key)+'</td>'+
+  tb.innerHTML=rows.map(r=>{const kp=(r.join_key||'').split('\u00a7');return'<tr>'+
+    KF.map((f,i)=>'<td class="tk">'+esc(kp[i]||'')+'</td>').join('')+
     '<td><span class="badge badge-'+esc(r.type_ecart)+'">'+esc(r.type_ecart)+'</span></td>'+
     '<td class="td-rule">'+esc(r.rule_name)+'</td>'+
     '<td class="tv">'+esc(r.champ)+'</td>'+
     '<td class="tv r">'+esc(r.valeur_reference)+'</td>'+
     '<td class="tv t">'+esc(r.valeur_cible)+'</td>'+
     '<td class="td-det" title="'+esc(r.detail)+'">'+esc(r.detail)+'</td>'+
-  '</tr>').join('');
+  '</tr>';}).join('');
 }
 initCounts();render();
 <\/script></body></html>`;
@@ -711,7 +737,10 @@ initCounts();render();
   const blob = new Blob([html], {type:'text/html;charset=utf-8'});
   const a    = document.createElement('a');
   a.href     = URL.createObjectURL(blob);
-  a.download = `rapport_${name.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.html`;
+  const _ts = new Date().toISOString().replace(/[-T:]/g,'').slice(0,12);
+  a.download = `rapport_${name.replace(/\s+/g,'_')}_${_ts}.html`;
   a.click();
   URL.revokeObjectURL(a.href);
 }
+
+document.addEventListener('DOMContentLoaded', _rebuildKeyHeaders);

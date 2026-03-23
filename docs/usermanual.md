@@ -433,6 +433,41 @@ report:
 | `boolean` | Booléen |
 | `skip` | Lu mais ignoré — utile pour ne pas décaler les colonnes positionnelles |
 
+### Formats de date (`date_format`)
+
+Le `date_format` utilise la syntaxe **strftime** de Python. Un aperçu dynamique de la date du jour est affiché dans le wizard dès que vous saisissez un format.
+
+#### Codes de format
+
+| Code | Description | Exemple |
+|---|---|---|
+| `%Y` | Année sur 4 chiffres | `2025` |
+| `%y` | Année sur 2 chiffres | `25` |
+| `%m` | Mois sur 2 chiffres (01–12) | `03` |
+| `%d` | Jour sur 2 chiffres (01–31) | `23` |
+| `%H` | Heure 24 h sur 2 chiffres (00–23) | `14` |
+| `%M` | Minute sur 2 chiffres (00–59) | `07` |
+| `%S` | Seconde sur 2 chiffres (00–59) | `45` |
+| `%j` | Jour de l'année (001–366) | `082` |
+| `%b` | Mois abrégé | `Mar` |
+| `%B` | Mois complet | `Mars` |
+
+#### Exemples courants
+
+```yaml
+date_format: "%Y-%m-%d"       # 2025-03-23  (ISO 8601, universel)
+date_format: "%d/%m/%Y"       # 23/03/2025  (format FR courant)
+date_format: "%d/%m/%Y %H:%M" # 23/03/2025 14:07
+date_format: "%Y%m%d"         # 20250323    (compact, sans séparateur)
+date_format: "%d%m%Y"         # 23032025    (compact FR)
+date_format: "%d-%b-%Y"       # 23-Mar-2025 (avec mois abrégé)
+date_format: "%Y/%m/%d"       # 2025/03/23
+date_format: "%m/%d/%Y"       # 03/23/2025  (format US)
+date_format: "%d.%m.%Y"       # 23.03.2025  (format allemand/suisse)
+```
+
+> **Conseil** : si vos deux sources ont des formats de date différents, normalisez-les dans leur configuration respective — la comparaison se fait toujours sur les valeurs normalisées.
+
 ---
 
 ## 6. Règles de contrôle

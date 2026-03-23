@@ -11,6 +11,7 @@ Endpoints :
 import io
 import json
 import os
+from datetime import datetime
 import socket
 import sys
 import time
@@ -26,8 +27,10 @@ from unpivot       import unpivot_dataframe
 from comparator    import compare_with_progress, _build_key_series
 import report
 from report        import save_history, list_history, load_history, to_csv, to_html, to_xlsx
+import settings as _settings_mod
+from settings      import load_settings, save_settings, resolve_path
 
-APP_VERSION = "3.8.4"
+APP_VERSION = "3.10.0"
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
 # _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
@@ -43,6 +46,9 @@ else:
 
 # Synchroniser report.REPORTS_DIR avec _DATA_DIR
 report.REPORTS_DIR = os.path.join(_DATA_DIR, "reports")
+
+# Synchroniser settings.SETTINGS_FILE avec _DATA_DIR
+_settings_mod.SETTINGS_FILE = os.path.join(_DATA_DIR, "settings.json")
 
 app = Flask(__name__, static_folder=_BASE_DIR, static_url_path="")
 
@@ -644,28 +650,43 @@ def export():
     ref_fmt   = src_ref.get("format", "")
     tgt_fmt   = src_tgt.get("format", "")
 
-    audit_name = config.get("meta", {}).get("name", "audit").replace(" ", "_")
+    audit_name   = config.get("meta", {}).get("name", "audit").replace(" ", "_")
+    _cfg_exports = load_settings().get("folder_default_reports", "")
+    _exports_dir = resolve_path(_cfg_exports, _DATA_DIR) if _cfg_exports else None
+
+    def _save_copy(filename: str, data: bytes):
+        """Enregistre une copie dans le dossier exports configuré."""
+        if not _exports_dir:
+            return
+        try:
+            os.makedirs(_exports_dir, exist_ok=True)
+            with open(os.path.join(_exports_dir, filename), "wb") as fh:
+                fh.write(data)
+        except OSError:
+            pass
 
     if fmt == "csv":
         # Tous les résultats — format pivot-friendly
-        content = "\ufeff" + to_csv(results, extra_ref, extra_tgt,
-                                    ref_rows_map, tgt_rows_map,
-                                    ref_label, tgt_label)
-        return send_file(
-            io.BytesIO(content.encode("utf-8")),
-            mimetype="text/csv", as_attachment=True,
-            download_name=f"audit_{audit_name}.csv"
-        )
+        content  = "\ufeff" + to_csv(results, config, extra_ref, extra_tgt,
+                                     ref_rows_map, tgt_rows_map,
+                                     ref_label, tgt_label)
+        raw      = content.encode("utf-8")
+        filename = f"audit_{audit_name}.csv"
+        _save_copy(filename, raw)
+        return send_file(io.BytesIO(raw), mimetype="text/csv",
+                         as_attachment=True, download_name=filename)
 
     elif fmt == "xlsx":
-        # Tous les résultats — onglets DATA + PIVOT
-        content = to_xlsx(results, summary, config,
-                          extra_ref, extra_tgt, ref_rows_map, tgt_rows_map,
-                          ref_label, tgt_label, ref_fmt, tgt_fmt)
+        # Tous les résultats — onglet DATA avec autofiltre
+        content  = to_xlsx(results, summary, config,
+                           extra_ref, extra_tgt, ref_rows_map, tgt_rows_map,
+                           ref_label, tgt_label, ref_fmt, tgt_fmt)
+        filename = f"audit_{audit_name}.xlsx"
+        _save_copy(filename, content)
         return send_file(
             io.BytesIO(content),
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            as_attachment=True, download_name=f"audit_{audit_name}.xlsx"
+            as_attachment=True, download_name=filename
         )
 
     elif fmt == "html":
@@ -685,14 +706,15 @@ def export():
             results, active_types, active_rules, rule_logic, q,
             extra_ref, extra_tgt, ref_rows_map, tgt_rows_map
         )
-        content = to_html(filtered, summary, config,
-                          extra_ref, extra_tgt, ref_rows_map, tgt_rows_map,
-                          ref_label, tgt_label, ref_fmt, tgt_fmt)
-        return send_file(
-            io.BytesIO(content.encode("utf-8")),
-            mimetype="text/html", as_attachment=True,
-            download_name=f"audit_{audit_name}.html"
-        )
+        content  = to_html(filtered, summary, config,
+                           extra_ref, extra_tgt, ref_rows_map, tgt_rows_map,
+                           ref_label, tgt_label, ref_fmt, tgt_fmt)
+        ts       = datetime.now().strftime("%Y%m%d%H%M")
+        filename = f"audit_{audit_name}_{ts}.html"
+        raw      = content.encode("utf-8")
+        _save_copy(filename, raw)
+        return send_file(io.BytesIO(raw), mimetype="text/html",
+                         as_attachment=True, download_name=filename)
 
     return jsonify({"error": "Format invalide."}), 400
 
@@ -925,6 +947,30 @@ def delete_all_history():
         shutil.rmtree(d)
         os.makedirs(d, exist_ok=True)
     return jsonify({"ok": True})
+
+
+# ─────────────────────────────────────────────────────────────
+#  GET/POST /api/settings
+# ─────────────────────────────────────────────────────────────
+@app.route("/api/settings", methods=["GET"])
+def get_settings():
+    return jsonify(load_settings())
+
+
+@app.route("/api/settings", methods=["POST"])
+def post_settings():
+    data = request.get_json(force=True) or {}
+    saved = save_settings(data)
+    # Recréer les dossiers si nécessaire
+    for key in ("folder_default_datasets", "folder_default_reports", "folder_default_configs"):
+        folder = saved.get(key, "")
+        if folder:
+            path = resolve_path(folder, _DATA_DIR)
+            try:
+                os.makedirs(path, exist_ok=True)
+            except OSError:
+                pass
+    return jsonify(saved)
 
 
 def _find_free_port(start: int = 5000) -> int:

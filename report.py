@@ -78,6 +78,7 @@ def load_history(filename: str) -> dict:
 # ─────────────────────────────────────────────────────────────
 
 def to_csv(results: list,
+           config: dict = None,
            extra_ref: list = None, extra_tgt: list = None,
            ref_rows_map: dict = None, tgt_rows_map: dict = None,
            ref_label: str = "Référence", tgt_label: str = "Cible") -> str:
@@ -85,12 +86,17 @@ def to_csv(results: list,
 
     Format adapté aux tableaux croisés dynamiques Excel.
     """
+    config       = config or {}
     extra_ref    = extra_ref or []
     extra_tgt    = extra_tgt or []
     ref_rows_map = ref_rows_map or {}
     tgt_rows_map = tgt_rows_map or {}
 
-    headers = _BASE_FIELDS + [
+    cfg_keys   = config.get("join", {}).get("keys", [])
+    key_fields = [k.get("source_field", "Clé") for k in cfg_keys] if cfg_keys else ["Clé"]
+    other_fields = ["type_ecart", "rule_name", "champ", "valeur_reference", "valeur_cible", "detail"]
+
+    headers = key_fields + other_fields + [
         f"{ref_label} \u00b7 {c}" for c in extra_ref
     ] + [
         f"{tgt_label} \u00b7 {c}" for c in extra_tgt
@@ -100,10 +106,12 @@ def to_csv(results: list,
     w   = csv.writer(out)
     w.writerow(headers)
     for r in results:
-        key = r.get("join_key", "")
-        row = [r.get(k, "") for k in _BASE_FIELDS]
-        row += [ref_rows_map.get(key, {}).get(c, "") for c in extra_ref]
-        row += [tgt_rows_map.get(key, {}).get(c, "") for c in extra_tgt]
+        key   = r.get("join_key", "")
+        kp    = key.split("\u00a7")  # § separator
+        row   = [kp[i] if i < len(kp) else "" for i in range(len(key_fields))]
+        row  += [r.get(k, "") for k in other_fields]
+        row  += [ref_rows_map.get(key, {}).get(c, "") for c in extra_ref]
+        row  += [tgt_rows_map.get(key, {}).get(c, "") for c in extra_tgt]
         w.writerow(row)
     return out.getvalue()
 
@@ -128,6 +136,11 @@ def to_xlsx(results: list, summary: dict, config: dict,
     ref_rows_map = ref_rows_map or {}
     tgt_rows_map = tgt_rows_map or {}
     name         = config.get("meta", {}).get("name", "Audit")
+    cfg_keys     = config.get("join", {}).get("keys", [])
+    key_fields   = [k.get("source_field", "Clé") for k in cfg_keys] if cfg_keys else ["Clé"]
+    other_hdrs   = ["Type", "Règle", "Champ", "Valeur réf.", "Valeur cible", "Détail"]
+    other_fields = ["type_ecart", "rule_name", "champ", "valeur_reference", "valeur_cible", "detail"]
+    n_key        = len(key_fields)
     wb           = Workbook()
 
     # ── Onglet DATA ───────────────────────────────────────────
@@ -135,7 +148,7 @@ def to_xlsx(results: list, summary: dict, config: dict,
     ws.title = "DATA"
 
     hdr_labels = (
-        ["Clé", "Type", "Règle", "Champ", "Valeur réf.", "Valeur cible", "Détail"]
+        key_fields + other_hdrs
         + [f"{ref_label} \u00b7 {c}" for c in extra_ref]
         + [f"{tgt_label} \u00b7 {c}" for c in extra_tgt]
     )
@@ -148,7 +161,7 @@ def to_xlsx(results: list, summary: dict, config: dict,
     TGT_ROW_F = PatternFill("solid", fgColor="F5F3FF")
 
     ws.append(hdr_labels)
-    n_base = len(_BASE_FIELDS)
+    n_base = n_key + len(other_fields)
     n_ref  = len(extra_ref)
     n_tgt  = len(extra_tgt)
     for i, cell in enumerate(ws[1]):
@@ -173,7 +186,9 @@ def to_xlsx(results: list, summary: dict, config: dict,
     for r in results:
         key  = r.get("join_key", "")
         te   = r.get("type_ecart", "")
-        row  = [r.get(k, "") for k in _BASE_FIELDS]
+        kp   = key.split("\u00a7")  # § separator
+        row  = [kp[i] if i < len(kp) else "" for i in range(n_key)]
+        row += [r.get(k, "") for k in other_fields]
         row += [ref_rows_map.get(key, {}).get(c, "") for c in extra_ref]
         row += [tgt_rows_map.get(key, {}).get(c, "") for c in extra_tgt]
         ws.append(row)
@@ -196,7 +211,7 @@ def to_xlsx(results: list, summary: dict, config: dict,
         ws.add_table(tbl)
 
     ws.freeze_panes = "A2"
-    col_widths = [28, 12, 20, 20, 18, 18, 35] + [20] * (n_ref + n_tgt)
+    col_widths = [20] * n_key + [12, 20, 20, 18, 18, 35] + [20] * (n_ref + n_tgt)
     for i, w in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
@@ -326,6 +341,7 @@ _HTML_JS = r"""
 const ALL=__ALL__;
 const EXTRA_REF=__EXTRA_REF__;
 const EXTRA_TGT=__EXTRA_TGT__;
+const KEY_FIELDS=__KEY_FIELDS__;
 let aT=new Set(ALL.map(r=>r.type_ecart));
 let aR=new Set(ALL.filter(r=>r.rule_name).map(r=>r.rule_name));
 let sC=null,sD=1;
@@ -355,7 +371,8 @@ function sortBy(col){
 const esc=v=>String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 function renderRow(r){
   let c='';
-  c+='<td class="tk">'+esc(r.join_key)+'</td>';
+  const kp=(r.join_key||'').split('\u00a7');
+  KEY_FIELDS.forEach((f,i)=>{c+='<td class="tk">'+esc(kp[i]||'')+'</td>';});
   for(const k of EXTRA_REF)c+='<td class="tv r">'+esc((r._ref||{})[k])+'</td>';
   c+='<td><span class="badge badge-'+esc(r.type_ecart)+'">'+esc(r.type_ecart)+'</span></td>';
   c+='<td class="td-rule">'+esc(r.rule_name)+'</td>';
@@ -458,9 +475,11 @@ def to_html(results: list, summary: dict, config: dict,
     ref_rows_map = ref_rows_map or {}
     tgt_rows_map = tgt_rows_map or {}
 
-    name  = config.get("meta", {}).get("name", "Audit")
-    now   = datetime.now().strftime("%d/%m/%Y \u00e0 %H:%M:%S")
-    rules = config.get("rules", [])
+    name      = config.get("meta", {}).get("name", "Audit")
+    now       = datetime.now().strftime("%d/%m/%Y \u00e0 %H:%M:%S")
+    rules     = config.get("rules", [])
+    cfg_keys  = config.get("join", {}).get("keys", [])
+    key_fields = [k.get("source_field", "Cl\u00e9") for k in cfg_keys] if cfg_keys else ["Cl\u00e9"]
 
     # Enrich results with extra column data
     enriched = []
@@ -505,9 +524,10 @@ def to_html(results: list, summary: dict, config: dict,
             )
 
     # JSON data (safe for embedding in HTML)
-    all_js       = json.dumps(enriched, ensure_ascii=False, default=str)
-    extra_ref_js = json.dumps(extra_ref)
-    extra_tgt_js = json.dumps(extra_tgt)
+    all_js        = json.dumps(enriched, ensure_ascii=False, default=str)
+    extra_ref_js  = json.dumps(extra_ref)
+    extra_tgt_js  = json.dumps(extra_tgt)
+    key_fields_js = json.dumps(key_fields)
 
     # Inject data into JS (use unique placeholders to avoid brace conflicts)
     js = (
@@ -515,6 +535,7 @@ def to_html(results: list, summary: dict, config: dict,
         .replace("__ALL__", all_js)
         .replace("__EXTRA_REF__", extra_ref_js)
         .replace("__EXTRA_TGT__", extra_tgt_js)
+        .replace("__KEY_FIELDS__", key_fields_js)
     )
 
     s = summary
@@ -548,7 +569,11 @@ def to_html(results: list, summary: dict, config: dict,
         '</div>\n',
         # Table
         '<div class="tbl-wrap"><table>\n<thead><tr>',
-        '<th onclick="sortBy(\'join_key\')">Cl\u00e9<span class="sort-ic" id="si-key">\u2195</span></th>',
+        "".join(
+            f'<th onclick="sortBy(\'join_key\')">{_h(kf)}'
+            f'<span class="sort-ic"{" id=\"si-key\"" if i == 0 else ""}>\u2195</span></th>'
+            for i, kf in enumerate(key_fields)
+        ),
         extra_ref_ths,
         '<th onclick="sortBy(\'type_ecart\')">Type<span class="sort-ic" id="si-type">\u2195</span></th>',
         '<th onclick="sortBy(\'rule_name\')">R\u00e8gle<span class="sort-ic" id="si-rule">\u2195</span></th>',

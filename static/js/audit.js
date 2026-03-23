@@ -114,6 +114,7 @@ function listenSSE(token) {
     } else if (ev.event === 'summary') {
       lastSummary = ev;
       lastConfig  = config || {};
+      _rebuildKeyHeaders();
       const rL = WS?.sources?.reference?.label || refLabel || 'Source';
       const tL = WS?.sources?.target?.label    || tgtLabel || 'Cible';
       const oa = (ev.orphelins_a || 0).toLocaleString('fr-FR');
@@ -218,6 +219,7 @@ async function loadHistoryEntry(filename) {
     allResults  = data.results || [];
     lastSummary = data.summary || {};
     lastConfig  = data.config  || {};
+    _rebuildKeyHeaders();
     currentToken = null;
 
     const rLH = WS?.sources?.reference?.label || refLabel || 'Source';
