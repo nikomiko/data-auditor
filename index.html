@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DataAuditor</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <link rel="stylesheet" href="/static/style.css">
@@ -30,14 +31,35 @@
   <button class="btn-help" onclick="openHelp()" title="Manuel utilisateur">?</button>
 </header>
 
-<!-- Barre de navigation globale -->
+<!-- Barre de navigation + actions globales (une seule barre) -->
 <div class="global-nav-bar" id="global-nav-bar">
   <button class="btn-nav btn-nav-sec" id="gnav-prev" onclick="globalPrev()">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
     Précédent
   </button>
+  <span class="gnav-sep"></span>
+  <button class="btn-xs" id="btn-save-config" onclick="saveConfig()" title="Enregistrer la configuration">💾</button>
+  <button class="btn-xs" onclick="saveAsConfig()" title="Enregistrer sous…">Save As…</button>
+  <button class="btn-xs" id="btn-toggle-yaml" onclick="toggleYamlEditor()" title="Voir / modifier le YAML">‹/›</button>
+  <span id="yaml-config-name" style="font-family:var(--mono);font-size:.65rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px"></span>
+  <span class="gnav-sep"></span>
+  <span id="cfg-ref-pill" style="font-family:var(--mono);font-size:.65rem;color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-bd);border-radius:3px;padding:.1rem .4rem"></span>
+  <span id="cfg-tgt-pill" style="font-family:var(--mono);font-size:.65rem;color:var(--ob);background:var(--ob-bg);border:1px solid var(--ob-bd);border-radius:3px;padding:.1rem .4rem"></span>
   <div class="wiz-err" id="gnav-wiz-err"></div>
   <div style="flex:1"></div>
+  <!-- Exports (affichés uniquement à l'étape ⑥) -->
+  <div id="gnav-exports" class="gnav-exports-group" style="display:none">
+    <button class="btn-exp" id="btn-csv" onclick="exportReport('csv')" disabled>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV
+    </button>
+    <button class="btn-exp" id="btn-html" onclick="exportReport('html')" disabled>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>HTML
+    </button>
+    <button class="btn-exp" id="btn-xlsx" onclick="exportReport('xlsx')" disabled>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>XLS
+    </button>
+    <span class="gnav-sep"></span>
+  </div>
   <button class="btn-nav" id="gnav-next" onclick="globalNext()">
     Suivant
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
@@ -46,17 +68,6 @@
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
     Lancer l'audit
   </button>
-</div>
-
-<!-- Barre YAML globale -->
-<div class="global-yaml-bar" id="global-yaml-bar">
-  <button class="btn-xs" id="btn-save-config" onclick="saveConfig()" title="Enregistrer la configuration">💾 Save</button>
-  <button class="btn-xs" onclick="saveAsConfig()" title="Enregistrer sous…">Save As…</button>
-  <button class="btn-xs" id="btn-toggle-yaml" onclick="toggleYamlEditor()">‹/› Voir YAML</button>
-  <span id="yaml-config-name" style="font-family:var(--mono);font-size:.65rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px"></span>
-  <div style="flex:1"></div>
-  <span id="cfg-ref-pill" style="font-family:var(--mono);font-size:.65rem;color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-bd);border-radius:3px;padding:.1rem .4rem"></span>
-  <span id="cfg-tgt-pill" style="font-family:var(--mono);font-size:.65rem;color:var(--ob);background:var(--ob-bg);border:1px solid var(--ob-bd);border-radius:3px;padding:.1rem .4rem"></span>
 </div>
 
 <div class="layout">
@@ -185,19 +196,6 @@
 
   <!-- ⑥ Résultats -->
   <div class="wf-view" id="wfv-6">
-    <div class="results-topbar">
-      <button class="btn-xs" onclick="goWFStep(5)">← Reconfigurer</button>
-      <div style="flex:1"></div>
-      <button class="btn-exp" id="btn-csv" onclick="exportReport('csv')" disabled>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV
-      </button>
-      <button class="btn-exp" id="btn-html" onclick="exportReport('html')" disabled>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>HTML
-      </button>
-      <button class="btn-exp" id="btn-xlsx" onclick="exportReport('xlsx')" disabled>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>XLS
-      </button>
-    </div>
 
     <div class="err-box" id="err"></div>
 
@@ -223,22 +221,18 @@
       <div class="filter-bar" id="filter-bar">
         <div class="filter-group">
           <span class="filter-group-label">Afficher</span>
-          <button class="chip ca on" data-kind="type" data-t="ORPHELIN_A" onclick="toggleChip(this)">Uniquement dans <strong id="chip-lbl-oa">Source</strong> <span class="chip-c" id="c-oa">0</span></button>
-          <button class="chip co" data-kind="type" data-t="BOTH" onclick="toggleChip(this)">Présence dans les deux <span class="chip-c" id="c-both">—</span></button>
-          <button class="chip cb on" data-kind="type" data-t="ORPHELIN_B" onclick="toggleChip(this)">Uniquement dans <strong id="chip-lbl-ob">Cible</strong> <span class="chip-c" id="c-ob">0</span></button>
+          <button class="chip ca" data-kind="type" data-t="ORPHELIN_A" onclick="toggleChip(this)">Uniquement dans <strong id="chip-lbl-oa">Source</strong> <span class="chip-c" id="c-oa">0</span></button>
+          <button class="chip co on" data-kind="type" data-t="BOTH" onclick="toggleChip(this)">Présence dans les deux <span class="chip-c" id="c-both">—</span></button>
+          <button class="chip cb" data-kind="type" data-t="ORPHELIN_B" onclick="toggleChip(this)">Uniquement dans <strong id="chip-lbl-ob">Cible</strong> <span class="chip-c" id="c-ob">0</span></button>
         </div>
         <div id="filter-dynamic"></div>
         <div class="filter-search">
           <span class="filter-group-label">Recherche</span>
-          <input type="search" id="filter-text" placeholder="Clé…" oninput="setFilterText(this.value)">
+          <input type="search" id="filter-text" placeholder="Recherche…" oninput="setFilterText(this.value)">
         </div>
       </div>
 
       <div id="col-picker" class="col-picker" style="display:none">
-        <div class="col-picker-header">
-          <span>Colonnes supplémentaires</span>
-          <button class="btn-xs" onclick="toggleColPicker()">Masquer ▲</button>
-        </div>
         <div id="col-picker-body" class="col-picker-body"></div>
       </div>
 
@@ -249,6 +243,7 @@
             <th id="th-eye"></th>
             <th class="sortable" onclick="setSortCol('key')">Clé<span class="sort-ic" id="si-key">↕</span></th>
             <th class="sortable" onclick="setSortCol('type')">Règles<span class="sort-ic" id="si-type">↕</span></th>
+            <th id="th-fs" class="th-fs-col"><button class="th-fs-btn" onclick="toggleResultsFS()" title="Plein écran"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button></th>
           </tr>
           </thead>
           <tbody id="tbody"></tbody>
@@ -368,7 +363,7 @@ document.addEventListener('keydown', e => {
       <div style="display:flex;align-items:center;gap:.75rem;flex-shrink:0">
         <label style="font-size:.72rem;display:flex;align-items:center;gap:.35rem;color:var(--dim)">
           Contexte
-          <input type="number" id="ctx-n" value="2" min="0" max="10"
+          <input type="number" id="ctx-n" value="1" min="0" max="10"
                  style="width:3rem;font-size:.72rem;padding:.15rem .3rem;border:1px solid var(--border);border-radius:4px;background:var(--s2);color:var(--text)"
                  onchange="_loadCtx()">
           enreg.

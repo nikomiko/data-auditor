@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 //  VERSION
 // ═══════════════════════════════════════════════════════════
-const UI_VERSION = '3.5.0';
+const UI_VERSION = '3.6.0';
 
 (async function checkVersion() {
   try {
@@ -28,8 +28,9 @@ let currentToken   = null;
 let _ctxKey        = null;
 let refLabel       = '';
 let tgtLabel       = '';
-let activeFilters  = new Set(['ORPHELIN_A','ORPHELIN_B']);
+let activeFilters    = new Set(['BOTH']);
 let activeRuleFilters = null;
+let ruleFilterLogic  = 'OR';   // 'OR' | 'AND'
 let filterText     = '';
 let sortCol        = null;   // 'key'|'type'|'rule'|'ref'|'tgt'
 let sortDir        = 1;      // 1=asc, -1=desc
@@ -41,8 +42,9 @@ let _pageTot   = 0;
 let _pagePages = 1;
 
 // Colonnes supplémentaires
-let extraRefCols = [];
-let extraTgtCols = [];
+let extraRefCols  = [];  // sélection ref (pour API)
+let extraTgtCols  = [];  // sélection tgt (pour API)
+let _extraColOrder = []; // [{side:'ref'|'tgt', col:string}] — ordre d'affichage mixte
 
 // Compteurs live pendant streaming SSE
 let _liveOA = 0, _liveOB = 0;
@@ -113,15 +115,17 @@ function updateGlobalNav(n) {
   const next    = document.getElementById('gnav-next');
   const run     = document.getElementById('gnav-run');
   const navBar  = document.getElementById('global-nav-bar');
-  const yamlBar = document.getElementById('global-yaml-bar');
+  const exports = document.getElementById('gnav-exports');
   if (!prev) return;
 
   // Masquer sur Historique (step 7)
-  navBar.style.display  = (n === 7) ? 'none' : '';
-  yamlBar.style.display = (n === 7) ? 'none' : '';
+  navBar.style.display = (n === 7) ? 'none' : '';
 
   // Bouton Précédent : invisible à l'étape 0
   prev.style.visibility = (n === 0) ? 'hidden' : '';
+
+  // Exports : visibles uniquement à l'étape ⑥
+  if (exports) exports.style.display = (n === 6) ? 'flex' : 'none';
 
   // Bouton Suivant vs Lancer l'audit
   if (n === 5) {
@@ -265,10 +269,11 @@ function resetAll() {
   refLabel = ''; tgtLabel = '';
   filterText = ''; sortCol = null; sortDir = 1;
   wfUnlocked = 1; wfCurrentStep = 0;
-  activeFilters = new Set(['ORPHELIN_A','ORPHELIN_B']);
+  activeFilters = new Set(['BOTH']);
   activeRuleFilters = null;
+  ruleFilterLogic = 'OR';
   _pageNum = 1; _pageSize = 100; _pageTot = 0; _pagePages = 1;
-  extraRefCols = []; extraTgtCols = [];
+  extraRefCols = []; extraTgtCols = []; _extraColOrder = [];
   _liveOA = 0; _liveOB = 0;
 
   // YAML

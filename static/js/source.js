@@ -837,39 +837,64 @@ report:
 // ═══════════════════════════════════════════════════════════
 //  REVUE CÔTE À CÔTE
 // ═══════════════════════════════════════════════════════════
-let _ctxEcarts = [];   // écarts du row courant (passés depuis _appendPageRow)
+let _ctxEcarts      = [];   // écarts du row courant (passés depuis _appendPageRow)
+let _ctxActiveRules = new Set(); // règles sélectionnées dans les pills (local à la modale)
+let _ctxLastData    = null;      // cache de la dernière réponse _loadCtx pour re-render
 
 function openCtxModal(key, ecarts) {
-  _ctxKey    = key;
-  _ctxEcarts = ecarts || [];
+  _ctxKey         = key;
+  _ctxEcarts      = ecarts || [];
+  _ctxLastData    = null;
   document.getElementById('ctx-center-key').textContent = key;
 
-  // Badges des règles dans le header
-  const badgesEl = document.getElementById('ctx-rules-badges');
-  if (badgesEl) {
-    const TYPE_LABELS = { ORPHELIN_A: 'Orphelin source', ORPHELIN_B: 'Orphelin cible' };
-    const seen = new Set();
-    let html = '';
-    _ctxEcarts.forEach(e => {
-      const t = e.type_ecart;
-      if (t === 'ORPHELIN_A' || t === 'ORPHELIN_B') {
-        if (!seen.has(t)) {
-          seen.add(t);
-          const bg = t === 'ORPHELIN_A' ? 'var(--oa)' : 'var(--ob)';
-          html += `<span style="font-size:.65rem;padding:.1rem .4rem;border-radius:3px;background:${bg};color:#fff;white-space:nowrap">${TYPE_LABELS[t]}</span>`;
-        }
-      } else if (e.rule_name && !seen.has(e.rule_name)) {
-        seen.add(e.rule_name);
-        const bg  = (typeof ruleColor === 'function') ? ruleColor(e.rule_name) : '#94a3b8';
-        const lbl = t === 'KO' ? `✗ ${e.rule_name}` : `✓ ${e.rule_name}`;
-        html += `<span style="font-size:.65rem;padding:.1rem .4rem;border-radius:3px;background:${bg};color:#fff;white-space:nowrap">${esc(lbl)}</span>`;
-      }
-    });
-    badgesEl.innerHTML = html;
-  }
+  // Initialiser _ctxActiveRules avec toutes les règles présentes (toutes sélectionnées par défaut)
+  _ctxActiveRules = new Set();
+  _ctxEcarts.forEach(e => { if (e.rule_name) _ctxActiveRules.add(e.rule_name); });
+
+  _ctxRenderPills();
 
   document.getElementById('ctx-modal').style.display = 'flex';
   _loadCtx();
+}
+
+function _ctxRenderPills() {
+  const badgesEl = document.getElementById('ctx-rules-badges');
+  if (!badgesEl) return;
+  const TYPE_LABELS = { ORPHELIN_A: 'Orphelin source', ORPHELIN_B: 'Orphelin cible' };
+  const seen = new Set();
+  let html = '';
+  _ctxEcarts.forEach(e => {
+    const t = e.type_ecart;
+    if (t === 'ORPHELIN_A' || t === 'ORPHELIN_B') {
+      if (!seen.has(t)) {
+        seen.add(t);
+        const bg = t === 'ORPHELIN_A' ? 'var(--oa)' : 'var(--ob)';
+        html += `<span style="font-size:.65rem;padding:.15rem .5rem;border-radius:3px;background:${bg};color:#fff;white-space:nowrap">${TYPE_LABELS[t]}</span>`;
+      }
+    } else if (e.rule_name && !seen.has(e.rule_name)) {
+      seen.add(e.rule_name);
+      const bg  = (typeof ruleColor === 'function') ? ruleColor(e.rule_name) : '#94a3b8';
+      const lbl = t === 'KO' ? `✗ ${e.rule_name}` : `✓ ${e.rule_name}`;
+      const active = _ctxActiveRules.has(e.rule_name);
+      html += `<button onclick="_ctxToggleRule(this,'${esc(e.rule_name)}')" data-rule="${esc(e.rule_name)}" style="cursor:pointer;font-size:.65rem;padding:.15rem .5rem;border-radius:3px;border:2px solid ${bg};background:${active ? bg : 'transparent'};color:${active ? '#fff' : bg};white-space:nowrap;transition:all .15s">${esc(lbl)}</button>`;
+    }
+  });
+  badgesEl.innerHTML = html;
+}
+
+function _ctxToggleRule(btn, ruleName) {
+  if (_ctxActiveRules.has(ruleName)) {
+    _ctxActiveRules.delete(ruleName);
+  } else {
+    _ctxActiveRules.add(ruleName);
+  }
+  // Mettre à jour l'apparence du bouton
+  const bg = (typeof ruleColor === 'function') ? ruleColor(ruleName) : '#94a3b8';
+  const active = _ctxActiveRules.has(ruleName);
+  btn.style.background = active ? bg : 'transparent';
+  btn.style.color      = active ? '#fff' : bg;
+  // Re-render les panneaux avec le nouveau filtre
+  if (_ctxLastData) _renderCtxPanels(_ctxLastData);
 }
 
 function closeCtxModal(e) {
@@ -887,6 +912,7 @@ async function _loadCtx() {
     const res  = await fetch(url);
     const data = await res.json();
     if (data.error) { console.warn('ctx:', data.error); return; }
+    _ctxLastData = data;
     _renderCtxPanels(data);
   } catch(e) { console.error('ctx fetch error', e); }
 }
@@ -894,17 +920,31 @@ async function _loadCtx() {
 function _renderCtxPanels(data) {
   const diffSet = new Set(data.diff_fields || []);
 
-  // Construire une map champ → [{ruleName, color, side}] depuis _ctxEcarts
-  const fieldRuleMap = {};   // fieldName → [{name, color}]
+  // Construire deux maps séparées : champ source → règles, champ cible → règles
+  // e.champ format : "src_field op tgt_field" (ex: "qty ≠ qty")
+  const srcFieldRuleMap = {};
+  const tgtFieldRuleMap = {};
   _ctxEcarts.forEach(e => {
     if (!e.rule_name || !e.champ) return;
+    if (!_ctxActiveRules.has(e.rule_name)) return; // ignorer les règles désactivées
     const color = (typeof ruleColor === 'function') ? ruleColor(e.rule_name) : '#94a3b8';
-    if (!fieldRuleMap[e.champ]) fieldRuleMap[e.champ] = [];
-    if (!fieldRuleMap[e.champ].some(x => x.name === e.rule_name))
-      fieldRuleMap[e.champ].push({ name: e.rule_name, color });
+    const tokens = e.champ.split(' ');
+    const srcField = tokens[0];
+    const tgtField = tokens[tokens.length - 1];
+
+    if (srcField) {
+      if (!srcFieldRuleMap[srcField]) srcFieldRuleMap[srcField] = [];
+      if (!srcFieldRuleMap[srcField].some(x => x.name === e.rule_name))
+        srcFieldRuleMap[srcField].push({ name: e.rule_name, color });
+    }
+    if (tgtField) {
+      if (!tgtFieldRuleMap[tgtField]) tgtFieldRuleMap[tgtField] = [];
+      if (!tgtFieldRuleMap[tgtField].some(x => x.name === e.rule_name))
+        tgtFieldRuleMap[tgtField].push({ name: e.rule_name, color });
+    }
   });
 
-  function renderPanel(rows, panelId) {
+  function renderPanel(rows, panelId, fieldRuleMap) {
     const el = document.getElementById(panelId);
     el.innerHTML = rows.map(row => {
       const center  = row.is_center;
@@ -915,19 +955,19 @@ function _renderCtxPanels(data) {
       const fields = Object.entries(row.data).map(([k, v]) => {
         const diff  = center && diffSet.has(k);
         const rules = center ? (fieldRuleMap[k] || []) : [];
-        const active = rules.some(r => !activeRuleFilters || activeRuleFilters.has(r.name));
+        const highlighted = rules.length > 0;
         const dots  = rules.map(r =>
           `<span class="rule-dot" style="background:${r.color};display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:3px;vertical-align:middle" title="${esc(r.name)}"></span>`
         ).join('');
-        const valCls = active ? ' ctx-rule-active' : '';
+        const valCls = highlighted ? ' ctx-rule-active' : '';
         return `<tr class="${diff?'ctx-diff':''}"><td>${esc(k)}${dots}</td><td class="${valCls}">${esc(String(v??''))}</td></tr>`;
       }).join('');
       return `<div class="ctx-record${center?' is-center':''}">${keyHtml}<table>${fields}</table></div>`;
     }).join('');
   }
 
-  renderPanel(data.ref_rows, 'ctx-ref-rows');
-  renderPanel(data.tgt_rows, 'ctx-tgt-rows');
+  renderPanel(data.ref_rows, 'ctx-ref-rows', srcFieldRuleMap);
+  renderPanel(data.tgt_rows, 'ctx-tgt-rows', tgtFieldRuleMap);
 
   // Défilement synchrone
   const refEl = document.getElementById('ctx-ref-rows');

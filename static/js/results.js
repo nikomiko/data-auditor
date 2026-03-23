@@ -10,6 +10,11 @@ function ruleColor(ruleName) {
   return idx >= 0 ? RULE_COLORS[idx % RULE_COLORS.length] : '#94a3b8';
 }
 
+function ruleType(ruleName) {
+  const rule = (lastConfig?.rules || []).find(r => r.name === ruleName);
+  return rule?.rule_type || 'incoherence';
+}
+
 // ═══════════════════════════════════════════════════════════
 //  PAGINATION SERVEUR — fetch + render
 // ═══════════════════════════════════════════════════════════
@@ -26,7 +31,10 @@ async function fetchPage(page) {
   if (activeFilters.has('BOTH'))       { types.add('KO'); types.add('OK'); }
   p.set('types', [...types].join(','));
 
-  if (activeRuleFilters !== null) p.set('rules', [...activeRuleFilters].join(','));
+  if (activeRuleFilters !== null) {
+    p.set('rules', [...activeRuleFilters].join(','));
+    p.set('rule_logic', ruleFilterLogic);
+  }
   if (filterText) p.set('q', filterText);
   if (sortCol)  { p.set('sort', sortCol); p.set('dir', sortDir === -1 ? 'desc' : 'asc'); }
   if (extraRefCols.length) p.set('extra_ref', extraRefCols.join(','));
@@ -78,18 +86,22 @@ function _appendPageRow(r) {
   // Badges pour chaque écart
   const badges = (r.ecarts || []).map(e => {
     const isOrphan = e.type_ecart === 'ORPHELIN_A' || e.type_ecart === 'ORPHELIN_B';
-    const color    = (!isOrphan && e.rule_name) ? ruleColor(e.rule_name) : null;
-    const dot      = color ? `<span class="rule-dot" style="background:${color}"></span>` : '';
+    const dotColor = (!isOrphan && e.rule_name) ? ruleColor(e.rule_name) : null;
+    const dot      = dotColor ? `<span class="rule-dot" style="background:${dotColor}"></span>` : '';
     const lbl      = isOrphan ? _typeLabel(e.type_ecart) : esc(e.rule_name || e.type_ecart);
     const title    = e.rule_name && !isOrphan
       ? `${esc(e.rule_name)} — réf: ${esc(e.valeur_reference)} / cible: ${esc(e.valeur_cible)}`
       : '';
     const dimmed   = (activeRuleFilters !== null && !isOrphan && e.rule_name && !activeRuleFilters.has(e.rule_name))
       ? ' dimmed' : '';
-    const cls      = isOrphan
-      ? `badge badge-${e.type_ecart}`
-      : `rule-badge${dimmed}`;
-    const style    = (!isOrphan && color) ? ` style="border-color:${color};color:${color};background:${color}18"` : '';
+    const cls      = isOrphan ? `badge badge-${e.type_ecart}` : `rule-badge${dimmed}`;
+    let style = '';
+    if (!isOrphan && e.rule_name) {
+      const rt = ruleType(e.rule_name);
+      style = rt === 'coherence'
+        ? ` style="background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok)"`
+        : ` style="background:var(--oa-bg);border-color:var(--oa-bd);color:var(--oa)"`;
+    }
     const dataRule = e.rule_name ? ` data-rule="${esc(e.rule_name)}"` : '';
     return `<button class="${cls}"${style}${dataRule} title="${title}">${dot}${lbl}</button>`;
   }).join('');
@@ -125,28 +137,91 @@ function _typeLabel(t) {
 
 // ── En-têtes colonnes supplémentaires ─────────────────────
 function _syncExtraHeaders() {
-  const tr = document.querySelector('#wfv-6 table thead tr');
+  const tr    = document.querySelector('#wfv-6 table thead tr');
   if (!tr) return;
-  // Supprimer les anciens th extra
   tr.querySelectorAll('.th-extra').forEach(th => th.remove());
-  // Insérer à la fin (après les colonnes fixes)
-  const insertBefore = null;
-  const refLblPfx = WS?.sources?.reference?.label || refLabel || 'Source';
-  const tgtLblPfx = WS?.sources?.target?.label    || tgtLabel || 'Cible';
-  extraRefCols.forEach(c => {
+
+  // Insérer avant th-fs (toujours dernier)
+  const fsTh = document.getElementById('th-fs');
+
+  const refFile = fileRef?.name || '';
+  const tgtFile = fileTgt?.name || '';
+  const refFmt  = (WS?.sources?.reference?.format || '').toUpperCase();
+  const tgtFmt  = (WS?.sources?.target?.format    || '').toUpperCase();
+
+  const mkTh = (side, col) => {
     const th = document.createElement('th');
-    th.className = 'th-extra th-extra-ref';
-    th.textContent = `${refLblPfx} : ${c}`;
-    th.title = `Source A — ${c}`;
-    tr.insertBefore(th, insertBefore);
+    th.className = `th-extra th-extra-${side}`;
+    th.style.position = 'relative';
+    th.title = `Source ${side === 'ref' ? 'A' : 'B'} — ${col}`;
+    const file = side === 'ref' ? refFile : tgtFile;
+    const fmt  = side === 'ref' ? refFmt  : tgtFmt;
+    const meta = [file, fmt].filter(Boolean).join(' · ');
+    th.innerHTML = `<div class="th-meta">${esc(meta)}</div><div class="th-field">${esc(col)}</div><div class="col-resize-handle"></div>`;
+    _addColResize(th);
+    _addColDrag(th, side, col);
+    tr.insertBefore(th, fsTh);
+  };
+
+  // Suivre l'ordre mixte; ajouter les colonnes sélectionnées absentes de _extraColOrder
+  const inOrder = new Set(_extraColOrder.map(e => e.side + ':' + e.col));
+  extraRefCols.forEach(c => { if (!inOrder.has('ref:' + c)) _extraColOrder.push({side:'ref', col:c}); });
+  extraTgtCols.forEach(c => { if (!inOrder.has('tgt:' + c)) _extraColOrder.push({side:'tgt', col:c}); });
+  // Purger les colonnes désélectionnées
+  _extraColOrder = _extraColOrder.filter(e =>
+    (e.side === 'ref' ? extraRefCols : extraTgtCols).includes(e.col)
+  );
+
+  _extraColOrder.forEach(({side, col}) => mkTh(side, col));
+}
+
+function _addColResize(th) {
+  const handle = th.querySelector('.col-resize-handle');
+  if (!handle) return;
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.pageX;
+    const startW = th.offsetWidth;
+    const onMove = ev => { th.style.width = Math.max(60, startW + ev.pageX - startX) + 'px'; };
+    const onUp   = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
   });
-  extraTgtCols.forEach(c => {
-    const th = document.createElement('th');
-    th.className = 'th-extra th-extra-tgt';
-    th.textContent = `${tgtLblPfx} : ${c}`;
-    th.title = `Source B — ${c}`;
-    tr.insertBefore(th, insertBefore);
+}
+
+function _addColDrag(th, side, col) {
+  th.draggable = true;
+  th.addEventListener('dragstart', e => {
+    e.dataTransfer.setData('text/plain', JSON.stringify({side, col}));
+    th.classList.add('col-dragging');
   });
+  th.addEventListener('dragend', () => th.classList.remove('col-dragging'));
+  th.addEventListener('dragover', e => { e.preventDefault(); th.classList.add('col-drag-over'); });
+  th.addEventListener('dragleave', () => th.classList.remove('col-drag-over'));
+  th.addEventListener('drop', e => {
+    e.preventDefault();
+    th.classList.remove('col-drag-over');
+    let parsed;
+    try { parsed = JSON.parse(e.dataTransfer.getData('text/plain')); } catch(_) { return; }
+    const {side: fromSide, col: fromCol} = parsed;
+    if (fromSide === side && fromCol === col) return;
+    // Réordonner _extraColOrder (cross-side autorisé)
+    const fromIdx = _extraColOrder.findIndex(e => e.side === fromSide && e.col === fromCol);
+    const toIdx   = _extraColOrder.findIndex(e => e.side === side   && e.col === col);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const [moved] = _extraColOrder.splice(fromIdx, 1);
+    _extraColOrder.splice(toIdx, 0, moved);
+    _syncExtraHeaders();
+    if (currentToken) fetchPage(_pageNum);
+  });
+}
+
+// ── Plein écran résultats ──────────────────────────────────
+function toggleResultsFS() {
+  const isFs = document.body.classList.toggle('results-fs');
+  const btn = document.querySelector('.th-fs-btn');
+  if (btn) btn.title = isFs ? 'Quitter le plein écran' : 'Plein écran';
 }
 
 // ── Pagination controls ────────────────────────────────────
@@ -191,7 +266,8 @@ function _renderColumnPicker(refCols, tgtCols) {
         <input type="checkbox" ${sel ? 'checked' : ''} onchange="_toggleExtraCol('${side}','${esc(c)}',this.checked)">
         ${esc(c)}</label>`;
     }).join('');
-    return `<div class="col-pick-group"><span class="col-pick-lbl">${label}</span>${checks}</div>`;
+    const color = side === 'ref' ? 'var(--ok)' : 'var(--ob)';
+    return `<div class="col-pick-group"><span class="col-pick-lbl" style="color:${color}">${label}</span>${checks}</div>`;
   };
 
   document.getElementById('col-picker-body').innerHTML =
@@ -210,10 +286,6 @@ function _toggleExtraCol(side, col, checked) {
   if (currentToken) fetchPage(_pageNum);
 }
 
-function toggleColPicker() {
-  const body = document.getElementById('col-picker-body');
-  if (body) body.style.display = body.style.display === 'none' ? '' : 'none';
-}
 
 // ═══════════════════════════════════════════════════════════
 //  HISTORIQUE — rendu local (allResults)
@@ -341,16 +413,29 @@ function buildRuleFilterBar(summary, config) {
   grp.className = 'filter-group';
   grp.innerHTML = '<span class="filter-group-label">Règles</span>';
 
+  const logicBtn = document.createElement('button');
+  logicBtn.id = 'rule-logic-btn';
+  logicBtn.className = 'rule-logic-btn' + (ruleFilterLogic === 'AND' ? ' is-and' : '');
+  logicBtn.textContent = ruleFilterLogic;
+  logicBtn.title = 'AND : toutes les règles sélectionnées doivent correspondre\nOR : au moins une règle suffit';
+  logicBtn.addEventListener('click', () => {
+    ruleFilterLogic = ruleFilterLogic === 'OR' ? 'AND' : 'OR';
+    logicBtn.textContent = ruleFilterLogic;
+    logicBtn.classList.toggle('is-and', ruleFilterLogic === 'AND');
+    _refresh();
+  });
+  grp.appendChild(logicBtn);
+
   rules.forEach((rule, idx) => {
-    const color = RULE_COLORS[idx % RULE_COLORS.length];
-    const btn   = document.createElement('button');
-    btn.className      = 'chip cr on';
+    const dotColor = RULE_COLORS[idx % RULE_COLORS.length];
+    const isCoh    = rule.rule_type === 'coherence';
+    const btn      = document.createElement('button');
+    btn.className      = 'chip on ' + (isCoh ? 'cr-coh' : 'cr-inc');
     btn.dataset.kind   = 'rule';
     btn.dataset.t      = rule.name;
     btn.title          = ruleTooltip(rule);
-    btn.style.cssText  = `--rule-c:${color}`;
     btn.addEventListener('click', function() { toggleChip(this); });
-    btn.innerHTML = `<span class="rule-dot" style="background:${color}"></span>${esc(rule.name)} <span class="chip-c">…</span>`;
+    btn.innerHTML = `<span class="rule-dot" style="background:${dotColor}"></span>${esc(rule.name)} <span class="chip-c">…</span>`;
     grp.appendChild(btn);
   });
   dyn.appendChild(grp);
@@ -423,9 +508,20 @@ const _SORT_KEY = { key:'join_key', type:'type_ecart', rule:'rule_name', ref:'va
 
 function _rowMatchesText(r) {
   if (!filterText) return true;
-  return (r.join_key || '').toLowerCase().includes(filterText)
-      || (r.valeur_reference || '').toLowerCase().includes(filterText)
-      || (r.valeur_cible || '').toLowerCase().includes(filterText);
+  if ((r.join_key || '').toLowerCase().includes(filterText)) return true;
+  for (const e of (r.ecarts || [])) {
+    if ((e.rule_name || '').toLowerCase().includes(filterText)) return true;
+    if ((e.valeur_reference || '').toLowerCase().includes(filterText)) return true;
+    if ((e.valeur_cible || '').toLowerCase().includes(filterText)) return true;
+    if ((e.champ || '').toLowerCase().includes(filterText)) return true;
+  }
+  for (const c of extraRefCols) {
+    if (String(r._ref?.[c] ?? '').toLowerCase().includes(filterText)) return true;
+  }
+  for (const c of extraTgtCols) {
+    if (String(r._tgt?.[c] ?? '').toLowerCase().includes(filterText)) return true;
+  }
+  return false;
 }
 
 // ═══════════════════════════════════════════════════════════

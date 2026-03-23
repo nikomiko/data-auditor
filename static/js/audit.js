@@ -23,7 +23,7 @@ async function runAudit() {
   _liveOA = 0; _liveOB = 0;
   filterText = ''; sortCol = null; sortDir = 1;
   // Réinitialiser les filtres pour chaque nouvel audit
-  activeFilters = new Set(['ORPHELIN_A', 'ORPHELIN_B']);
+  activeFilters = new Set(['BOTH']);
   activeRuleFilters = null;
   document.querySelectorAll('#filter-bar .chip[data-kind="type"]').forEach(btn => {
     const t = btn.dataset.t;

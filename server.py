@@ -24,7 +24,7 @@ from comparator    import compare_with_progress, _build_key_series
 import report
 from report        import save_history, list_history, load_history, to_csv, to_html, to_xlsx
 
-APP_VERSION = "3.5.0"
+APP_VERSION = "3.6.0"
 
 app = Flask(__name__, static_folder=".", static_url_path="")
 
@@ -390,8 +390,9 @@ def get_results_page(token):
     sort_col  = request.args.get("sort",  "")
     sort_dir  = request.args.get("dir",   "asc")
     types_str = request.args.get("types", "")
-    rules_str = request.args.get("rules", "")
-    q         = request.args.get("q",     "").lower().strip()
+    rules_str   = request.args.get("rules", "")
+    rule_logic  = request.args.get("rule_logic", "OR").upper()
+    q           = request.args.get("q",     "").lower().strip()
     extra_ref = [c for c in request.args.get("extra_ref", "").split(",") if c]
     extra_tgt = [c for c in request.args.get("extra_tgt", "").split(",") if c]
 
@@ -416,22 +417,60 @@ def get_results_page(token):
 
     # ── Filtrer ──────────────────────────────────────────────
     def key_matches(row):
-        for e in row["ecarts"]:
-            t = e["type_ecart"]
-            if active_types is not None and t not in active_types:
-                continue
-            if active_rules is not None and t not in ("ORPHELIN_A", "ORPHELIN_B"):
-                if e.get("rule_name") not in active_rules:
-                    continue
-            return True
-        return False
+        ecarts = row["ecarts"]
+        # Filtrage par type
+        if active_types is not None:
+            ecarts = [e for e in ecarts if e["type_ecart"] in active_types]
+        if not ecarts:
+            return False
+        # Filtrage par règle
+        if active_rules is not None:
+            rule_ecarts = [e for e in ecarts
+                           if e["type_ecart"] not in ("ORPHELIN_A", "ORPHELIN_B")
+                           and e.get("rule_name") in active_rules]
+            orphan_ecarts = [e for e in ecarts
+                             if e["type_ecart"] in ("ORPHELIN_A", "ORPHELIN_B")]
+            if rule_logic == "AND":
+                # Toutes les règles actives doivent être présentes
+                matched = {e.get("rule_name") for e in rule_ecarts}
+                if not active_rules.issubset(matched):
+                    return bool(orphan_ecarts)  # orphelins passent toujours
+            else:
+                # OR : au moins une règle présente
+                if not rule_ecarts and not orphan_ecarts:
+                    return False
+        return True
 
     rows = list(grouped.values())
     if active_types is not None:
         rows = [r for r in rows if key_matches(r)]
 
     if q:
-        rows = [r for r in rows if q in str(r["join_key"]).lower()]
+        ref_rows_map = sess.get("ref_rows_map", {})
+        tgt_rows_map = sess.get("tgt_rows_map", {})
+
+        def _row_matches_q(row):
+            if q in str(row["join_key"]).lower():
+                return True
+            for e in row["ecarts"]:
+                if q in str(e.get("rule_name") or "").lower():
+                    return True
+                if q in str(e.get("valeur_reference") or "").lower():
+                    return True
+                if q in str(e.get("valeur_cible") or "").lower():
+                    return True
+                if q in str(e.get("champ") or "").lower():
+                    return True
+            key = row["join_key"]
+            for c in extra_ref:
+                if q in str(ref_rows_map.get(key, {}).get(c, "")).lower():
+                    return True
+            for c in extra_tgt:
+                if q in str(tgt_rows_map.get(key, {}).get(c, "")).lower():
+                    return True
+            return False
+
+        rows = [r for r in rows if _row_matches_q(r)]
 
     # ── Tri ──────────────────────────────────────────────────
     reverse = (sort_dir == "desc")

@@ -1,6 +1,6 @@
 # DataAuditor — Manuel utilisateur
 
-**Version 3.5.0 · data/auditor server**
+**Version 3.6.0 · data/auditor server**
 
 ---
 
@@ -150,9 +150,10 @@ Chaque règle reçoit automatiquement une **couleur distincte** visible dans le 
 - **Filtres** : restreignez l'audit à un sous-ensemble de lignes (par valeur d'un champ)
 - **Rapport** : `show_matching` active l'affichage des lignes conformes ; `max_diff_preview` limite la pagination
 - **Méta** : nommez et versionnez votre configuration
-- **`</> YAML`** : ouvre l'éditeur YAML complet pour édition directe
 
 Cliquez **▶ Lancer l'audit** : l'application bascule sur la page résultats avec barre de progression.
+
+> La **barre d'actions** (en haut, persistante) regroupe : **💾** (enregistrer), **Save As…** (enregistrer sous), **‹/›** (éditeur YAML), le nom du fichier config, et les pills des fichiers chargés. À l'étape ⑥, les boutons d'export (CSV, HTML, XLS) s'y ajoutent également.
 
 ---
 
@@ -166,11 +167,12 @@ Source (WMS) : 98 enr. dont 2 absents de la cible  |  Cible (ERP) : 99 enr. dont
 ```
 
 **Barre de filtres** :
+- **Présence dans les deux** : sélectionné par défaut — enregistrements appariés (KO et OK)
 - **Uniquement dans Source** : orphelins absents de la cible (ORPHELIN_A)
-- **Présence dans les deux** : enregistrements appariés ayant au moins un résultat KO ou OK
 - **Uniquement dans Cible** : orphelins absents de la référence (ORPHELIN_B)
-- **Chips de règle** : filtre par règle individuelle (clic pour isoler, clic à nouveau pour tout réafficher)
-- **Recherche texte** : filtre sur la clé de jointure
+- **Chips de règle** : filtre par règle individuelle — **fond vert** = règle de cohérence, **fond rouge** = règle d'incohérence ; le point coloré identifie la règle précise
+- **Bouton AND / OR** (entre le label "Règles" et les chips) : `OR` (défaut) = au moins une règle sélectionnée ; `AND` = toutes les règles sélectionnées doivent être présentes sur l'enregistrement
+- **Recherche** : full-text sur toutes les colonnes affichées (clé, règles, valeurs réf./cible, colonnes supplémentaires)
 
 **Tableau** :
 
@@ -178,11 +180,14 @@ Source (WMS) : 98 enr. dont 2 absents de la cible  |  Cible (ERP) : 99 enr. dont
 |---|---|
 | 👁 | Ouvre la revue côte à côte |
 | Clé | Valeur(s) de la clé de jointure |
-| Règles | Badges colorés des règles déclenchées. Survol = détail (valeur réf. / valeur cible) |
+| Règles | Badges colorés des règles déclenchées. Fond vert (cohérence) ou rouge (incohérence). Survol = détail |
+| ⛶ | Bouton plein écran (dernière colonne de l'en-tête) |
 
 > Les badges grisés correspondent aux règles non sélectionnées dans les filtres.
 
-**Colonnes supplémentaires** : via le sélecteur de colonnes, ajoutez des champs bruts de la référence et/ou de la cible.
+**Colonnes supplémentaires** : via le sélecteur de colonnes, ajoutez des champs bruts de la référence et/ou de la cible. Les colonnes affichent le nom du fichier et le format sur une première ligne fine, puis le nom du champ. Les colonnes sont **redimensionnables** (glisser le bord droit) et **réordonnables par glisser-déposer** — le mélange source/cible est autorisé.
+
+**Mode plein écran** : cliquez sur ⛶ en haut à droite du tableau pour masquer le bandeau de navigation et la barre de filtres. Cliquez à nouveau pour quitter.
 
 **Pagination serveur** : navigation par pages (taille configurable).
 
@@ -191,10 +196,11 @@ Source (WMS) : 98 enr. dont 2 absents de la cible  |  Cible (ERP) : 99 enr. dont
 ### Revue côte à côte (👁)
 
 Ouvrez la revue d'un enregistrement :
-- **En-tête** : clé de l'enregistrement + navigation entre enregistrements voisins
-- **Deux panneaux** : référence (gauche) et cible (droite)
-- Les champs impliqués dans au moins une règle active sont **mis en évidence** (fond jaune)
-- Des **points colorés** identifient les règles liées à chaque champ (même couleur que les badges dans le tableau)
+- **En-tête** : clé de l'enregistrement + pills des règles déclenchées sur cette ligne
+- **Deux panneaux** : référence (gauche) et cible (droite), avec 1 enregistrement de contexte par défaut (réglable)
+- Les champs impliqués dans au moins une règle active sont **mis en évidence** (fond jaune) **des deux côtés**
+- Des **points colorés** identifient les règles liées à chaque champ (couleur propre à chaque règle)
+- **Pills interactives** : cliquez sur une pill de règle dans l'en-tête pour activer/désactiver la mise en évidence de cette règle (toutes sélectionnées par défaut)
 
 ---
 
