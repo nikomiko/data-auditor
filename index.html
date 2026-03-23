@@ -23,7 +23,7 @@
 <header>
   <div class="logo">data<em>/</em>auditor
     <span class="logo-tag">server</span>
-    <span class="logo-ver" id="logo-ver">v3.7.0</span>
+    <span class="logo-ver" id="logo-ver">v3.8.0</span>
     <span id="version-mismatch" style="display:none" title="" class="version-mismatch-badge">⚠ version</span>
   </div>
   <div class="wf-steps" id="wf-steps">
@@ -473,15 +473,17 @@ document.addEventListener('keydown', e => {
 (function () {
   // Service Worker
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').then(function () {
-      navigator.serviceWorker.addEventListener('message', function (e) {
-        if (e.data && e.data.type === 'SW_UPDATED') {
-          var bar = document.getElementById('sw-update-bar');
-          if (bar) bar.style.display = 'flex';
-        }
-      });
-    }).catch(function (err) {
+    var hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('/sw.js').catch(function (err) {
       console.warn('[PWA] SW registration failed:', err);
+    });
+    // Bandeau de mise à jour : seulement quand un nouveau SW remplace l'ancien
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (hadController) {
+        var bar = document.getElementById('sw-update-bar');
+        if (bar) bar.style.display = 'flex';
+      }
+      hadController = true;
     });
   }
 

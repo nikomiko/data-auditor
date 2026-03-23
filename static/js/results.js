@@ -537,8 +537,12 @@ function exportReport(fmt) {
   if (extraTgtCols.length) p.set('extra_tgt', extraTgtCols.join(','));
 
   if (fmt === 'html') {
-    // HTML = vue courante : filtres + recherche en cours
-    if (activeFilters.size) p.set('types', [...activeFilters].join(','));
+    // Traduire activeFilters (BOTH → KO+OK) — le serveur ne connaît pas BOTH
+    const types = new Set();
+    if (activeFilters.has('ORPHELIN_A')) types.add('ORPHELIN_A');
+    if (activeFilters.has('ORPHELIN_B')) types.add('ORPHELIN_B');
+    if (activeFilters.has('BOTH')) { types.add('KO'); types.add('OK'); }
+    if (types.size) p.set('types', [...types].join(','));
     if (activeRuleFilters !== null) p.set('rules', [...activeRuleFilters].join(','));
     if (ruleFilterLogic !== 'OR') p.set('rule_logic', ruleFilterLogic);
     if (filterText) p.set('q', filterText);

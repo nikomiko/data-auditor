@@ -8,7 +8,7 @@
  *   Hors-ligne     → sert la version en cache si disponible
  */
 
-const CACHE_VERSION = 'v3.7.0';
+const CACHE_VERSION = 'v3.8.0';
 const CACHE_NAME    = `dataauditor-${CACHE_VERSION}`;
 
 // Ressources pré-cachées à l'installation
@@ -95,14 +95,6 @@ async function _cacheFirstWithUpdate(request) {
 
   if (cached) {
     // Répondre depuis le cache, laisser le réseau mettre à jour silencieusement
-    networkPromise.then(fresh => {
-      if (fresh) {
-        // Notifier les clients qu'une nouvelle version est disponible
-        self.clients.matchAll().then(clients => {
-          clients.forEach(c => c.postMessage({ type: 'SW_UPDATED' }));
-        });
-      }
-    });
     return cached;
   }
 
