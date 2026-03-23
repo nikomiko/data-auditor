@@ -110,13 +110,9 @@ function _appendPageRow(r) {
   html    += `<td class="tk">${esc(r.join_key)}</td>`;
   html    += `<td><div class="td-ecarts">${badges}</div></td>`;
 
-  extraRefCols.forEach(c => {
-    const v = r._ref?.[c] ?? '';
-    html += `<td class="tv xc xc-ref" title="${esc(v)}">${esc(v)}</td>`;
-  });
-  extraTgtCols.forEach(c => {
-    const v = r._tgt?.[c] ?? '';
-    html += `<td class="tv xc xc-tgt" title="${esc(v)}">${esc(v)}</td>`;
+  _extraColOrder.forEach(({side, col}) => {
+    const v = (side === 'ref' ? r._ref : r._tgt)?.[col] ?? '';
+    html += `<td class="tv xc xc-${side}" title="${esc(v)}">${esc(v)}</td>`;
   });
 
   tr.innerHTML = html;
