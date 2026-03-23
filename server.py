@@ -11,9 +11,12 @@ Endpoints :
 import io
 import json
 import os
+import socket
+import sys
 import time
 import threading
 import uuid
+import webbrowser
 from flask import Flask, request, jsonify, send_file, send_from_directory, Response, stream_with_context
 
 from config_loader import load_config, ConfigError
@@ -26,7 +29,22 @@ from report        import save_history, list_history, load_history, to_csv, to_h
 
 APP_VERSION = "3.6.0"
 
-app = Flask(__name__, static_folder=".", static_url_path="")
+# ── Résolution des chemins (dev vs frozen PyInstaller) ────────
+# _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
+#             → dans _MEIPASS quand frozen (répertoire d'extraction temporaire)
+# _DATA_DIR : données persistantes (reports/)
+#             → à côté du .exe quand frozen (survit aux mises à jour)
+if getattr(sys, "frozen", False):
+    _BASE_DIR = sys._MEIPASS
+    _DATA_DIR = os.path.dirname(sys.executable)
+else:
+    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    _DATA_DIR = _BASE_DIR
+
+# Synchroniser report.REPORTS_DIR avec _DATA_DIR
+report.REPORTS_DIR = os.path.join(_DATA_DIR, "reports")
+
+app = Flask(__name__, static_folder=_BASE_DIR, static_url_path="")
 
 # ── Stockage session ──────────────────────────────────────────
 # Token → {status, results, summary, config, queue}
@@ -43,21 +61,25 @@ def api_version():
 
 @app.route("/")
 def index():
-    return send_from_directory(".", "index.html")
+    return send_from_directory(_BASE_DIR, "index.html")
 
 
 @app.route("/docs/<path:filename>")
 def serve_docs(filename):
-    return send_from_directory("docs", filename)
+    return send_from_directory(os.path.join(_BASE_DIR, "docs"), filename)
 
 
 @app.route("/sample/<path:filename>")
 def serve_sample(filename):
     """Téléchargement des fichiers exemples."""
-    ALLOWED = {"test_audit_demo.yaml", "test_reference.dat", "test_target.csv"}
+    ALLOWED = {"test_audit_demo.yaml", "test_reference.dat", "test_target.csv",
+               "test_unpivot.yaml", "unpivot_ref.csv", "unpivot_target.csv"}
     if filename not in ALLOWED:
         return jsonify({"error": "Fichier non disponible."}), 404
-    return send_from_directory(".", filename, as_attachment=True)
+    sample_dir = os.path.join(_BASE_DIR, "sample")
+    if not os.path.exists(os.path.join(sample_dir, filename)):
+        sample_dir = _BASE_DIR   # fallback : fichiers à la racine
+    return send_from_directory(sample_dir, filename, as_attachment=True)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -874,17 +896,60 @@ def delete_all_history():
     return jsonify({"ok": True})
 
 
+def _find_free_port(start: int = 5000) -> int:
+    """Retourne le premier port TCP libre à partir de `start`."""
+    for port in range(start, start + 50):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(("127.0.0.1", port))
+                return port
+        except OSError:
+            continue
+    raise RuntimeError(f"Aucun port disponible entre {start} et {start + 50}.")
+
+
+def _open_browser_when_ready(url: str, host: str, port: int) -> None:
+    """Attend que le serveur réponde puis ouvre le navigateur."""
+    def _wait_and_open():
+        for _ in range(30):
+            try:
+                with socket.create_connection((host, port), timeout=0.5):
+                    break
+            except OSError:
+                time.sleep(0.3)
+        webbrowser.open(url)
+    threading.Thread(target=_wait_and_open, daemon=True).start()
+
+
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--debug", action="store_true", help="Active les logs de debug filtres")
+    parser = argparse.ArgumentParser(description=f"DataAuditor v{APP_VERSION}")
+    parser.add_argument("--port",       type=int, default=None,
+                        help="Port d'écoute (défaut : premier port libre depuis 5000)")
+    parser.add_argument("--host",       default="127.0.0.1",
+                        help="Interface d'écoute (défaut : 127.0.0.1)")
+    parser.add_argument("--debug",      action="store_true",
+                        help="Active les logs de debug filtres")
+    parser.add_argument("--no-browser", action="store_true",
+                        help="Ne pas ouvrir le navigateur au démarrage")
     args = parser.parse_args()
-    print("=" * 55)
-    print("  DataAuditor — serveur Flask")
+
+    port = args.port or _find_free_port()
+    url  = f"http://{'localhost' if args.host == '127.0.0.1' else args.host}:{port}"
+
+    W = 58
+    print("=" * W)
+    print(f"  DataAuditor v{APP_VERSION}")
+    print(f"  → {url}")
+    print(f"  Rapports  : {report.REPORTS_DIR}")
     if args.debug:
-        import os
         os.environ["DA_DEBUG"] = "1"
-        print("  ⚠  mode DEBUG actif — logs filtres dans le terminal")
-    print("  → http://localhost:5000")
-    print("=" * 55)
-    app.run(debug=args.debug, host="0.0.0.0", port=5000, threaded=True)
+        print("  ⚠  mode DEBUG actif")
+    print("=" * W)
+    print("  Ctrl+C pour arrêter")
+    print()
+
+    if not args.no_browser:
+        _open_browser_when_ready(url, args.host, port)
+
+    app.run(debug=args.debug, host=args.host, port=port, threaded=True)

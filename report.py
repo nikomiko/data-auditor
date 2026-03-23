@@ -8,7 +8,19 @@ import os
 from collections import defaultdict
 from datetime import datetime
 
-REPORTS_DIR = os.path.join(os.path.dirname(__file__), "reports")
+def _get_reports_dir() -> str:
+    """Retourne le répertoire des rapports.
+
+    En mode PyInstaller frozen, les rapports sont stockés à côté du .exe
+    (persistant entre les mises à jour), et non dans le répertoire temporaire
+    d'extraction (_MEIPASS).
+    """
+    import sys as _sys
+    if getattr(_sys, "frozen", False):
+        return os.path.join(os.path.dirname(_sys.executable), "reports")
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "reports")
+
+REPORTS_DIR = _get_reports_dir()
 
 _BASE_FIELDS = ["join_key", "type_ecart", "rule_name", "champ",
                 "valeur_reference", "valeur_cible", "detail"]
