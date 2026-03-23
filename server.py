@@ -27,7 +27,7 @@ from comparator    import compare_with_progress, _build_key_series
 import report
 from report        import save_history, list_history, load_history, to_csv, to_html, to_xlsx
 
-APP_VERSION = "3.8.0"
+APP_VERSION = "3.8.1"
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
 # _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
@@ -438,7 +438,11 @@ def get_results_page(token):
 
     raw          = sess.get("results", [])
     active_types = set(types_str.split(",")) if types_str else None
-    active_rules = set(rules_str.split(",")) if rules_str else None
+    # 'rules' présent dans la requête = filtre explicite ; absent = pas de filtre
+    if 'rules' in request.args:
+        active_rules = set(rules_str.split(",")) if rules_str else set()
+    else:
+        active_rules = None
 
     # ── Grouper par join_key ──────────────────────────────────
     from collections import OrderedDict
@@ -465,11 +469,14 @@ def get_results_page(token):
             return False
         # Filtrage par règle
         if active_rules is not None:
+            orphan_ecarts = [e for e in ecarts
+                             if e["type_ecart"] in ("ORPHELIN_A", "ORPHELIN_B")]
+            # Aucune règle sélectionnée → n'afficher que les orphelins
+            if not active_rules:
+                return bool(orphan_ecarts)
             rule_ecarts = [e for e in ecarts
                            if e["type_ecart"] not in ("ORPHELIN_A", "ORPHELIN_B")
                            and e.get("rule_name") in active_rules]
-            orphan_ecarts = [e for e in ecarts
-                             if e["type_ecart"] in ("ORPHELIN_A", "ORPHELIN_B")]
             if rule_logic == "AND":
                 # Toutes les règles actives doivent être présentes
                 matched = {e.get("rule_name") for e in rule_ecarts}
@@ -569,11 +576,14 @@ def _filter_results_flat(results, active_types, active_rules, rule_logic,
             continue
 
         if active_rules is not None:
+            orph_e = [e for e in ecarts
+                      if e.get("type_ecart") in ("ORPHELIN_A", "ORPHELIN_B")]
+            if not active_rules:
+                out.extend(orph_e)
+                continue
             rule_e = [e for e in ecarts
                       if e.get("type_ecart") not in ("ORPHELIN_A", "ORPHELIN_B")
                       and e.get("rule_name") in active_rules]
-            orph_e = [e for e in ecarts
-                      if e.get("type_ecart") in ("ORPHELIN_A", "ORPHELIN_B")]
             if rule_logic == "AND":
                 matched = {e.get("rule_name") for e in rule_e}
                 if not active_rules.issubset(matched):
@@ -666,7 +676,10 @@ def export():
         q          = request.args.get("q", "").lower().strip()
 
         active_types = set(types_str.split(",")) if types_str else None
-        active_rules = set(rules_str.split(",")) if rules_str else None
+        if 'rules' in request.args:
+            active_rules = set(rules_str.split(",")) if rules_str else set()
+        else:
+            active_rules = None
 
         filtered = _filter_results_flat(
             results, active_types, active_rules, rule_logic, q,

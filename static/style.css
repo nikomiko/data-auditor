@@ -199,8 +199,8 @@ textarea#yaml::placeholder{color:var(--muted)}
 .chip.on.cd{background:var(--dv-bg);border-color:var(--dv);color:var(--dv)}
 .chip.on.co{background:var(--ok-bg);border-color:var(--ok);color:var(--ok)}
 .chip.on.cr{background:#ede9fe;border-color:#7c3aed;color:#5b21b6}
-.chip.on.cr-coh{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok)}
-.chip.on.cr-inc{background:var(--oa-bg);border-color:var(--oa-bd);color:var(--oa)}
+.chip.on.cr-coh{background:#d1fae5;border-color:var(--ok);color:var(--ok)}
+.chip.on.cr-inc{background:#fee2e2;border-color:var(--oa);color:var(--oa)}
 .chip-c{background:rgba(0,0,0,.07);border-radius:99px;padding:0 .4rem;font-family:var(--mono);font-size:.6rem}
 .filter-sep{width:1px;height:18px;background:var(--border);margin:0 .2rem;align-self:center;flex-shrink:0}
 .rule-logic-btn{background:none;border:1px solid var(--border);color:var(--muted);font-size:.6rem;font-weight:700;font-family:var(--mono);padding:.1rem .4rem;border-radius:3px;cursor:pointer;letter-spacing:.05em;transition:all .15s;white-space:nowrap}

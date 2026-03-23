@@ -202,10 +202,10 @@ def to_xlsx(results: list, summary: dict, config: dict,
 
     out = io.BytesIO()
     wb.save(out)
-    return _add_pivot_table(out.getvalue(), hdr_labels)
+    return _add_pivot_table(out.getvalue(), hdr_labels, ws.max_row)
 
 
-def _add_pivot_table(xlsx_bytes: bytes, col_names: list) -> bytes:
+def _add_pivot_table(xlsx_bytes: bytes, col_names: list, n_rows: int) -> bytes:
     """
     Injecte une vraie pivot table Excel dans le fichier XLSX via manipulation ZIP.
 
@@ -236,6 +236,9 @@ def _add_pivot_table(xlsx_bytes: bytes, col_names: list) -> bytes:
     CT_PT    = 'application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml'
 
     n = len(col_names)
+    from openpyxl.utils import get_column_letter as _gcl
+    last_col = _gcl(n)
+    src_ref  = f"A1:{last_col}{n_rows}"   # plage exacte du tableau DATA
 
     # ── pivotCacheDefinition ──────────────────────────────────
     cache_fields = ''.join(
@@ -247,7 +250,7 @@ def _add_pivot_table(xlsx_bytes: bytes, col_names: list) -> bytes:
         f'<pivotCacheDefinition {NS_SS} {NS_R} r:id="rId1"'
         ' refreshedBy="Python" createdVersion="6" refreshedVersion="6"'
         ' minRefreshableVersion="3" refreshOnLoad="1">'
-        '<cacheSource type="worksheet"><worksheetSource name="DATA"/></cacheSource>'
+        f'<cacheSource type="worksheet"><worksheetSource ref={_qa(src_ref)} sheet="DATA"/></cacheSource>'
         f'<cacheFields count="{n}">{cache_fields}</cacheFields>'
         '</pivotCacheDefinition>'
     )
