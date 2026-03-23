@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install Python dependencies
+        run: pip install flask pandas openpyxl pyyaml jinja2 pyinstaller
+
+      - name: Extract version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $v = '${{ github.ref_name }}'.TrimStart('v')
+          echo "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Build with PyInstaller
+        run: pyinstaller build.spec
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        run: iscc /DAppVersion=${{ steps.version.outputs.version }} installer.iss
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "DataAuditor v${{ steps.version.outputs.version }}"
+          body: |
+            ## Installation Windows
+
+            Téléchargez et lancez **DataAuditor_Setup_v${{ steps.version.outputs.version }}.exe** — l'installeur configure l'application, crée les raccourcis et lance le serveur automatiquement au démarrage.
+
+            **Prérequis :** Windows 10/11 64 bits.
+
+            ---
+
+            ## Utilisation sans installation
+
+            Téléchargez le code source et lancez :
+            ```
+            pip install flask pandas openpyxl pyyaml jinja2
+            python server.py
+            ```
+          draft: false
+          prerelease: false
+          files: dist/installer/DataAuditor_Setup_v${{ steps.version.outputs.version }}.exe

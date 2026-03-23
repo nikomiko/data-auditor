@@ -9,6 +9,7 @@ Fichiers mis à jour :
     static/js/state.js        UI_VERSION = 'x.y.z'
     static/sw.js              CACHE_VERSION = 'vx.y.z'
     index.html                <span … id="logo-ver">vx.y.z</span>
+    installer.iss             #define AppVersion "x.y.z"
 """
 import re
 import sys
@@ -52,6 +53,11 @@ def bump(version: str) -> None:
             ROOT / "index.html",
             r'(<span[^>]+id="logo-ver"[^>]*>)[^<]+(</span>)',
             rf"\g<1>{vv}\2",
+        ),
+        (
+            ROOT / "installer.iss",
+            r'(#define AppVersion\s+")[^"]+(")',
+            rf"\g<1>{v}\2",
         ),
     ]
 
