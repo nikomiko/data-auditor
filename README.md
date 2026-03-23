@@ -14,12 +14,12 @@ bash install.sh
 install.bat
 ```
 
-Génère un script de lancement `run.sh` / `dataAuditorServer.bat`.
+Génère un script de lancement `dataAuditor.sh` / `dataAuditorServer.bat`.
 
 ## Utilisation
 
 ```bash
-bash run.sh           # Linux / macOS
+bash dataAuditor.sh   # Linux / macOS
 dataAuditorServer.bat # Windows
 ```
 
