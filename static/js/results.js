@@ -1,6 +1,296 @@
-// ── Ajout d'une ligne au tableau ──────────────────────────
+// ═══════════════════════════════════════════════════════════
+//  COULEURS PAR RÈGLE
+// ═══════════════════════════════════════════════════════════
+const RULE_COLORS = [
+  '#6366f1','#f59e0b','#10b981','#ef4444','#3b82f6',
+  '#8b5cf6','#f97316','#14b8a6','#ec4899','#84cc16',
+];
+function ruleColor(ruleName) {
+  const idx = (lastConfig?.rules || []).findIndex(r => r.name === ruleName);
+  return idx >= 0 ? RULE_COLORS[idx % RULE_COLORS.length] : '#94a3b8';
+}
+
+function ruleType(ruleName) {
+  const rule = (lastConfig?.rules || []).find(r => r.name === ruleName);
+  return rule?.rule_type || 'incoherence';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PAGINATION SERVEUR — fetch + render
+// ═══════════════════════════════════════════════════════════
+async function fetchPage(page) {
+  if (!currentToken) { rebuildTable(); return; }
+  _pageNum = page;
+
+  const p = new URLSearchParams({ page, size: _pageSize });
+
+  // Types actifs : orphelins depuis activeFilters, KO+OK si BOTH actif
+  const types = new Set();
+  if (activeFilters.has('ORPHELIN_A')) types.add('ORPHELIN_A');
+  if (activeFilters.has('ORPHELIN_B')) types.add('ORPHELIN_B');
+  if (activeFilters.has('BOTH'))       { types.add('KO'); types.add('OK'); }
+  p.set('types', [...types].join(','));
+
+  if (activeRuleFilters !== null) {
+    p.set('rules', [...activeRuleFilters].join(','));
+    p.set('rule_logic', ruleFilterLogic);
+  }
+  if (filterText) p.set('q', filterText);
+  if (sortCol)  { p.set('sort', sortCol); p.set('dir', sortDir === -1 ? 'desc' : 'asc'); }
+  if (extraRefCols.length) p.set('extra_ref', extraRefCols.join(','));
+  if (extraTgtCols.length) p.set('extra_tgt', extraTgtCols.join(','));
+
+  try {
+    const data = await fetch(`/api/results/${currentToken}?${p}`).then(r => r.json());
+    if (data.error) { showErr(data.error); return; }
+    _pageTot   = data.total;
+    _pagePages = data.pages;
+    _pageNum   = data.page;
+    _syncExtraHeaders();
+    _renderPage(data.results);
+    _renderPagination();
+  } catch(e) { showErr('Erreur pagination : ' + e.message); }
+}
+
+async function fetchMeta() {
+  if (!currentToken) return;
+  try {
+    const meta = await fetch(`/api/results/${currentToken}/meta`).then(r => r.json());
+    if (meta.error) return;
+    _updateRuleChipCounts(meta.rule_counts || {});
+    _renderColumnPicker(meta.ref_columns || [], meta.tgt_columns || []);
+  } catch(_) {}
+}
+
+function _refresh() {
+  if (currentToken) fetchPage(1);
+  else              rebuildTable();
+}
+
+// ── Rendu d'une page de résultats ─────────────────────────
+function _renderPage(rows) {
+  const tbody = document.getElementById('tbody');
+  const empty = document.getElementById('empty');
+  tbody.innerHTML = '';
+  if (!rows.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  rows.forEach(r => _appendPageRow(r));
+}
+
+const _EYE_SVG = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+
+function _appendPageRow(r) {
+  const tbody = document.getElementById('tbody');
+  const tr    = document.createElement('tr');
+
+  // Badges pour chaque écart
+  const badges = (r.ecarts || []).map(e => {
+    const isOrphan = e.type_ecart === 'ORPHELIN_A' || e.type_ecart === 'ORPHELIN_B';
+    const dotColor = (!isOrphan && e.rule_name) ? ruleColor(e.rule_name) : null;
+    const dot      = dotColor ? `<span class="rule-dot" style="background:${dotColor}"></span>` : '';
+    const lbl      = isOrphan ? _typeLabel(e.type_ecart) : esc(e.rule_name || e.type_ecart);
+    const title    = e.rule_name && !isOrphan
+      ? `${esc(e.rule_name)} — réf: ${esc(e.valeur_reference)} / cible: ${esc(e.valeur_cible)}`
+      : '';
+    const dimmed   = (activeRuleFilters !== null && !isOrphan && e.rule_name && !activeRuleFilters.has(e.rule_name))
+      ? ' dimmed' : '';
+    const cls      = isOrphan ? `badge badge-${e.type_ecart}` : `rule-badge${dimmed}`;
+    let style = '';
+    if (!isOrphan && e.rule_name) {
+      const rt = ruleType(e.rule_name);
+      style = rt === 'coherence'
+        ? ` style="background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok)"`
+        : ` style="background:var(--oa-bg);border-color:var(--oa-bd);color:var(--oa)"`;
+    }
+    const dataRule = e.rule_name ? ` data-rule="${esc(e.rule_name)}"` : '';
+    return `<button class="${cls}"${style}${dataRule} title="${title}">${dot}${lbl}</button>`;
+  }).join('');
+
+  let html = `<td class="td-eye"><button class="eye-btn" title="Voir le contexte">${_EYE_SVG}</button></td>`;
+  html    += `<td class="tk">${esc(r.join_key)}</td>`;
+  html    += `<td><div class="td-ecarts">${badges}</div></td>`;
+
+  extraRefCols.forEach(c => {
+    const v = r._ref?.[c] ?? '';
+    html += `<td class="tv xc xc-ref" title="${esc(v)}">${esc(v)}</td>`;
+  });
+  extraTgtCols.forEach(c => {
+    const v = r._tgt?.[c] ?? '';
+    html += `<td class="tv xc xc-tgt" title="${esc(v)}">${esc(v)}</td>`;
+  });
+
+  tr.innerHTML = html;
+
+  // Clic sur un badge de règle → filtrer sur cette règle
+  tr.querySelectorAll('.rule-badge[data-rule]').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); filterToRule(btn.dataset.rule); });
+  });
+  tr.querySelector('.eye-btn').addEventListener('click', () => openCtxModal(r.join_key, r.ecarts || []));
+  tbody.appendChild(tr);
+}
+
+function _typeLabel(t) {
+  if (t === 'ORPHELIN_A') return 'Absent cible';
+  if (t === 'ORPHELIN_B') return 'Absent source';
+  return t;
+}
+
+// ── En-têtes colonnes supplémentaires ─────────────────────
+function _syncExtraHeaders() {
+  const tr    = document.querySelector('#wfv-6 table thead tr');
+  if (!tr) return;
+  tr.querySelectorAll('.th-extra').forEach(th => th.remove());
+
+  // Insérer avant th-fs (toujours dernier)
+  const fsTh = document.getElementById('th-fs');
+
+  const refFile = fileRef?.name || '';
+  const tgtFile = fileTgt?.name || '';
+  const refFmt  = (WS?.sources?.reference?.format || '').toUpperCase();
+  const tgtFmt  = (WS?.sources?.target?.format    || '').toUpperCase();
+
+  const mkTh = (side, col) => {
+    const th = document.createElement('th');
+    th.className = `th-extra th-extra-${side}`;
+    th.style.position = 'relative';
+    th.title = `Source ${side === 'ref' ? 'A' : 'B'} — ${col}`;
+    const file = side === 'ref' ? refFile : tgtFile;
+    const fmt  = side === 'ref' ? refFmt  : tgtFmt;
+    const meta = [file, fmt].filter(Boolean).join(' · ');
+    th.innerHTML = `<div class="th-meta">${esc(meta)}</div><div class="th-field">${esc(col)}</div><div class="col-resize-handle"></div>`;
+    _addColResize(th);
+    _addColDrag(th, side, col);
+    tr.insertBefore(th, fsTh);
+  };
+
+  // Suivre l'ordre mixte; ajouter les colonnes sélectionnées absentes de _extraColOrder
+  const inOrder = new Set(_extraColOrder.map(e => e.side + ':' + e.col));
+  extraRefCols.forEach(c => { if (!inOrder.has('ref:' + c)) _extraColOrder.push({side:'ref', col:c}); });
+  extraTgtCols.forEach(c => { if (!inOrder.has('tgt:' + c)) _extraColOrder.push({side:'tgt', col:c}); });
+  // Purger les colonnes désélectionnées
+  _extraColOrder = _extraColOrder.filter(e =>
+    (e.side === 'ref' ? extraRefCols : extraTgtCols).includes(e.col)
+  );
+
+  _extraColOrder.forEach(({side, col}) => mkTh(side, col));
+}
+
+function _addColResize(th) {
+  const handle = th.querySelector('.col-resize-handle');
+  if (!handle) return;
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.pageX;
+    const startW = th.offsetWidth;
+    const onMove = ev => { th.style.width = Math.max(60, startW + ev.pageX - startX) + 'px'; };
+    const onUp   = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function _addColDrag(th, side, col) {
+  th.draggable = true;
+  th.addEventListener('dragstart', e => {
+    e.dataTransfer.setData('text/plain', JSON.stringify({side, col}));
+    th.classList.add('col-dragging');
+  });
+  th.addEventListener('dragend', () => th.classList.remove('col-dragging'));
+  th.addEventListener('dragover', e => { e.preventDefault(); th.classList.add('col-drag-over'); });
+  th.addEventListener('dragleave', () => th.classList.remove('col-drag-over'));
+  th.addEventListener('drop', e => {
+    e.preventDefault();
+    th.classList.remove('col-drag-over');
+    let parsed;
+    try { parsed = JSON.parse(e.dataTransfer.getData('text/plain')); } catch(_) { return; }
+    const {side: fromSide, col: fromCol} = parsed;
+    if (fromSide === side && fromCol === col) return;
+    // Réordonner _extraColOrder (cross-side autorisé)
+    const fromIdx = _extraColOrder.findIndex(e => e.side === fromSide && e.col === fromCol);
+    const toIdx   = _extraColOrder.findIndex(e => e.side === side   && e.col === col);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const [moved] = _extraColOrder.splice(fromIdx, 1);
+    _extraColOrder.splice(toIdx, 0, moved);
+    _syncExtraHeaders();
+    if (currentToken) fetchPage(_pageNum);
+  });
+}
+
+// ── Plein écran résultats ──────────────────────────────────
+function toggleResultsFS() {
+  const isFs = document.body.classList.toggle('results-fs');
+  const btn = document.querySelector('.th-fs-btn');
+  if (btn) btn.title = isFs ? 'Quitter le plein écran' : 'Plein écran';
+}
+
+// ── Pagination controls ────────────────────────────────────
+function _renderPagination() {
+  const bar = document.getElementById('pagination-bar');
+  if (!bar) return;
+  if (!currentToken || _pagePages <= 1) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  const from = ((_pageNum - 1) * _pageSize + 1).toLocaleString('fr-FR');
+  const to   = Math.min(_pageNum * _pageSize, _pageTot).toLocaleString('fr-FR');
+  const tot  = _pageTot.toLocaleString('fr-FR');
+  const sizeSel = [50, 100, 200, 500].map(n =>
+    `<option value="${n}"${n === _pageSize ? ' selected' : ''}>${n}</option>`).join('');
+  const pageSel = Array.from({length: _pagePages}, (_, i) =>
+    `<option value="${i+1}"${i+1 === _pageNum ? ' selected' : ''}>${i+1}</option>`).join('');
+  bar.innerHTML = `
+    <button class="btn-xs" ${_pageNum <= 1 ? 'disabled' : ''} onclick="fetchPage(${_pageNum-1})">← Préc.</button>
+    <span class="pag-info">${from}–${to} / ${tot}</span>
+    <select class="pag-sel" onchange="fetchPage(+this.value)">${pageSel}</select>
+    <span class="pag-sep">|</span>
+    <select class="pag-sel" onchange="_setPageSize(+this.value)" title="Lignes par page">${sizeSel} / page</select>
+    <button class="btn-xs" ${_pageNum >= _pagePages ? 'disabled' : ''} onclick="fetchPage(${_pageNum+1})">Suiv. →</button>`;
+}
+
+function _setPageSize(n) { _pageSize = n; fetchPage(1); }
+
+// ── Sélecteur de colonnes supplémentaires ─────────────────
+function _renderColumnPicker(refCols, tgtCols) {
+  const panel = document.getElementById('col-picker');
+  if (!panel) return;
+  if (!refCols.length && !tgtCols.length) { panel.style.display = 'none'; return; }
+  panel.style.display = '';
+
+  const refLbl = esc(WS?.sources?.reference?.label || refLabel || 'Source A');
+  const tgtLbl = esc(WS?.sources?.target?.label    || tgtLabel || 'Source B');
+
+  const mkGroup = (label, cols, side) => {
+    if (!cols.length) return '';
+    const checks = cols.map(c => {
+      const sel = (side === 'ref' ? extraRefCols : extraTgtCols).includes(c);
+      return `<label class="col-pick-item col-pick-${side}">
+        <input type="checkbox" ${sel ? 'checked' : ''} onchange="_toggleExtraCol('${side}','${esc(c)}',this.checked)">
+        ${esc(c)}</label>`;
+    }).join('');
+    const color = side === 'ref' ? 'var(--ok)' : 'var(--ob)';
+    return `<div class="col-pick-group"><span class="col-pick-lbl" style="color:${color}">${label}</span>${checks}</div>`;
+  };
+
+  document.getElementById('col-picker-body').innerHTML =
+    mkGroup(refLbl, refCols, 'ref') + mkGroup(tgtLbl, tgtCols, 'tgt');
+}
+
+function _toggleExtraCol(side, col, checked) {
+  if (side === 'ref') {
+    if (checked) { if (!extraRefCols.includes(col)) extraRefCols.push(col); }
+    else extraRefCols = extraRefCols.filter(c => c !== col);
+  } else {
+    if (checked) { if (!extraTgtCols.includes(col)) extraTgtCols.push(col); }
+    else extraTgtCols = extraTgtCols.filter(c => c !== col);
+  }
+  _syncExtraHeaders();
+  if (currentToken) fetchPage(_pageNum);
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  HISTORIQUE — rendu local (allResults)
+// ═══════════════════════════════════════════════════════════
 function appendRow(r) {
-  // Orphelins filtrés par type ; KO/DIVERGENT filtrés uniquement par règle
   if (r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') {
     if (!activeFilters.has(r.type_ecart)) return;
   }
@@ -14,11 +304,9 @@ function appendRow(r) {
     <td>${r.rule_name ? `<button class="rule-chip">${esc(r.rule_name)}</button>` : ''}</td>
     <td class="tv r" title="${esc(r.valeur_reference)}">${esc(r.valeur_reference)}</td>
     <td class="tv t" title="${esc(r.valeur_cible)}">${esc(r.valeur_cible)}</td>
-    <td class="td-eye"><button class="eye-btn" title="Voir le détail"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></td>`;
-  // Listeners via closure — évite le problème des guillemets dans les attributs onclick HTML
+    <td class="td-eye"><button class="eye-btn" title="Voir le contexte"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></td>`;
   const ruleBtn = tr.querySelector('.rule-chip');
   if (ruleBtn) {
-    // Solo style : appliqué ici car rebuildTable() recrée les lignes après filterToRule()
     if (activeRuleFilters && activeRuleFilters.size === 1 && activeRuleFilters.has(r.rule_name))
       ruleBtn.classList.add('solo');
     ruleBtn.addEventListener('click', () => filterToRule(r.rule_name));
@@ -27,38 +315,66 @@ function appendRow(r) {
   tbody.appendChild(tr);
 }
 
-function updateLiveCounts() {
-  // Pendant le streaming, on n'a pas encore lastConfig.rules → on compte juste les orphelins
-  let oa = 0, ob = 0;
-  allResults.forEach(r => {
-    if (r.type_ecart === 'ORPHELIN_A') oa++;
-    else if (r.type_ecart === 'ORPHELIN_B') ob++;
+function rebuildTable() {
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  const empty = document.getElementById('empty');
+
+  let rows = allResults.filter(r => {
+    if ((r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') && !activeFilters.has(r.type_ecart)) return false;
+    if (activeRuleFilters !== null && r.rule_name && !activeRuleFilters.has(r.rule_name)) return false;
+    if (!_rowMatchesText(r)) return false;
+    return true;
   });
-  document.getElementById('c-oa').textContent = oa;
-  document.getElementById('c-ob').textContent = ob;
-  // Counts cohérence/incohérence mis à jour par updateChipCounts après summary
+  if (sortCol) {
+    const key = _SORT_KEY[sortCol];
+    rows = rows.slice().sort((a, b) => {
+      const va = (a[key] || '').toString().toLowerCase();
+      const vb = (b[key] || '').toString().toLowerCase();
+      return va < vb ? -sortDir : va > vb ? sortDir : 0;
+    });
+  }
+  if (!rows.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  rows.forEach(r => appendRow(r));
+  // Pas de pagination pour l'historique (données déjà limitées côté serveur)
+  const bar = document.getElementById('pagination-bar');
+  if (bar) bar.style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  COMPTEURS
+// ═══════════════════════════════════════════════════════════
+function updateLiveCounts() {
+  document.getElementById('c-oa').textContent = _liveOA;
+  document.getElementById('c-ob').textContent = _liveOB;
 }
 
 function updateChipCounts() {
-  const counts = { ORPHELIN_A:0, ORPHELIN_B:0 };
-  const ruleTypeCounts = { coherence:0, incoherence:0 };
-  const ruleTypeMap = {};
-  (lastConfig?.rules || []).forEach(r => { ruleTypeMap[r.name] = r.rule_type || 'coherence'; });
-  allResults.forEach(r => {
-    if (r.type_ecart === 'ORPHELIN_A') counts.ORPHELIN_A++;
-    else if (r.type_ecart === 'ORPHELIN_B') counts.ORPHELIN_B++;
-    else if (r.rule_name) {
-      // KO → incoherence ; OK → coherence (selon le nouveau modèle)
-      const rt = ruleTypeMap[r.rule_name] || 'coherence';
-      ruleTypeCounts[rt]++;
-    }
-  });
-  document.getElementById('c-oa').textContent  = counts.ORPHELIN_A;
-  document.getElementById('c-ob').textContent  = counts.ORPHELIN_B;
-  document.getElementById('c-coh').textContent = ruleTypeCounts.coherence;
-  document.getElementById('c-inc').textContent = ruleTypeCounts.incoherence;
+  const oa = lastSummary.orphelins_a || 0;
+  const ob = lastSummary.orphelins_b || 0;
+  document.getElementById('c-oa').textContent  = oa;
+  document.getElementById('c-ob').textContent  = ob;
+  // "Présence dans les deux" = clés avec au moins un résultat de règle (KO ou OK émis)
+  const both = (lastSummary.divergents || 0) + (lastSummary.ok || 0);
+  const bothEl = document.getElementById('c-both');
+  if (bothEl) bothEl.textContent = both.toLocaleString('fr-FR');
 }
 
+function _updateRuleChipCounts(ruleCounts) {
+  const rules = lastConfig?.rules || [];
+  rules.forEach(rule => {
+    const cnt = ruleCounts[rule.name] || 0;
+    document.querySelectorAll(`#filter-dynamic .chip[data-t="${CSS.escape(rule.name)}"]`).forEach(btn => {
+      const sp = btn.querySelector('.chip-c');
+      if (sp) sp.textContent = cnt;
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  FILTER BAR
+// ═══════════════════════════════════════════════════════════
 function ruleTooltip(rule) {
   const OP_LABEL = { equals:'=', '=':'=', differs:'≠', '<>':'≠', greater:'>',  '>':'>',
                      less:'<', '<':'<', contains:'∋', not_contains:'∌' };
@@ -66,18 +382,13 @@ function ruleTooltip(rule) {
   const logic = rule.logic || 'AND';
   const fields = (rule.fields || []).map(f => {
     const op = OP_LABEL[f.operator] || f.operator || '=';
-    // source_data / target_data form
     if (f.source_data) {
       const src = f.source_data.field || '?';
       const tgt = f.target_data?.field || f.target_data?.value || '?';
       const tol = f.target_data?.tolerance ? ` ±${f.target_data.tolerance}` : '';
       return `  • ${src} ${op} ${tgt}${tol}`;
     }
-    // fixed target_value
-    if (f.target_value !== undefined) {
-      return `  • ${f.source_field || '?'} ${op} "${f.target_value}"`;
-    }
-    // standard source_field / target_field
+    if (f.target_value !== undefined) return `  • ${f.source_field || '?'} ${op} "${f.target_value}"`;
     const src = f.source_field || '?';
     const tgt = f.target_field || '?';
     const tol = f.tolerance ? ` ±${f.tolerance}` : '';
@@ -91,20 +402,9 @@ function buildRuleFilterBar(summary, config) {
   dyn.innerHTML = '';
   const rules = config?.rules || [];
 
-  // Afficher / masquer les chips groupe cohérence / incohérence
-  const hasCoh = rules.some(r => (r.rule_type || 'coherence') === 'coherence');
-  const hasInc = rules.some(r => r.rule_type === 'incoherence');
-  const showGroup = hasCoh || hasInc;
-  document.getElementById('sep-ruletype').style.display  = showGroup ? '' : 'none';
-  document.getElementById('grp-ruletype').style.display  = showGroup ? '' : 'none';
-  document.getElementById('chip-coh').style.display      = hasCoh ? '' : 'none';
-  document.getElementById('chip-inc').style.display      = hasInc ? '' : 'none';
-
   if (!rules.length) { activeRuleFilters = null; return; }
-
   activeRuleFilters = new Set(rules.map(r => r.name));
 
-  if (!rules.length) return;
   const sep = document.createElement('div');
   sep.className = 'filter-sep';
   dyn.appendChild(sep);
@@ -113,30 +413,44 @@ function buildRuleFilterBar(summary, config) {
   grp.className = 'filter-group';
   grp.innerHTML = '<span class="filter-group-label">Règles</span>';
 
-  // Comptage par règle depuis allResults (rule_stats ne couvre que les KO)
-  const ruleCounts = {};
-  allResults.forEach(r => {
-    if (r.rule_name) ruleCounts[r.rule_name] = (ruleCounts[r.rule_name] || 0) + 1;
+  const logicBtn = document.createElement('button');
+  logicBtn.id = 'rule-logic-btn';
+  logicBtn.className = 'rule-logic-btn' + (ruleFilterLogic === 'AND' ? ' is-and' : '');
+  logicBtn.textContent = ruleFilterLogic;
+  logicBtn.title = 'AND : toutes les règles sélectionnées doivent correspondre\nOR : au moins une règle suffit';
+  logicBtn.addEventListener('click', () => {
+    ruleFilterLogic = ruleFilterLogic === 'OR' ? 'AND' : 'OR';
+    logicBtn.textContent = ruleFilterLogic;
+    logicBtn.classList.toggle('is-and', ruleFilterLogic === 'AND');
+    _refresh();
   });
+  grp.appendChild(logicBtn);
 
-  rules.forEach(rule => {
-    const ruleType = rule.rule_type || 'coherence';
-    const cnt = ruleCounts[rule.name] || 0;
-    const btn = document.createElement('button');
-    btn.className = ruleType === 'incoherence' ? 'chip ca on' : 'chip co on';
-    btn.dataset.kind     = 'rule';
-    btn.dataset.t        = rule.name;
-    btn.dataset.ruleType = ruleType;
-    btn.title = ruleTooltip(rule);
+  rules.forEach((rule, idx) => {
+    const dotColor = RULE_COLORS[idx % RULE_COLORS.length];
+    const isCoh    = rule.rule_type === 'coherence';
+    const btn      = document.createElement('button');
+    btn.className      = 'chip on ' + (isCoh ? 'cr-coh' : 'cr-inc');
+    btn.dataset.kind   = 'rule';
+    btn.dataset.t      = rule.name;
+    btn.title          = ruleTooltip(rule);
     btn.addEventListener('click', function() { toggleChip(this); });
-    btn.innerHTML = `${esc(rule.name)} <span class="chip-c">${cnt}</span>`;
+    btn.innerHTML = `<span class="rule-dot" style="background:${dotColor}"></span>${esc(rule.name)} <span class="chip-c">…</span>`;
     grp.appendChild(btn);
   });
   dyn.appendChild(grp);
+
+  // Mettre à jour les labels de présence avec les labels source/cible
+  const rL = WS?.sources?.reference?.label || refLabel || 'Source';
+  const tL = WS?.sources?.target?.label    || tgtLabel || 'Cible';
+  const oaLbl = document.getElementById('chip-lbl-oa');
+  const obLbl = document.getElementById('chip-lbl-ob');
+  if (oaLbl) oaLbl.textContent = rL;
+  if (obLbl) obLbl.textContent = tL;
 }
 
 // ═══════════════════════════════════════════════════════════
-//  FILTERS
+//  FILTRES & TRI
 // ═══════════════════════════════════════════════════════════
 function toggleChip(btn) {
   const kind = btn.dataset.kind || 'type';
@@ -146,46 +460,14 @@ function toggleChip(btn) {
 
   if (kind === 'type') {
     if (isOn) activeFilters.delete(t); else activeFilters.add(t);
-
-  } else if (kind === 'ruletype') {
-    // Active/désactive toutes les règles du type cohérence ou incohérence
-    if (!activeRuleFilters) {
-      activeRuleFilters = new Set((lastConfig?.rules || []).map(r => r.name));
-    }
-    (lastConfig?.rules || []).forEach(r => {
-      if ((r.rule_type || 'coherence') === t) {
-        if (isOn) activeRuleFilters.delete(r.name);
-        else      activeRuleFilters.add(r.name);
-      }
-    });
-    // Sync pills individuelles du même type
-    document.querySelectorAll(`#filter-dynamic .chip[data-kind="rule"][data-rule-type="${t}"]`).forEach(p => {
-      p.classList.toggle('on', !isOn);
-    });
-
   } else if (kind === 'rule') {
-    if (!activeRuleFilters) {
-      activeRuleFilters = new Set((lastConfig?.rules || []).map(r => r.name));
-    }
+    if (!activeRuleFilters) activeRuleFilters = new Set((lastConfig?.rules || []).map(r => r.name));
     if (isOn) activeRuleFilters.delete(t); else activeRuleFilters.add(t);
-    // Sync chip groupe : on si au moins une règle du même type est active
-    _syncRuletypeChips();
   }
-  rebuildTable();
-}
-
-function _syncRuletypeChips() {
-  ['coherence','incoherence'].forEach(rt => {
-    const rulesOfType = (lastConfig?.rules || []).filter(r => (r.rule_type||'coherence') === rt).map(r => r.name);
-    if (!rulesOfType.length) return;
-    const anyOn = rulesOfType.some(n => !activeRuleFilters || activeRuleFilters.has(n));
-    const chip = document.getElementById(rt === 'coherence' ? 'chip-coh' : 'chip-inc');
-    if (chip) chip.classList.toggle('on', anyOn);
-  });
+  _refresh();
 }
 
 function filterToRule(name) {
-  // Solo : si déjà seule règle active → tout réactiver, sinon → isoler
   const isSolo = activeRuleFilters && activeRuleFilters.size === 1 && activeRuleFilters.has(name);
   if (isSolo) {
     const rules = lastConfig?.rules || [];
@@ -193,26 +475,21 @@ function filterToRule(name) {
   } else {
     activeRuleFilters = new Set([name]);
   }
-  // Sync visuels chips règles et chips groupe
   document.querySelectorAll('#filter-dynamic .chip[data-kind="rule"]').forEach(btn => {
-    const on = !activeRuleFilters || activeRuleFilters.has(btn.dataset.t);
-    btn.classList.toggle('on', on);
+    btn.classList.toggle('on', !activeRuleFilters || activeRuleFilters.has(btn.dataset.t));
   });
-  _syncRuletypeChips();
-  // rebuildTable recrée les lignes — appendRow applique le style solo directement
-  rebuildTable();
+  _refresh();
 }
 
 function setFilterText(v) {
   filterText = v.trim().toLowerCase();
-  rebuildTable();
+  _refresh();
 }
 
 function setSortCol(col) {
   if (sortCol === col) { sortDir = -sortDir; }
   else { sortCol = col; sortDir = 1; }
-  // Mise à jour visuelle des icônes
-  ['key','type','rule','ref','tgt'].forEach(c => {
+  ['key','type'].forEach(c => {
     const th = document.getElementById('si-' + c)?.parentElement;
     const ic = document.getElementById('si-' + c);
     if (!th || !ic) return;
@@ -223,59 +500,56 @@ function setSortCol(col) {
       ic.textContent = sortDir === 1 ? '↑' : '↓';
     }
   });
-  rebuildTable();
+  _refresh();
 }
 
+// Mapping colonne → champ (pour le tri des données historique plates)
 const _SORT_KEY = { key:'join_key', type:'type_ecart', rule:'rule_name', ref:'valeur_reference', tgt:'valeur_cible' };
 
 function _rowMatchesText(r) {
   if (!filterText) return true;
-  return (r.join_key || '').toLowerCase().includes(filterText)
-      || (r.valeur_reference || '').toLowerCase().includes(filterText)
-      || (r.valeur_cible || '').toLowerCase().includes(filterText);
-}
-
-function rebuildTable() {
-  const tbody = document.getElementById('tbody');
-  tbody.innerHTML = '';
-  const max = lastConfig?.report?.max_diff_preview || 500;
-
-  let rows = allResults.filter(r => {
-    if ((r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') && !activeFilters.has(r.type_ecart)) return false;
-    if (activeRuleFilters !== null && r.rule_name && !activeRuleFilters.has(r.rule_name)) return false;
-    if (!_rowMatchesText(r)) return false;
-    return true;
-  });
-
-  if (sortCol) {
-    const key = _SORT_KEY[sortCol];
-    rows = rows.slice().sort((a, b) => {
-      const va = (a[key] || '').toString().toLowerCase();
-      const vb = (b[key] || '').toString().toLowerCase();
-      return va < vb ? -sortDir : va > vb ? sortDir : 0;
-    });
+  if ((r.join_key || '').toLowerCase().includes(filterText)) return true;
+  for (const e of (r.ecarts || [])) {
+    if ((e.rule_name || '').toLowerCase().includes(filterText)) return true;
+    if ((e.valeur_reference || '').toLowerCase().includes(filterText)) return true;
+    if ((e.valeur_cible || '').toLowerCase().includes(filterText)) return true;
+    if ((e.champ || '').toLowerCase().includes(filterText)) return true;
   }
-
-  rows.slice(0, max).forEach(r => appendRow(r));
+  for (const c of extraRefCols) {
+    if (String(r._ref?.[c] ?? '').toLowerCase().includes(filterText)) return true;
+  }
+  for (const c of extraTgtCols) {
+    if (String(r._tgt?.[c] ?? '').toLowerCase().includes(filterText)) return true;
+  }
+  return false;
 }
 
 // ═══════════════════════════════════════════════════════════
 //  EXPORT
 // ═══════════════════════════════════════════════════════════
 function exportReport(fmt) {
-  if (fmt === 'csv') {
-    if (!currentToken) return;
-    window.location.href = `/api/export?token=${currentToken}&format=csv`;
-  } else if (fmt === 'xlsx') {
-    if (!currentToken) return;
-    window.location.href = `/api/export?token=${currentToken}&format=xlsx`;
-  } else {
-    exportHTMLDynamic();
+  if (!currentToken) { exportHTMLDynamic(); return; }
+
+  const p = new URLSearchParams({ token: currentToken, format: fmt });
+
+  // Colonnes supplémentaires actuellement sélectionnées
+  if (extraRefCols.length) p.set('extra_ref', extraRefCols.join(','));
+  if (extraTgtCols.length) p.set('extra_tgt', extraTgtCols.join(','));
+
+  if (fmt === 'html') {
+    // HTML = vue courante : filtres + recherche en cours
+    if (activeFilters.size) p.set('types', [...activeFilters].join(','));
+    if (activeRuleFilters !== null) p.set('rules', [...activeRuleFilters].join(','));
+    if (ruleFilterLogic !== 'OR') p.set('rule_logic', ruleFilterLogic);
+    if (filterText) p.set('q', filterText);
   }
+  // CSV et XLSX : tous les résultats (pas de filtre), extra cols seulement
+
+  window.location.href = `/api/export?${p}`;
 }
 
 function _getVisibleRows() {
-  // Reconstruit la liste visible (filtres + tri actuels) sans limite max
+  // Pour l'export HTML historique (sans token) uniquement
   const rows = allResults.filter(r => {
     if ((r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') && !activeFilters.has(r.type_ecart)) return false;
     if (activeRuleFilters !== null && r.rule_name && !activeRuleFilters.has(r.rule_name)) return false;
@@ -352,15 +626,15 @@ th.sort-asc .sort-ic,th.sort-desc .sort-ic{opacity:1;color:#3b82f6}
 <div class="cards">
   <div class="card"><div class="v">${s.total_reference||0}</div><div class="l">R\xe9f.</div></div>
   <div class="card"><div class="v">${s.total_cible||0}</div><div class="l">Cible</div></div>
-  <div class="card ca"><div class="v">${s.orphelins_a||0}</div><div class="l">Orphelins A</div></div>
-  <div class="card cb"><div class="v">${s.orphelins_b||0}</div><div class="l">Orphelins B</div></div>
+  <div class="card ca"><div class="v">${s.orphelins_a||0}</div><div class="l">Pas dans la cible</div></div>
+  <div class="card cb"><div class="v">${s.orphelins_b||0}</div><div class="l">Pas dans la réf.</div></div>
   <div class="card cd"><div class="v">${s.divergents||0}</div><div class="l">KO</div></div>
   <div class="card co"><div class="v">${s.ok||0}</div><div class="l">OK</div></div>
 </div>
 <div class="filter-bar">
   <span class="fl">Types</span>
-  <button class="chip ca on" data-k="type" data-v="ORPHELIN_A" onclick="toggleChip(this)">Orphelin A <span class="chip-c" id="cc-a">0</span></button>
-  <button class="chip cb on" data-k="type" data-v="ORPHELIN_B" onclick="toggleChip(this)">Orphelin B <span class="chip-c" id="cc-b">0</span></button>
+  <button class="chip ca on" data-k="type" data-v="ORPHELIN_A" onclick="toggleChip(this)">Pas dans la cible <span class="chip-c" id="cc-a">0</span></button>
+  <button class="chip cb on" data-k="type" data-v="ORPHELIN_B" onclick="toggleChip(this)">Pas dans la réf. <span class="chip-c" id="cc-b">0</span></button>
   <button class="chip cd on" data-k="type" data-v="KO" onclick="toggleChip(this)">KO <span class="chip-c" id="cc-ko">0</span></button>
   <button class="chip co on" data-k="type" data-v="OK" onclick="toggleChip(this)">OK <span class="chip-c" id="cc-ok">0</span></button>
   ${ruleChips}
@@ -441,4 +715,3 @@ initCounts();render();
   a.click();
   URL.revokeObjectURL(a.href);
 }
-

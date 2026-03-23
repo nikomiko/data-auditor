@@ -11,9 +11,12 @@ Endpoints :
 import io
 import json
 import os
+import socket
+import sys
 import time
 import threading
 import uuid
+import webbrowser
 from flask import Flask, request, jsonify, send_file, send_from_directory, Response, stream_with_context
 
 from config_loader import load_config, ConfigError
@@ -24,7 +27,24 @@ from comparator    import compare_with_progress, _build_key_series
 import report
 from report        import save_history, list_history, load_history, to_csv, to_html, to_xlsx
 
-app = Flask(__name__, static_folder=".", static_url_path="")
+APP_VERSION = "3.6.0"
+
+# ── Résolution des chemins (dev vs frozen PyInstaller) ────────
+# _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
+#             → dans _MEIPASS quand frozen (répertoire d'extraction temporaire)
+# _DATA_DIR : données persistantes (reports/)
+#             → à côté du .exe quand frozen (survit aux mises à jour)
+if getattr(sys, "frozen", False):
+    _BASE_DIR = sys._MEIPASS
+    _DATA_DIR = os.path.dirname(sys.executable)
+else:
+    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    _DATA_DIR = _BASE_DIR
+
+# Synchroniser report.REPORTS_DIR avec _DATA_DIR
+report.REPORTS_DIR = os.path.join(_DATA_DIR, "reports")
+
+app = Flask(__name__, static_folder=_BASE_DIR, static_url_path="")
 
 # ── Stockage session ──────────────────────────────────────────
 # Token → {status, results, summary, config, queue}
@@ -34,23 +54,50 @@ _sessions_lock  = threading.Lock()
 MAX_PREVIEW = 500   # lignes max en mémoire pour l'UI
 
 
+@app.route("/api/version")
+def api_version():
+    return jsonify({"version": APP_VERSION})
+
+
 @app.route("/")
 def index():
-    return send_from_directory(".", "index.html")
+    return send_from_directory(_BASE_DIR, "index.html")
 
 
 @app.route("/docs/<path:filename>")
 def serve_docs(filename):
-    return send_from_directory("docs", filename)
+    return send_from_directory(os.path.join(_BASE_DIR, "docs"), filename)
+
+
+@app.route("/sw.js")
+def service_worker():
+    """Service Worker servi depuis la racine (scope = /) pour couvrir toute l'app."""
+    return send_from_directory(
+        os.path.join(_BASE_DIR, "static"), "sw.js",
+        mimetype="application/javascript",
+    )
+
+
+@app.route("/manifest.json")
+def manifest():
+    """Alias racine → /static/manifest.json (pratique pour les PWA scanners)."""
+    return send_from_directory(
+        os.path.join(_BASE_DIR, "static"), "manifest.json",
+        mimetype="application/manifest+json",
+    )
 
 
 @app.route("/sample/<path:filename>")
 def serve_sample(filename):
     """Téléchargement des fichiers exemples."""
-    ALLOWED = {"test_audit_demo.yaml", "test_reference.dat", "test_target.csv"}
+    ALLOWED = {"test_audit_demo.yaml", "test_reference.dat", "test_target.csv",
+               "test_unpivot.yaml", "unpivot_ref.csv", "unpivot_target.csv"}
     if filename not in ALLOWED:
         return jsonify({"error": "Fichier non disponible."}), 404
-    return send_from_directory(".", filename, as_attachment=True)
+    sample_dir = os.path.join(_BASE_DIR, "sample")
+    if not os.path.exists(os.path.join(sample_dir, filename)):
+        sample_dir = _BASE_DIR   # fallback : fichiers à la racine
+    return send_from_directory(sample_dir, filename, as_attachment=True)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -112,8 +159,8 @@ def _run_audit(token: str, ref_bytes: bytes, tgt_bytes: bytes, config: dict):
 
         _push(token, {"event": "progress", "done": 0, "total": 0, "pct": 0,
                       "step": "Normalisation…"})
-        df_ref = normalize_dataframe(df_ref, src_ref)
-        df_tgt = normalize_dataframe(df_tgt, src_tgt)
+        df_ref = normalize_dataframe(df_ref, src_ref, debug=app.debug)
+        df_tgt = normalize_dataframe(df_tgt, src_tgt, debug=app.debug)
 
         if src_ref.get("unpivot"):
             _push(token, {"event": "progress", "done": 0, "total": 0, "pct": 0,
@@ -171,6 +218,8 @@ def _run_audit(token: str, ref_bytes: bytes, tgt_bytes: bytes, config: dict):
         sess["ref_rows_map"]    = ref_rows_map
         sess["tgt_rows_map"]    = tgt_rows_map
         sess["all_keys_sorted"] = sorted(set(ref_rows_map) | set(tgt_rows_map))
+        sess["ref_columns"]     = [c for c in df_ref.columns.tolist() if c not in ref_key_cols]
+        sess["tgt_columns"]     = [c for c in df_tgt.columns.tolist() if c not in tgt_key_cols]
 
         # Historisation
         history_file = save_history(results, summary, config)
@@ -191,21 +240,108 @@ def apply_filters(df_ref, df_tgt, filters, config):
     Pas de propagation croisée : les orphelins restent visibles dans le comparateur.
     """
     for f in filters:
-        field  = f.get("field")
-        src    = f.get("source", "reference")
-        values = f.get("values")
-        if not field or values is None:
+        field      = f.get("field")
+        src        = f.get("source", "reference")
+        operator   = f.get("operator", "equals")
+        value_type = f.get("value_type", "value")
+        value      = f.get("value", "")
+        # Compat ascendante : ancien format { values: [...] }
+        legacy_values = f.get("values")
+
+        if not field:
             continue
-        values_set = set(str(v) for v in values)
+
+        def _make_mask(fld, op, vt, val, lv):
+            import pandas as _pd
+
+            def _as_str(series):
+                """NaN → '' pour toutes les comparaisons string."""
+                return series.where(series.notna(), other="").astype(str).str.strip()
+
+            def _debug(fld, result, computed_series, raw_series=None, cmp_val=None):
+                if not app.debug:
+                    return
+                true_count  = int(result.sum())
+                false_count = int((~result).sum())
+                label = f"[filter debug] champ={fld!r}  op={op!r}  value_type={vt!r}"
+                if cmp_val is not None:
+                    label += f"  valeur_comparée={cmp_val!r}"
+                print(f"{label}  →  TRUE={true_count}  FALSE={false_count}  TOTAL={true_count+false_count}")
+                print(f"  {'#':>6}  {'valeur brute':30s}  {'notna':5}  {'_as_str':30s}  résultat")
+                print(f"  {'-'*6}  {'-'*30}  {'-'*5}  {'-'*30}  --------")
+                raw_list = list(raw_series) if raw_series is not None else list(computed_series)
+                str_list = list(computed_series)
+                res_list = list(result)
+                for idx, (raw_v, str_v, res_row) in enumerate(zip(raw_list, str_list, res_list)):
+                    notna_v = raw_series is not None and raw_v is not None and raw_v == raw_v
+                    print(f"  {idx:>6}  {repr(raw_v):30s}  {str(notna_v):5}  {repr(str_v):30s}  {'TRUE' if res_row else 'FALSE'}")
+
+            if vt == "empty":
+                def _m(df, _f=fld):
+                    s = df[_f].fillna("").astype(str).str.strip()
+                    r = s == ""
+                    _debug(_f, r, s, raw_series=df[_f])
+                    return r
+                return _m
+            if vt == "not_empty":
+                def _m(df, _f=fld):
+                    s = df[_f].fillna("").astype(str).str.strip()
+                    r = s != ""
+                    _debug(_f, r, s, raw_series=df[_f])
+                    return r
+                return _m
+            # value_type == "value" (ou valeur brute)
+            if lv is not None and not val:
+                vs = set(str(v) for v in lv)
+                def _m(df, _f=fld, _vs=vs):
+                    s = _as_str(df[_f])
+                    r = s.isin(_vs)
+                    _debug(_f, r, s, cmp_val=sorted(_vs))
+                    return r
+                return _m
+            v = str(val).strip() if val is not None else ""
+            if op == "equals":
+                def _m(df, _f=fld, _v=v):
+                    s = _as_str(df[_f]); r = s == _v; _debug(_f, r, s, cmp_val=_v); return r
+                return _m
+            if op == "differs":
+                def _m(df, _f=fld, _v=v):
+                    s = _as_str(df[_f]); r = s != _v; _debug(_f, r, s, cmp_val=_v); return r
+                return _m
+            if op == "greater":
+                def _m(df, _f=fld, _v=v):
+                    n = _pd.to_numeric(df[_f], errors="coerce")
+                    r = n > _pd.to_numeric(_v, errors="coerce")
+                    _debug(_f, r.fillna(False), n.astype(str), cmp_val=_v); return r
+                return _m
+            if op == "less":
+                def _m(df, _f=fld, _v=v):
+                    n = _pd.to_numeric(df[_f], errors="coerce")
+                    r = n < _pd.to_numeric(_v, errors="coerce")
+                    _debug(_f, r.fillna(False), n.astype(str), cmp_val=_v); return r
+                return _m
+            if op == "contains":
+                def _m(df, _f=fld, _v=v):
+                    s = _as_str(df[_f]); r = s.str.contains(_v, regex=False); _debug(_f, r, s, cmp_val=_v); return r
+                return _m
+            if op == "not_contains":
+                def _m(df, _f=fld, _v=v):
+                    s = _as_str(df[_f]); r = ~s.str.contains(_v, regex=False); _debug(_f, r, s, cmp_val=_v); return r
+                return _m
+            def _m(df, _f=fld, _v=v):
+                s = _as_str(df[_f]); r = s == _v; _debug(_f, r, s, cmp_val=_v); return r
+            return _m
+
+        mask = _make_mask(field, operator, value_type, value, legacy_values)
 
         if src == "reference":
             if field not in df_ref.columns:
                 raise ConfigError(f"filters: champ '{field}' introuvable dans la reference.")
-            df_ref = df_ref[df_ref[field].astype(str).isin(values_set)].reset_index(drop=True)
+            df_ref = df_ref[mask(df_ref)].reset_index(drop=True)
         elif src == "target":
             if field not in df_tgt.columns:
                 raise ConfigError(f"filters: champ '{field}' introuvable dans la cible.")
-            df_tgt = df_tgt[df_tgt[field].astype(str).isin(values_set)].reset_index(drop=True)
+            df_tgt = df_tgt[mask(df_tgt)].reset_index(drop=True)
     return df_ref, df_tgt
 
 
@@ -255,8 +391,226 @@ def _sse(data: dict) -> str:
 
 
 # ─────────────────────────────────────────────────────────────
-#  GET /api/export  — CSV ou HTML
+#  GET /api/results/<token>/meta  — colonnes disponibles + comptages
 # ─────────────────────────────────────────────────────────────
+@app.route("/api/results/<token>/meta")
+def get_results_meta(token):
+    with _sessions_lock:
+        sess = _sessions.get(token)
+    if not sess:
+        return jsonify({"error": "Session introuvable"}), 404
+    rule_counts = {}
+    for r in sess.get("results", []):
+        name = r.get("rule_name")
+        if name:
+            rule_counts[name] = rule_counts.get(name, 0) + 1
+    return jsonify({
+        "total":       len(sess.get("results", [])),
+        "ref_columns": sess.get("ref_columns", []),
+        "tgt_columns": sess.get("tgt_columns", []),
+        "rule_counts": rule_counts,
+    })
+
+
+# ─────────────────────────────────────────────────────────────
+#  GET /api/results/<token>  — résultats paginés + filtrés + triés
+# ─────────────────────────────────────────────────────────────
+_GRAVITY = {"ORPHELIN_A": 0, "ORPHELIN_B": 1, "KO": 2, "DIVERGENT": 2, "OK": 3}
+
+
+@app.route("/api/results/<token>")
+def get_results_page(token):
+    with _sessions_lock:
+        sess = _sessions.get(token)
+    if not sess:
+        return jsonify({"error": "Session introuvable"}), 404
+
+    page      = max(1, int(request.args.get("page",  1)))
+    size      = min(500, max(1, int(request.args.get("size", 100))))
+    sort_col  = request.args.get("sort",  "")
+    sort_dir  = request.args.get("dir",   "asc")
+    types_str = request.args.get("types", "")
+    rules_str   = request.args.get("rules", "")
+    rule_logic  = request.args.get("rule_logic", "OR").upper()
+    q           = request.args.get("q",     "").lower().strip()
+    extra_ref = [c for c in request.args.get("extra_ref", "").split(",") if c]
+    extra_tgt = [c for c in request.args.get("extra_tgt", "").split(",") if c]
+
+    raw          = sess.get("results", [])
+    active_types = set(types_str.split(",")) if types_str else None
+    active_rules = set(rules_str.split(",")) if rules_str else None
+
+    # ── Grouper par join_key ──────────────────────────────────
+    from collections import OrderedDict
+    grouped: dict = OrderedDict()
+    for r in raw:
+        k = r.get("join_key", "")
+        if k not in grouped:
+            grouped[k] = {"join_key": k, "ecarts": []}
+        grouped[k]["ecarts"].append({
+            "type_ecart":       r["type_ecart"],
+            "rule_name":        r.get("rule_name"),
+            "champ":            r.get("champ", ""),
+            "valeur_reference": r.get("valeur_reference", ""),
+            "valeur_cible":     r.get("valeur_cible", ""),
+        })
+
+    # ── Filtrer ──────────────────────────────────────────────
+    def key_matches(row):
+        ecarts = row["ecarts"]
+        # Filtrage par type
+        if active_types is not None:
+            ecarts = [e for e in ecarts if e["type_ecart"] in active_types]
+        if not ecarts:
+            return False
+        # Filtrage par règle
+        if active_rules is not None:
+            rule_ecarts = [e for e in ecarts
+                           if e["type_ecart"] not in ("ORPHELIN_A", "ORPHELIN_B")
+                           and e.get("rule_name") in active_rules]
+            orphan_ecarts = [e for e in ecarts
+                             if e["type_ecart"] in ("ORPHELIN_A", "ORPHELIN_B")]
+            if rule_logic == "AND":
+                # Toutes les règles actives doivent être présentes
+                matched = {e.get("rule_name") for e in rule_ecarts}
+                if not active_rules.issubset(matched):
+                    return bool(orphan_ecarts)  # orphelins passent toujours
+            else:
+                # OR : au moins une règle présente
+                if not rule_ecarts and not orphan_ecarts:
+                    return False
+        return True
+
+    rows = list(grouped.values())
+    if active_types is not None:
+        rows = [r for r in rows if key_matches(r)]
+
+    if q:
+        ref_rows_map = sess.get("ref_rows_map", {})
+        tgt_rows_map = sess.get("tgt_rows_map", {})
+
+        def _row_matches_q(row):
+            if q in str(row["join_key"]).lower():
+                return True
+            for e in row["ecarts"]:
+                if q in str(e.get("rule_name") or "").lower():
+                    return True
+                if q in str(e.get("valeur_reference") or "").lower():
+                    return True
+                if q in str(e.get("valeur_cible") or "").lower():
+                    return True
+                if q in str(e.get("champ") or "").lower():
+                    return True
+            key = row["join_key"]
+            for c in extra_ref:
+                if q in str(ref_rows_map.get(key, {}).get(c, "")).lower():
+                    return True
+            for c in extra_tgt:
+                if q in str(tgt_rows_map.get(key, {}).get(c, "")).lower():
+                    return True
+            return False
+
+        rows = [r for r in rows if _row_matches_q(r)]
+
+    # ── Tri ──────────────────────────────────────────────────
+    reverse = (sort_dir == "desc")
+    if sort_col == "key":
+        rows.sort(key=lambda r: str(r["join_key"]).lower(), reverse=reverse)
+    elif sort_col == "type":
+        rows.sort(
+            key=lambda r: min((_GRAVITY.get(e["type_ecart"], 99) for e in r["ecarts"]), default=99),
+            reverse=reverse,
+        )
+
+    # ── Pagination ───────────────────────────────────────────
+    total  = len(rows)
+    pages  = max(1, (total + size - 1) // size)
+    page   = min(page, pages)
+    page_r = rows[(page - 1) * size : page * size]
+
+    # ── Enrichissement colonnes extra ────────────────────────
+    if extra_ref or extra_tgt:
+        ref_rows_map = sess.get("ref_rows_map", {})
+        tgt_rows_map = sess.get("tgt_rows_map", {})
+        result_rows = []
+        for r in page_r:
+            key = r["join_key"]
+            row = {"join_key": key, "ecarts": r["ecarts"]}
+            if extra_ref:
+                row["_ref"] = {c: ref_rows_map.get(key, {}).get(c, "") for c in extra_ref}
+            if extra_tgt:
+                row["_tgt"] = {c: tgt_rows_map.get(key, {}).get(c, "") for c in extra_tgt}
+            result_rows.append(row)
+        page_r = result_rows
+
+    return jsonify({"total": total, "page": page, "size": size, "pages": pages, "results": page_r})
+
+
+# ─────────────────────────────────────────────────────────────
+#  GET /api/export  — CSV / XLSX / HTML
+# ─────────────────────────────────────────────────────────────
+
+def _filter_results_flat(results, active_types, active_rules, rule_logic,
+                         q, extra_ref, extra_tgt, ref_rows_map, tgt_rows_map):
+    """Filtre une liste plate d'écarts (même logique que api_results)."""
+    if active_types is None and active_rules is None and not q:
+        return results
+
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for r in results:
+        grouped[r.get("join_key", "")].append(r)
+
+    out = []
+    for key, ecarts in grouped.items():
+        if active_types is not None:
+            ecarts = [e for e in ecarts if e.get("type_ecart") in active_types]
+        if not ecarts:
+            continue
+
+        if active_rules is not None:
+            rule_e = [e for e in ecarts
+                      if e.get("type_ecart") not in ("ORPHELIN_A", "ORPHELIN_B")
+                      and e.get("rule_name") in active_rules]
+            orph_e = [e for e in ecarts
+                      if e.get("type_ecart") in ("ORPHELIN_A", "ORPHELIN_B")]
+            if rule_logic == "AND":
+                matched = {e.get("rule_name") for e in rule_e}
+                if not active_rules.issubset(matched):
+                    out.extend(orph_e)
+                    continue
+                ecarts = rule_e + orph_e
+            else:
+                if not rule_e and not orph_e:
+                    continue
+                ecarts = rule_e + orph_e
+
+        if q:
+            match = q in str(key).lower()
+            if not match:
+                for e in ecarts:
+                    if any(q in str(e.get(f) or "").lower()
+                           for f in ("rule_name", "valeur_reference",
+                                     "valeur_cible", "champ")):
+                        match = True
+                        break
+            if not match:
+                for c in extra_ref:
+                    if q in str(ref_rows_map.get(key, {}).get(c, "")).lower():
+                        match = True
+                        break
+            if not match:
+                for c in extra_tgt:
+                    if q in str(tgt_rows_map.get(key, {}).get(c, "")).lower():
+                        match = True
+                        break
+            if not match:
+                continue
+
+        out.extend(ecarts)
+    return out
+
+
 @app.route("/api/export")
 def export():
     token  = request.args.get("token", "")
@@ -264,31 +618,69 @@ def export():
     with _sessions_lock:
         sess = _sessions.get(token, {})
 
-    results = sess.get("results", [])
-    summary = sess.get("summary", {})
-    config  = sess.get("config", {})
+    results      = sess.get("results", [])
+    summary      = sess.get("summary", {})
+    config       = sess.get("config", {})
+    ref_rows_map = sess.get("ref_rows_map", {})
+    tgt_rows_map = sess.get("tgt_rows_map", {})
+
+    extra_ref = [c for c in request.args.get("extra_ref", "").split(",") if c]
+    extra_tgt = [c for c in request.args.get("extra_tgt", "").split(",") if c]
+
+    src_ref   = config.get("sources", {}).get("reference", {})
+    src_tgt   = config.get("sources", {}).get("target", {})
+    ref_label = src_ref.get("label", "Référence")
+    tgt_label = src_tgt.get("label", "Cible")
+    ref_fmt   = src_ref.get("format", "")
+    tgt_fmt   = src_tgt.get("format", "")
+
+    audit_name = config.get("meta", {}).get("name", "audit").replace(" ", "_")
 
     if fmt == "csv":
-        content = "\ufeff" + to_csv(results)   # BOM pour Excel
+        # Tous les résultats — format pivot-friendly
+        content = "\ufeff" + to_csv(results, extra_ref, extra_tgt,
+                                    ref_rows_map, tgt_rows_map,
+                                    ref_label, tgt_label)
         return send_file(
             io.BytesIO(content.encode("utf-8")),
             mimetype="text/csv", as_attachment=True,
-            download_name="rapport_audit.csv"
+            download_name=f"audit_{audit_name}.csv"
         )
-    elif fmt == "html":
-        content = to_html(results, summary, config)
-        return send_file(
-            io.BytesIO(content.encode("utf-8")),
-            mimetype="text/html", as_attachment=True,
-            download_name="rapport_audit.html"
-        )
+
     elif fmt == "xlsx":
-        content = to_xlsx(results, summary, config)
+        # Tous les résultats — onglets DATA + PIVOT
+        content = to_xlsx(results, summary, config,
+                          extra_ref, extra_tgt, ref_rows_map, tgt_rows_map,
+                          ref_label, tgt_label, ref_fmt, tgt_fmt)
         return send_file(
             io.BytesIO(content),
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            as_attachment=True, download_name="rapport_audit.xlsx"
+            as_attachment=True, download_name=f"audit_{audit_name}.xlsx"
         )
+
+    elif fmt == "html":
+        # Vue courante filtrée — filtres dynamiques conservés dans le HTML
+        types_str  = request.args.get("types", "")
+        rules_str  = request.args.get("rules", "")
+        rule_logic = request.args.get("rule_logic", "OR").upper()
+        q          = request.args.get("q", "").lower().strip()
+
+        active_types = set(types_str.split(",")) if types_str else None
+        active_rules = set(rules_str.split(",")) if rules_str else None
+
+        filtered = _filter_results_flat(
+            results, active_types, active_rules, rule_logic, q,
+            extra_ref, extra_tgt, ref_rows_map, tgt_rows_map
+        )
+        content = to_html(filtered, summary, config,
+                          extra_ref, extra_tgt, ref_rows_map, tgt_rows_map,
+                          ref_label, tgt_label, ref_fmt, tgt_fmt)
+        return send_file(
+            io.BytesIO(content.encode("utf-8")),
+            mimetype="text/html", as_attachment=True,
+            download_name=f"audit_{audit_name}.html"
+        )
+
     return jsonify({"error": "Format invalide."}), 400
 
 
@@ -319,8 +711,8 @@ def test_join():
         ref_bytes = request.files["file_ref"].read()
         tgt_bytes = request.files["file_tgt"].read()
 
-        df_ref = normalize_dataframe(parse_file(ref_bytes, src_ref), src_ref)
-        df_tgt = normalize_dataframe(parse_file(tgt_bytes, src_tgt), src_tgt)
+        df_ref = normalize_dataframe(parse_file(ref_bytes, src_ref), src_ref, debug=app.debug)
+        df_tgt = normalize_dataframe(parse_file(tgt_bytes, src_tgt), src_tgt, debug=app.debug)
 
         if src_ref.get("unpivot"):
             df_ref = unpivot_dataframe(df_ref, src_ref["unpivot"])
@@ -376,6 +768,51 @@ def test_join():
             "keys_ref":    sorted(ref_map.keys())[:20],
             "keys_tgt":    sorted(tgt_map.keys())[:20],
         })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 422
+
+
+# ─────────────────────────────────────────────────────────────
+#  POST /api/test-filters  — test des filtres (wizard)
+# ─────────────────────────────────────────────────────────────
+@app.route("/api/test-filters", methods=["POST"])
+def test_filters():
+    from config_loader import _Loader as _YamlLoader
+    import yaml as pyyaml
+    if "file" not in request.files:
+        return jsonify({"error": "Fichier manquant."}), 400
+    config_yaml = request.form.get("config_yaml", "")
+    which = request.form.get("source", "reference")  # "reference" ou "target"
+    if not config_yaml.strip():
+        return jsonify({"error": "config_yaml manquant."}), 400
+    try:
+        config = pyyaml.load(config_yaml, Loader=_YamlLoader)
+    except Exception as e:
+        return jsonify({"error": f"YAML invalide : {e}"}), 422
+
+    try:
+        src_key = "reference" if which == "reference" else "target"
+        src_cfg = config.get("sources", {}).get(src_key, {})
+        filters = config.get("filters", [])
+
+        file_bytes = request.files["file"].read()
+        df = normalize_dataframe(parse_file(file_bytes, src_cfg), src_cfg, debug=app.debug)
+
+        if src_cfg.get("unpivot"):
+            df = unpivot_dataframe(df, src_cfg["unpivot"])
+
+        total = len(df)
+
+        # Appliquer les filtres pour cette source uniquement
+        dummy_other = df.iloc[0:0].copy()  # DataFrame vide pour l'autre source
+        if which == "reference":
+            df_ref, _ = apply_filters(df, dummy_other, filters, config)
+            filtered = len(df_ref)
+        else:
+            _, df_tgt = apply_filters(dummy_other, df, filters, config)
+            filtered = len(df_tgt)
+
+        return jsonify({"total": total, "filtered": filtered})
     except Exception as e:
         return jsonify({"error": str(e)}), 422
 
@@ -477,9 +914,60 @@ def delete_all_history():
     return jsonify({"ok": True})
 
 
+def _find_free_port(start: int = 5000) -> int:
+    """Retourne le premier port TCP libre à partir de `start`."""
+    for port in range(start, start + 50):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(("127.0.0.1", port))
+                return port
+        except OSError:
+            continue
+    raise RuntimeError(f"Aucun port disponible entre {start} et {start + 50}.")
+
+
+def _open_browser_when_ready(url: str, host: str, port: int) -> None:
+    """Attend que le serveur réponde puis ouvre le navigateur."""
+    def _wait_and_open():
+        for _ in range(30):
+            try:
+                with socket.create_connection((host, port), timeout=0.5):
+                    break
+            except OSError:
+                time.sleep(0.3)
+        webbrowser.open(url)
+    threading.Thread(target=_wait_and_open, daemon=True).start()
+
+
 if __name__ == "__main__":
-    print("=" * 55)
-    print("  DataAuditor v2 — serveur Flask")
-    print("  → http://localhost:5000")
-    print("=" * 55)
-    app.run(debug=False, host="0.0.0.0", port=5000, threaded=True)
+    import argparse
+    parser = argparse.ArgumentParser(description=f"DataAuditor v{APP_VERSION}")
+    parser.add_argument("--port",       type=int, default=None,
+                        help="Port d'écoute (défaut : premier port libre depuis 5000)")
+    parser.add_argument("--host",       default="127.0.0.1",
+                        help="Interface d'écoute (défaut : 127.0.0.1)")
+    parser.add_argument("--debug",      action="store_true",
+                        help="Active les logs de debug filtres")
+    parser.add_argument("--no-browser", action="store_true",
+                        help="Ne pas ouvrir le navigateur au démarrage")
+    args = parser.parse_args()
+
+    port = args.port or _find_free_port()
+    url  = f"http://{'localhost' if args.host == '127.0.0.1' else args.host}:{port}"
+
+    W = 58
+    print("=" * W)
+    print(f"  DataAuditor v{APP_VERSION}")
+    print(f"  → {url}")
+    print(f"  Rapports  : {report.REPORTS_DIR}")
+    if args.debug:
+        os.environ["DA_DEBUG"] = "1"
+        print("  ⚠  mode DEBUG actif")
+    print("=" * W)
+    print("  Ctrl+C pour arrêter")
+    print()
+
+    if not args.no_browser:
+        _open_browser_when_ready(url, args.host, port)
+
+    app.run(debug=args.debug, host=args.host, port=port, threaded=True)

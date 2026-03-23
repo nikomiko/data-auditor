@@ -1,18 +1,53 @@
 // ═══════════════════════════════════════════════════════════
+//  VERSION
+// ═══════════════════════════════════════════════════════════
+const UI_VERSION = '3.6.0';
+
+(async function checkVersion() {
+  try {
+    const data = await fetch('/api/version').then(r => r.json());
+    const srv  = data.version || '?';
+    const badge = document.getElementById('version-mismatch');
+    const ver   = document.getElementById('logo-ver');
+    if (ver) ver.textContent = `v${srv}`;
+    if (srv !== UI_VERSION && badge) {
+      badge.textContent = `⚠ UI v${UI_VERSION} ≠ serveur v${srv}`;
+      badge.title = `L'interface (v${UI_VERSION}) ne correspond pas au serveur (v${srv}). Rechargez la page après redémarrage.`;
+      badge.style.display = '';
+    }
+  } catch (_) { /* serveur inaccessible au chargement */ }
+})();
+
+// ═══════════════════════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════════════════════
-let allResults     = [];
+let allResults     = [];      // utilisé uniquement pour les entrées historique
 let lastSummary    = {};
 let lastConfig     = {};
 let currentToken   = null;
 let _ctxKey        = null;
 let refLabel       = '';
 let tgtLabel       = '';
-let activeFilters  = new Set(['ORPHELIN_A','ORPHELIN_B']);  // KO filtré par rule uniquement
+let activeFilters    = new Set(['BOTH']);
 let activeRuleFilters = null;
+let ruleFilterLogic  = 'OR';   // 'OR' | 'AND'
 let filterText     = '';
 let sortCol        = null;   // 'key'|'type'|'rule'|'ref'|'tgt'
 let sortDir        = 1;      // 1=asc, -1=desc
+
+// Pagination serveur
+let _pageNum   = 1;
+let _pageSize  = 100;
+let _pageTot   = 0;
+let _pagePages = 1;
+
+// Colonnes supplémentaires
+let extraRefCols  = [];  // sélection ref (pour API)
+let extraTgtCols  = [];  // sélection tgt (pour API)
+let _extraColOrder = []; // [{side:'ref'|'tgt', col:string}] — ordre d'affichage mixte
+
+// Compteurs live pendant streaming SSE
+let _liveOA = 0, _liveOB = 0;
 let yamlFilename   = 'config.yaml';
 let yamlOriginal   = '';
 let yamlFileHandle = null;  // File System Access API handle (Chrome/Edge)
@@ -23,7 +58,7 @@ let wfCurrentStep = 0; // step actuellement affiché
 //  FILES
 // ═══════════════════════════════════════════════════════════
 let fileRef = null, fileTgt = null;
-const TEXT_EXTS = new Set(['csv','txt','dat','json']);
+const TEXT_EXTS = new Set(['csv','txt','dat','json','jsonl']);
 
 function isBinary(file) {
   const ext = file.name.split('.').pop().toLowerCase();
@@ -47,8 +82,8 @@ function updateSourceLabels() {
   const rL = refLabel || 'Référence';
   const tL = tgtLabel || 'Cible';
   const e = id => document.getElementById(id);
-  if (e('lbl-ref'))       e('lbl-ref').textContent       = rL;
-  if (e('lbl-tgt'))       e('lbl-tgt').textContent       = tL;
+  if (e('lbl-ref'))       e('lbl-ref').textContent       = refLabel || '';
+  if (e('lbl-tgt'))       e('lbl-tgt').textContent       = tgtLabel || '';
   if (e('nav-lbl-tgt'))   e('nav-lbl-tgt').textContent   = tL;
   if (e('nav-lbl-ref'))   e('nav-lbl-ref').textContent   = rL;
   if (e('nav-lbl-ref0'))  e('nav-lbl-ref0').textContent  = rL;
@@ -80,15 +115,17 @@ function updateGlobalNav(n) {
   const next    = document.getElementById('gnav-next');
   const run     = document.getElementById('gnav-run');
   const navBar  = document.getElementById('global-nav-bar');
-  const yamlBar = document.getElementById('global-yaml-bar');
+  const exports = document.getElementById('gnav-exports');
   if (!prev) return;
 
   // Masquer sur Historique (step 7)
-  navBar.style.display  = (n === 7) ? 'none' : '';
-  yamlBar.style.display = (n === 7) ? 'none' : '';
+  navBar.style.display = (n === 7) ? 'none' : '';
 
   // Bouton Précédent : invisible à l'étape 0
   prev.style.visibility = (n === 0) ? 'hidden' : '';
+
+  // Exports : visibles uniquement à l'étape ⑥
+  if (exports) exports.style.display = (n === 6) ? 'flex' : 'none';
 
   // Bouton Suivant vs Lancer l'audit
   if (n === 5) {
@@ -232,18 +269,23 @@ function resetAll() {
   refLabel = ''; tgtLabel = '';
   filterText = ''; sortCol = null; sortDir = 1;
   wfUnlocked = 1; wfCurrentStep = 0;
-  activeFilters = new Set(['ORPHELIN_A','ORPHELIN_B']);
+  activeFilters = new Set(['BOTH']);
   activeRuleFilters = null;
+  ruleFilterLogic = 'OR';
+  _pageNum = 1; _pageSize = 100; _pageTot = 0; _pagePages = 1;
+  extraRefCols = []; extraTgtCols = []; _extraColOrder = [];
+  _liveOA = 0; _liveOB = 0;
 
   // YAML
   const yamlEl = document.getElementById('yaml');
   if (yamlEl) yamlEl.value = '';
   yamlFilename = 'config.yaml'; yamlOriginal = ''; yamlFileHandle = null;
+  updateSaveBtn();
 
   // Drop zone référence
-  document.getElementById('dz-ref').classList.remove('loaded');
+  document.getElementById('dz-ref').classList.remove('loaded', 'hinted');
   document.getElementById('dz-ref-label').textContent = 'Glissez votre fichier ici';
-  document.getElementById('dz-ref-sub').textContent   = 'ou cliquez pour parcourir — CSV, TXT, DAT, JSON, XLSX';
+  document.getElementById('dz-ref-sub').textContent   = 'ou cliquez pour parcourir — CSV, TXT, JSON, JSONL, XLSX';
   document.getElementById('eye-ref').style.display    = 'none';
   document.getElementById('val-ref').style.display    = 'none';
   document.getElementById('val-badge-ref').style.display = 'none';
@@ -251,9 +293,9 @@ function resetAll() {
   document.getElementById('f-ref').value = '';
 
   // Drop zone cible
-  document.getElementById('dz-tgt').classList.remove('loaded');
+  document.getElementById('dz-tgt').classList.remove('loaded', 'hinted');
   document.getElementById('dz-tgt-label').textContent = 'Glissez votre fichier ici';
-  document.getElementById('dz-tgt-sub').textContent   = 'ou cliquez pour parcourir — CSV, TXT, DAT, JSON, XLSX';
+  document.getElementById('dz-tgt-sub').textContent   = 'ou cliquez pour parcourir — CSV, TXT, JSON, JSONL, XLSX';
   document.getElementById('eye-tgt').style.display    = 'none';
   document.getElementById('val-tgt').style.display    = 'none';
   document.getElementById('val-badge-tgt').style.display = 'none';
@@ -282,7 +324,13 @@ function resetAll() {
   updateGlobalNav(0);
 
   // Réinitialiser WS APRÈS goWFStep (qui peut relire le DOM via _saveCurrentWFStep)
-  wizSrcDefault();
+  WS.sources.reference = wizSrcDefault();
+  WS.sources.target    = wizSrcDefault();
+  WS.join.keys  = [];
+  WS.rules      = [];
+  WS.filters    = [];
+  WS.report     = { show_matching: false, max_diff_preview: 500 };
+  WS.meta       = { name: '', version: '' };
 
   // Vider le rendu des étapes source pour ne pas afficher de contenu résiduel
   const src1 = document.getElementById('wfv-1-src');

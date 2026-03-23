@@ -1,11 +1,11 @@
 ---
 tags: [spec, dataauditor]
-updated: 2026-03-19
+updated: 2026-03-23
 ---
 
 # DataAuditor — Spécification fonctionnelle
 
-**Version de référence : v3.0.0**
+**Version de référence : v3.6.0**
 
 ---
 
@@ -418,8 +418,8 @@ const _normOp = op => _OP_ALIAS[op] || op || 'equals';
 
 **Algorithme :**
 ```
-activeFilters = Set{'ORPHELIN_A', 'ORPHELIN_B'}   // orphelins toujours visibles par défaut
-activeRuleFilters = null                           // null = toutes les règles visibles
+activeFilters = Set{'BOTH'}    // "Présence dans les deux" sélectionné par défaut (v3.6)
+activeRuleFilters = null       // null = toutes les règles visibles
 
 appendRow(r) :
   Si ORPHELIN_A|B ET ∉ activeFilters → masquer
@@ -517,4 +517,217 @@ Content-Disposition : attachment; filename="audit_<timestamp>.csv"
 Fichier : reports/audit_<YYYYMMDD_HHMMSS>.json
 Contenu : { timestamp, config_name, summary, results[] }
 Accessible via GET /api/history et GET /api/history/<filename>
+```
+
+---
+
+### RG-RES — Écran résultats (v3.6)
+
+#### RG-RES-01 — Barre de navigation unifiée
+
+| Métadonnée | Valeur |
+|---|---|
+| Commit | `v3.6.0` |
+| Tests | — |
+
+**Résumé :** À partir de la v3.6.0, la barre YAML et la barre de navigation sont fusionnées en une seule barre globale persistante. Les boutons d'export CSV/HTML/XLSX y apparaissent uniquement à l'étape ⑥ (résultats).
+
+**Algorithme :**
+```
+global-nav-bar contient (gauche → droite) :
+  ← Précédent | ① … ⑥ | → Suivant / Lancer
+  [separator]
+  💾 Sauvegarder | Enregistrer sous… | ‹/› (basculer vue YAML) | <nom config>
+  [separator]
+  chip ref | chip tgt | message d'erreur wizard
+  [spacer flex]
+  [boutons export : CSV, HTML, XLSX — visibles uniquement step === 6]
+
+updateGlobalNav(n) :
+  n === 6 → exports.style.display = 'flex'
+  n ≠ 6  → exports.style.display = 'none'
+```
+
+#### RG-RES-02 — Filtre par défaut "Présence dans les deux"
+
+| Métadonnée | Valeur |
+|---|---|
+| Commit | `v3.6.0` |
+| Tests | — |
+
+**Résumé :** Au démarrage d'un audit et après réinitialisation, le filtre actif par défaut est `BOTH` (enregistrements présents dans les deux sources), pas les orphelins.
+
+**Algorithme :**
+```
+Au démarrage de l'audit (client + server) :
+  activeFilters = Set{'BOTH'}
+  → Seuls les résultats KO/OK sont affichés par défaut
+  → Les chips ORPHELIN_A et ORPHELIN_B sont désactivées par défaut
+```
+
+#### RG-RES-03 — Chips de règles colorées par rule_type
+
+| Métadonnée | Valeur |
+|---|---|
+| Commit | `v3.6.0` |
+| Tests | — |
+
+**Résumé :** Les chips de règles dans la barre de filtres sont colorées selon le `rule_type` de la règle : fond vert pour `coherence`, fond rouge pour `incoherence`. Un point de couleur distinctif identifie chaque règle.
+
+**Algorithme :**
+```
+ruleType(ruleName) → lastConfig.rules.find(r => r.name === ruleName)?.rule_type || 'incoherence'
+
+Pour chaque chip de règle :
+  rule_type === 'coherence'   → classe .cr-coh (fond vert)
+  rule_type === 'incoherence' → classe .cr-inc (fond rouge)
+  Un cercle coloré (ruleColor()) distingue visuellement chaque règle individuelle
+  État non-sélectionné : opacity réduite (dimmed)
+```
+
+#### RG-RES-04 — Filtre AND/OR entre règles
+
+| Métadonnée | Valeur |
+|---|---|
+| Commit | `v3.6.0` |
+| Tests | — |
+
+**Résumé :** Un bouton toggle entre l'intitulé "Règles" et les chips permet de basculer entre OR (au moins une règle) et AND (toutes les règles sélectionnées).
+
+**Algorithme :**
+```
+ruleFilterLogic = 'OR'  // défaut
+
+Clic bouton → basculer OR ↔ AND → fetchPage()
+
+Requête API : rule_logic=AND|OR
+
+Côté serveur (key_matches) :
+  OR  : au moins un écart de la ligne appartient à active_rules
+  AND : active_rules.issubset(matched_rules) — toutes les règles sélectionnées
+        présentes dans les écarts de la ligne (les orphelins bypassent cette règle)
+```
+
+#### RG-RES-05 — Recherche plein texte
+
+| Métadonnée | Valeur |
+|---|---|
+| Commit | `v3.6.0` |
+| Tests | — |
+
+**Résumé :** Le champ de recherche filtre sur l'ensemble des colonnes affichées : clé de jointure, nom de règle, valeurs ref/cible, nom de champ, et valeurs des colonnes supplémentaires.
+
+**Algorithme :**
+```
+Paramètre API : q=<texte>
+
+Côté serveur (_row_matches_q) :
+  Chercher q (insensible à la casse) dans :
+    join_key
+    Pour chaque écart : rule_name, valeur_reference, valeur_cible, champ
+    Pour chaque colonne extra ref  : ref_rows_map[key].get(col)
+    Pour chaque colonne extra tgt  : tgt_rows_map[key].get(col)
+  Retourne True si trouvé dans au moins un champ
+```
+
+#### RG-RES-06 — Colonnes supplémentaires : ordre mixte et en-têtes deux lignes
+
+| Métadonnée | Valeur |
+|---|---|
+| Commit | `v3.6.0` |
+| Tests | — |
+
+**Résumé :** Les colonnes supplémentaires ref et cible peuvent être librement mélangées. L'ordre est géré par `_extraColOrder`. Les en-têtes s'affichent sur deux lignes : source (petit, fin) au-dessus, nom du champ (gras) en dessous.
+
+**Algorithme :**
+```
+_extraColOrder = [{side:'ref'|'tgt', col:string}]
+
+_syncExtraHeaders() :
+  1. Purger de _extraColOrder les colonnes décochées
+  2. Ajouter en fin les colonnes nouvellement cochées
+  3. Pour chaque {side, col} dans _extraColOrder :
+     Rendre <th> avec :
+       .th-meta  = "<nomFichier> · <format>"  (petit, police fine)
+       .th-field = col                         (gras, majuscules)
+     Attacher handle de redimensionnement + drag HTML5
+
+Redimensionnement : mousedown sur .col-resize-handle → track deltaX → th.style.width
+Réorganisation    : HTML5 drag-and-drop ; cross-side autorisé ; met à jour _extraColOrder
+```
+
+#### RG-RES-07 — Mode plein écran résultats
+
+| Métadonnée | Valeur |
+|---|---|
+| Commit | `v3.6.0` |
+| Tests | — |
+
+**Résumé :** Un bouton ⛶ dans la colonne de droite des en-têtes permet de basculer un mode plein écran qui masque toutes les zones hors tableau.
+
+**Algorithme :**
+```
+toggleResultsFS() :
+  body.classList.toggle('results-fs')
+
+body.results-fs :
+  header               → display:none
+  .summary-bar         → display:none
+  .filter-bar          → display:none
+  #col-picker          → display:none
+  .wf-view.active      → height: 100vh (pleine hauteur)
+```
+
+---
+
+### RG-CTX — Vue contextuelle (œil)
+
+#### RG-CTX-01 — Enregistrements de contexte
+
+| Métadonnée | Valeur |
+|---|---|
+| Commit | `v3.6.0` |
+| Tests | — |
+
+**Résumé :** Le modal de vue contextuelle affiche par défaut 1 enregistrement de contexte avant et après la clé sélectionnée (au lieu de 2 précédemment).
+
+**Algorithme :**
+```
+Valeur par défaut du champ "Contexte" : 1
+Requête API : GET /api/context/{token}/{key}?ctx=1
+```
+
+#### RG-CTX-02 — Pills de règles interactives
+
+| Métadonnée | Valeur |
+|---|---|
+| Commit | `v3.6.0` |
+| Tests | — |
+
+**Résumé :** Le header du modal contextuel affiche des pills interactives pour chaque règle déclenchée sur la clé. Sélectionner/désélectionner une pill filtre les bullets et surlignages dans les deux panneaux (ref et cible).
+
+**Algorithme :**
+```
+openCtxModal(key, ecarts) :
+  _ctxActiveRules = Set(tous les rule_name dans ecarts)  // tout sélectionné par défaut
+  _ctxEcarts = ecarts (écarts de la ligne)
+  Rendre pills :
+    ORPHELIN_A|B → badge statique (non interactif)
+    KO/OK avec rule_name → <button> pill interactif
+      État actif   : fond coloré (vert coherence / rouge incoherence)
+      État inactif : bordure seule, texte coloré
+
+_ctxToggleRule(btn, ruleName) :
+  Si ruleName ∈ _ctxActiveRules → retirer, inactif
+  Sinon                         → ajouter, actif
+  Re-rendre les panneaux avec _ctxLastData
+
+_renderCtxPanels(data) :
+  srcFieldRuleMap = {} // champ source → Set(rule_names actifs)
+  tgtFieldRuleMap = {} // champ cible  → Set(rule_names actifs)
+  Pour chaque écart dont rule_name ∈ _ctxActiveRules :
+    parser champ (format "src_field op tgt_field") :
+      srcFieldRuleMap[src_field].add(rule_name)
+      tgtFieldRuleMap[tgt_field].add(rule_name)
+  Chaque cellule avec ≥1 règle active → bullet + surlignage
 ```

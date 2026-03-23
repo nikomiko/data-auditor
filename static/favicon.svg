@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Fond arrondi -->
+  <rect width="32" height="32" rx="7" fill="#2563eb"/>
+  <!-- Colonne gauche (source) -->
+  <rect x="4" y="8" width="7" height="3" rx="1" fill="#ffffff" opacity="0.9"/>
+  <rect x="4" y="13" width="7" height="3" rx="1" fill="#ffffff" opacity="0.65"/>
+  <rect x="4" y="18" width="7" height="3" rx="1" fill="#ffffff" opacity="0.45"/>
+  <rect x="4" y="23" width="5" height="3" rx="1" fill="#ffffff" opacity="0.3"/>
+  <!-- Slash de comparaison -->
+  <line x1="14.5" y1="25" x2="17.5" y2="7" stroke="#facc15" stroke-width="2" stroke-linecap="round"/>
+  <!-- Colonne droite (cible) -->
+  <rect x="21" y="8" width="7" height="3" rx="1" fill="#ffffff" opacity="0.9"/>
+  <rect x="21" y="13" width="7" height="3" rx="1" fill="#ffffff" opacity="0.65"/>
+  <!-- Ligne en écart (rouge) -->
+  <rect x="21" y="18" width="7" height="3" rx="1" fill="#f87171" opacity="0.9"/>
+  <rect x="21" y="23" width="5" height="3" rx="1" fill="#ffffff" opacity="0.3"/>
+</svg>

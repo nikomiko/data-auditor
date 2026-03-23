@@ -15,15 +15,39 @@ def _clean_str(s: str) -> str:
     return s.strip()
 
 
-def normalize_dataframe(df: pd.DataFrame, src_cfg: dict) -> pd.DataFrame:
+def normalize_dataframe(df: pd.DataFrame, src_cfg: dict, debug: bool = False) -> pd.DataFrame:
     df        = df.copy()
     field_map = get_field_map(src_cfg)
     for col in df.columns:
         fdef  = field_map.get(col, {})
         ftype = fdef.get("type", "string")
         try:
+            if ftype == "skip":
+                continue   # champ lu mais non normalisé (blob, opaque, etc.)
             if ftype == "string":
-                df[col] = df[col].astype(str).map(_clean_str)
+                raw = df[col]
+                # where(notna, "") → NaN reste "" (pas "nan") avant astype(str)
+                normalized = (raw.where(raw.notna(), other="")
+                                 .astype(str).map(_clean_str))
+                if debug:
+                    n_empty_before = int(raw.isna().sum())
+                    n_empty_after  = int((normalized == "").sum())
+                    n_changed      = int((raw.astype(str) != normalized).sum())
+                    print(f"[norm debug] col={col!r}  dtype_avant={raw.dtype}  "
+                          f"NaN_avant={n_empty_before}  vides_après={n_empty_after}  "
+                          f"valeurs_modifiées={n_changed}")
+                    # Lignes dont la valeur est devenue "" après normalisation
+                    became_empty = normalized == ""
+                    if became_empty.any():
+                        print(f"  → {became_empty.sum()} valeurs devenues vides :")
+                        sample = raw[became_empty].head(10)
+                        for idx, v in sample.items():
+                            print(f"    [{idx}] {repr(v)}")
+                    # Échantillon des 5 premières valeurs avant/après
+                    print(f"  Échantillon (5 premières lignes) :")
+                    for idx in df.index[:5]:
+                        print(f"    [{idx}] {repr(raw[idx])} → {repr(normalized[idx])}")
+                df[col] = normalized
             elif ftype == "date":
                 fmt = fdef.get("date_format", "%Y-%m-%d")
                 df[col] = pd.to_datetime(

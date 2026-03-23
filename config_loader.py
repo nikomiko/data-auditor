@@ -14,8 +14,8 @@ _Loader.add_constructor(
     lambda loader, node: "=",
 )
 
-VALID_FORMATS      = {"csv", "txt", "dat", "json", "xlsx"}
-VALID_TYPES        = {"string", "integer", "decimal", "date", "boolean"}
+VALID_FORMATS      = {"csv", "txt", "dat", "json", "jsonl", "xlsx"}
+VALID_TYPES        = {"string", "integer", "decimal", "date", "boolean", "skip"}
 VALID_NORMALIZATIONS = {"none", "lowercase", "trim", "both"}
 
 
@@ -44,7 +44,7 @@ def _validate_source(config: dict, role: str):
     fmt = src.get("format", "").lower()
     if fmt not in VALID_FORMATS:
         raise ConfigError(f"sources.{role}.format invalide : '{fmt}'. Valeurs : {', '.join(VALID_FORMATS)}")
-    if fmt not in ("json", "xlsx"):
+    if fmt not in ("json", "jsonl", "xlsx"):
         if not src.get("fields") and not src.get("column_positions"):
             raise ConfigError(f"sources.{role} : 'fields' ou 'column_positions' requis.")
     fields = src.get("fields") or src.get("column_positions") or []

@@ -41,6 +41,10 @@ function applyYamlContent(content, filename) {
   try {
     const parsed = jsyaml.load(content);
     wizLoadFromYaml(parsed);
+    _updateFileHint('reference');
+    _updateFileHint('target');
+    if (fileRef) _quickConformityCheck('reference', fileRef);
+    if (fileTgt) _quickConformityCheck('target', fileTgt);
     // Mettre à jour le résumé dans wfv-0
     const sum = document.getElementById('yaml-loaded-summary');
     const dz  = document.getElementById('dz-yaml');
@@ -187,9 +191,52 @@ async function saveAsConfig() {
   updateSaveBtn();
 }
 
+function _dotGet(obj, path) {
+  for (const key of path.replace(/^\./,'').split('.')) {
+    if (!key || typeof obj !== 'object' || obj === null) return undefined;
+    obj = obj[key];
+  }
+  return obj;
+}
+
+async function _autoDetectJson(srcKey, file) {
+  try {
+    const text = await readFileText(file.slice(0, 512000));
+    const src  = WS.sources[srcKey];
+    let records;
+    if (src.format === 'jsonl') {
+      records = text.split('\n').map(l => l.trim()).filter(Boolean)
+        .map(l => { try { return JSON.parse(l); } catch(_) { return null; } }).filter(Boolean);
+    } else {
+      const obj = JSON.parse(text);
+      const jp  = src.json_path || '';
+      if (jp)                  records = _dotGet(obj, jp);
+      else if (Array.isArray(obj)) records = obj;
+      else {
+        for (const k of ['records','data','items','rows'])
+          if (Array.isArray(obj[k])) { records = obj[k]; break; }
+      }
+    }
+    if (!Array.isArray(records) || !records.length) return;
+    const first = records[0];
+    if (typeof first !== 'object' || !first) return;
+    const fields = [];
+    for (const [k, v] of Object.entries(first)) {
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        for (const sk of Object.keys(v))
+          fields.push({ name: sk, type:'string', date_format:'', ignored:false, path:`${k}.${sk}` });
+      } else {
+        fields.push({ name: k, type:'string', date_format:'', ignored:false, path:'' });
+      }
+    }
+    WS.sources[srcKey].fields = fields;
+  } catch(_) {}
+}
+
 async function autoDetectColumns(srcKey, file) {
   const src = WS.sources[srcKey];
-  if (!['csv','txt','dat'].includes(src.format)) return;
+  if (src.format === 'json' || src.format === 'jsonl') return _autoDetectJson(srcKey, file);
+  if (!['csv','txt','dat','positionnel'].includes(src.format)) return;
   if (!src.has_header) return;
   if (src.fixed_width) return;
   try {
@@ -211,6 +258,119 @@ async function autoDetectColumns(srcKey, file) {
     if (!names.length) return;
     src.fields = names.map(n => ({ name: n, type: 'string', date_format: '', ignored: false }));
   } catch(_) {}
+}
+
+function _basename(path) {
+  return (path || '').replace(/\\/g, '/').split('/').pop();
+}
+
+function _updateFileHint(srcKey) {
+  const which = srcKey === 'reference' ? 'ref' : 'tgt';
+  const fileLoaded = srcKey === 'reference' ? !!fileRef : !!fileTgt;
+  const path = WS.sources[srcKey].file || '';
+  const dz = document.getElementById('dz-' + which);
+  if (!dz) return;
+  if (fileLoaded || !path) {
+    dz.classList.remove('hinted');
+    return;
+  }
+  const name = _basename(path);
+  document.getElementById('dz-' + which + '-label').textContent = name || path;
+  document.getElementById('dz-' + which + '-sub').textContent   =
+    path !== name ? path : 'Cliquez pour charger ce fichier';
+  dz.classList.add('hinted');
+}
+
+function _hasSourceConfig(srcKey) {
+  const s = WS.sources[srcKey];
+  return (s.fields && s.fields.length > 0) ||
+         (s.column_positions && s.column_positions.length > 0);
+}
+
+async function _onFileLoaded(srcKey, file) {
+  if (_hasSourceConfig(srcKey)) {
+    await _quickConformityCheck(srcKey, file);
+  }
+  if (wfCurrentStep === 1 && srcKey === 'reference') onEnterRef();
+  else if (wfCurrentStep === 2 && srcKey === 'target') onEnterTgt();
+}
+
+async function _quickConformityCheck(srcKey, file) {
+  const which = srcKey === 'reference' ? 'ref' : 'tgt';
+  const src = WS.sources[srcKey];
+  if (!['csv','txt','dat'].includes(src.format) || src.fixed_width || !src.has_header) {
+    _updateValBadge(which, null); return;
+  }
+  try {
+    const buf = await file.slice(0, 32768).arrayBuffer();
+    const enc = src.encoding === 'utf-8-sig' ? 'utf-8' : (src.encoding || 'utf-8');
+    let text;
+    try { text = new TextDecoder(enc, {fatal:false}).decode(buf); }
+    catch(_) { text = new TextDecoder('utf-8', {fatal:false}).decode(buf); }
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+    const skip = parseInt(src.skip_rows) || 0;
+    const header = lines[skip] || '';
+    const delim = src.delimiter || ';';
+    const fileNames = header.split(delim).map(s => s.trim().replace(/^"|"$/g,''));
+    const declared = (src.fields || []).map(f => f.name);
+    let ok = 0, warn = 0;
+    fileNames.forEach((fn, i) => { declared[i] === fn ? ok++ : warn++; });
+    const missing = Math.max(0, declared.length - fileNames.length);
+    _updateValBadge(which, {ok, warn, missing});
+  } catch(_) { _updateValBadge(which, null); }
+}
+
+async function detectAndApply(srcKey) {
+  const file = srcKey === 'reference' ? fileRef : fileTgt;
+  if (!file) return;
+  const src = WS.sources[srcKey];
+
+  // JSON / JSONL : déléguer à _autoDetectJson puis re-rendre
+  if (src.format === 'json' || src.format === 'jsonl') {
+    await _autoDetectJson(srcKey, file);
+    if (srcKey === 'reference') onEnterRef();
+    else onEnterTgt();
+    return;
+  }
+
+  try {
+    const buf = await file.slice(0, 65536).arrayBuffer();
+    let text;
+    try { text = new TextDecoder('utf-8', {fatal:true}).decode(buf); }
+    catch(_) { text = new TextDecoder('windows-1252').decode(buf); }
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    const allLines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+    const lines = allLines.filter(l => l.trim());
+
+    const DELIMS = [';', ',', '\t', '|'];
+    let bestDelim = ';', bestScore = -1;
+    for (const d of DELIMS) {
+      const cnts = lines.slice(0, 10).map(l => l.split(d).length);
+      const maxCnt = Math.max(...cnts);
+      const score = cnts.filter(c => c === maxCnt).length * maxCnt;
+      if (score > bestScore) { bestScore = score; bestDelim = d; }
+    }
+    src.delimiter = bestDelim;
+
+    const cnts = lines.map(l => l.split(bestDelim).length);
+    const maxCnt = Math.max(...cnts.slice(0, 15));
+    let skip = 0;
+    while (skip < lines.length && cnts[skip] < maxCnt) skip++;
+    src.skip_rows = skip;
+    src.has_header = true;
+    src.fixed_width = false;
+
+    const hdrLine = lines[skip] || '';
+    const names = hdrLine.split(bestDelim)
+      .map(s => s.trim().replace(/^"|"$/g, '')).filter(Boolean);
+    if (names.length) {
+      src.fields = names.map(n => ({name: n, type: 'string', date_format: '', ignored: false}));
+    }
+
+    if (srcKey === 'reference') onEnterRef();
+    else onEnterTgt();
+  } catch(e) { console.error('detectAndApply failed', e); }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -261,7 +421,7 @@ async function previewFile(which, evt, openTab) {
     `Prévisualisation — ${label} : ${file.name}`;
 
   // Lire les premières lignes (max 50KB)
-  const slice = file.slice(0, 51200);
+  const slice = file.slice(0, 512000);
   const text  = await slice.text();
   const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l => l.trim());
 
@@ -271,7 +431,11 @@ async function previewFile(which, evt, openTab) {
   const src   = WS.sources[srcKey];
   const delim = src.delimiter || ';';
 
-  renderPreviewTable(lines, delim);
+  if (['json','jsonl'].includes(src.format)) {
+    renderPreviewJson(which, text);
+  } else {
+    renderPreviewTable(lines, delim);
+  }
   renderPreviewRaw(lines);
   renderValidationCols(which, lines);
 
@@ -297,8 +461,8 @@ function renderValidationCols(which, lines) {
   const srcKey = which === 'ref' ? 'reference' : 'target';
   const src    = WS.sources[srcKey];
 
-  // JSON/XLSX : colonnes auto-détectées
-  if (['json','xlsx'].includes(src.format)) {
+  // JSON / JSONL / XLSX : colonnes auto-détectées au parsing, pas de validation ligne par ligne
+  if (['json','jsonl','xlsx'].includes(src.format)) {
     wrap.innerHTML = '<div class="preview-na">Format ' + src.format + ' : colonnes détectées automatiquement au parsing, pas de validation possible ici.</div>';
     _updateValBadge(which, null);
     return;
@@ -408,9 +572,73 @@ function _updateValBadge(which, stats) {
   badgeEl.style.display = '';
 }
 
+function renderPreviewJson(which, text) {
+  const wrap   = document.getElementById('preview-table-wrap');
+  const srcKey = which === 'ref' ? 'reference' : 'target';
+  const src    = WS.sources[srcKey];
+  const MAX_ROWS = 200;
+  try {
+    let records;
+    if (src.format === 'jsonl') {
+      records = text.split('\n').map(l => l.trim()).filter(Boolean)
+        .map(l => { try { return JSON.parse(l); } catch(_) { return null; } }).filter(Boolean);
+    } else {
+      const obj = JSON.parse(text);
+      const jp  = src.json_path || '';
+      if (jp)                      records = _dotGet(obj, jp);
+      else if (Array.isArray(obj)) records = obj;
+      else {
+        for (const k of ['records','data','items','rows'])
+          if (Array.isArray(obj[k])) { records = obj[k]; break; }
+        if (!records) records = [obj];
+      }
+    }
+    if (!Array.isArray(records) || !records.length) {
+      wrap.innerHTML = '<div class="preview-na">Aucun enregistrement trouvé.</div>';
+      return;
+    }
+
+    // Colonnes : champs configurés si disponibles, sinon clés du 1er enregistrement
+    const fields = (src.fields && src.fields.length)
+      ? src.fields.filter(f => f.type !== 'skip' && !f.ignored)
+      : Object.keys(records[0]).map(k => ({ name: k, path: '' }));
+
+    const display = records.slice(0, MAX_ROWS);
+    const truncR  = records.length > MAX_ROWS;
+
+    let html = '<table class="preview-table"><thead><tr>';
+    html += '<th style="color:var(--muted);font-weight:400">#</th>';
+    fields.forEach(f => {
+      const tip = f.path ? `${f.name} (path: ${f.path})` : f.name;
+      html += `<th title="${esc(tip)}">${esc(f.name)}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    display.forEach((rec, ri) => {
+      html += `<tr><td style="color:var(--muted);font-size:.6rem">${ri + 1}</td>`;
+      fields.forEach(f => {
+        const fpath = f.path || f.name;
+        const val   = fpath.includes('.') ? _dotGet(rec, fpath) : rec[fpath];
+        const s     = (val === null || val === undefined) ? ''
+                    : (typeof val === 'object' ? JSON.stringify(val) : String(val));
+        html += `<td title="${esc(s)}">${esc(s)}</td>`;
+      });
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    if (truncR) {
+      html += `<div class="preview-na" style="padding:.5rem 1rem">… ${records.length.toLocaleString('fr-FR')} enregistrements au total (aperçu limité à ${MAX_ROWS})</div>`;
+    }
+    wrap.innerHTML = html;
+  } catch(e) {
+    wrap.innerHTML = `<div class="preview-na">Erreur de parsing JSON : ${esc(String(e))}</div>`;
+  }
+}
+
 function renderPreviewTable(lines, delim) {
   const wrap = document.getElementById('preview-table-wrap');
-  const MAX_ROWS = 20, MAX_COLS = 30;
+  const MAX_ROWS = 200, MAX_COLS = 30;
 
   if (!lines.length) { wrap.innerHTML = '<div class="preview-na">Fichier vide.</div>'; return; }
 
@@ -609,11 +837,64 @@ report:
 // ═══════════════════════════════════════════════════════════
 //  REVUE CÔTE À CÔTE
 // ═══════════════════════════════════════════════════════════
-function openCtxModal(key) {
-  _ctxKey = key;
+let _ctxEcarts      = [];   // écarts du row courant (passés depuis _appendPageRow)
+let _ctxActiveRules = new Set(); // règles sélectionnées dans les pills (local à la modale)
+let _ctxLastData    = null;      // cache de la dernière réponse _loadCtx pour re-render
+
+function openCtxModal(key, ecarts) {
+  _ctxKey         = key;
+  _ctxEcarts      = ecarts || [];
+  _ctxLastData    = null;
   document.getElementById('ctx-center-key').textContent = key;
+
+  // Initialiser _ctxActiveRules avec toutes les règles présentes (toutes sélectionnées par défaut)
+  _ctxActiveRules = new Set();
+  _ctxEcarts.forEach(e => { if (e.rule_name) _ctxActiveRules.add(e.rule_name); });
+
+  _ctxRenderPills();
+
   document.getElementById('ctx-modal').style.display = 'flex';
   _loadCtx();
+}
+
+function _ctxRenderPills() {
+  const badgesEl = document.getElementById('ctx-rules-badges');
+  if (!badgesEl) return;
+  const TYPE_LABELS = { ORPHELIN_A: 'Orphelin source', ORPHELIN_B: 'Orphelin cible' };
+  const seen = new Set();
+  let html = '';
+  _ctxEcarts.forEach(e => {
+    const t = e.type_ecart;
+    if (t === 'ORPHELIN_A' || t === 'ORPHELIN_B') {
+      if (!seen.has(t)) {
+        seen.add(t);
+        const bg = t === 'ORPHELIN_A' ? 'var(--oa)' : 'var(--ob)';
+        html += `<span style="font-size:.65rem;padding:.15rem .5rem;border-radius:3px;background:${bg};color:#fff;white-space:nowrap">${TYPE_LABELS[t]}</span>`;
+      }
+    } else if (e.rule_name && !seen.has(e.rule_name)) {
+      seen.add(e.rule_name);
+      const bg  = (typeof ruleColor === 'function') ? ruleColor(e.rule_name) : '#94a3b8';
+      const lbl = t === 'KO' ? `✗ ${e.rule_name}` : `✓ ${e.rule_name}`;
+      const active = _ctxActiveRules.has(e.rule_name);
+      html += `<button onclick="_ctxToggleRule(this,'${esc(e.rule_name)}')" data-rule="${esc(e.rule_name)}" style="cursor:pointer;font-size:.65rem;padding:.15rem .5rem;border-radius:3px;border:2px solid ${bg};background:${active ? bg : 'transparent'};color:${active ? '#fff' : bg};white-space:nowrap;transition:all .15s">${esc(lbl)}</button>`;
+    }
+  });
+  badgesEl.innerHTML = html;
+}
+
+function _ctxToggleRule(btn, ruleName) {
+  if (_ctxActiveRules.has(ruleName)) {
+    _ctxActiveRules.delete(ruleName);
+  } else {
+    _ctxActiveRules.add(ruleName);
+  }
+  // Mettre à jour l'apparence du bouton
+  const bg = (typeof ruleColor === 'function') ? ruleColor(ruleName) : '#94a3b8';
+  const active = _ctxActiveRules.has(ruleName);
+  btn.style.background = active ? bg : 'transparent';
+  btn.style.color      = active ? '#fff' : bg;
+  // Re-render les panneaux avec le nouveau filtre
+  if (_ctxLastData) _renderCtxPanels(_ctxLastData);
 }
 
 function closeCtxModal(e) {
@@ -631,6 +912,7 @@ async function _loadCtx() {
     const res  = await fetch(url);
     const data = await res.json();
     if (data.error) { console.warn('ctx:', data.error); return; }
+    _ctxLastData = data;
     _renderCtxPanels(data);
   } catch(e) { console.error('ctx fetch error', e); }
 }
@@ -638,24 +920,54 @@ async function _loadCtx() {
 function _renderCtxPanels(data) {
   const diffSet = new Set(data.diff_fields || []);
 
-  function renderPanel(rows, panelId) {
+  // Construire deux maps séparées : champ source → règles, champ cible → règles
+  // e.champ format : "src_field op tgt_field" (ex: "qty ≠ qty")
+  const srcFieldRuleMap = {};
+  const tgtFieldRuleMap = {};
+  _ctxEcarts.forEach(e => {
+    if (!e.rule_name || !e.champ) return;
+    if (!_ctxActiveRules.has(e.rule_name)) return; // ignorer les règles désactivées
+    const color = (typeof ruleColor === 'function') ? ruleColor(e.rule_name) : '#94a3b8';
+    const tokens = e.champ.split(' ');
+    const srcField = tokens[0];
+    const tgtField = tokens[tokens.length - 1];
+
+    if (srcField) {
+      if (!srcFieldRuleMap[srcField]) srcFieldRuleMap[srcField] = [];
+      if (!srcFieldRuleMap[srcField].some(x => x.name === e.rule_name))
+        srcFieldRuleMap[srcField].push({ name: e.rule_name, color });
+    }
+    if (tgtField) {
+      if (!tgtFieldRuleMap[tgtField]) tgtFieldRuleMap[tgtField] = [];
+      if (!tgtFieldRuleMap[tgtField].some(x => x.name === e.rule_name))
+        tgtFieldRuleMap[tgtField].push({ name: e.rule_name, color });
+    }
+  });
+
+  function renderPanel(rows, panelId, fieldRuleMap) {
     const el = document.getElementById(panelId);
     el.innerHTML = rows.map(row => {
-      const center = row.is_center;
+      const center  = row.is_center;
       const keyHtml = `<div class="ctx-record-key">${esc(row.key)}</div>`;
       if (!row.data) {
         return `<div class="ctx-record${center?' is-center':''}">${keyHtml}<div class="ctx-absent">Absent</div></div>`;
       }
       const fields = Object.entries(row.data).map(([k, v]) => {
-        const diff = center && diffSet.has(k);
-        return `<tr class="${diff?'ctx-diff':''}"><td>${esc(k)}</td><td>${esc(String(v??''))}</td></tr>`;
+        const diff  = center && diffSet.has(k);
+        const rules = center ? (fieldRuleMap[k] || []) : [];
+        const highlighted = rules.length > 0;
+        const dots  = rules.map(r =>
+          `<span class="rule-dot" style="background:${r.color};display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:3px;vertical-align:middle" title="${esc(r.name)}"></span>`
+        ).join('');
+        const valCls = highlighted ? ' ctx-rule-active' : '';
+        return `<tr class="${diff?'ctx-diff':''}"><td>${esc(k)}${dots}</td><td class="${valCls}">${esc(String(v??''))}</td></tr>`;
       }).join('');
       return `<div class="ctx-record${center?' is-center':''}">${keyHtml}<table>${fields}</table></div>`;
     }).join('');
   }
 
-  renderPanel(data.ref_rows, 'ctx-ref-rows');
-  renderPanel(data.tgt_rows, 'ctx-tgt-rows');
+  renderPanel(data.ref_rows, 'ctx-ref-rows', srcFieldRuleMap);
+  renderPanel(data.tgt_rows, 'ctx-tgt-rows', tgtFieldRuleMap);
 
   // Défilement synchrone
   const refEl = document.getElementById('ctx-ref-rows');
