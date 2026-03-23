@@ -41,7 +41,8 @@ if getattr(sys, "frozen", False):
     _BASE_DIR = sys._MEIPASS
     _DATA_DIR = os.path.dirname(sys.executable)
 else:
-    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    _SRC_DIR  = os.path.dirname(os.path.abspath(__file__))   # …/src
+    _BASE_DIR = os.path.dirname(_SRC_DIR)                    # …/ (repo root)
     _DATA_DIR = _BASE_DIR
 
 # Synchroniser report.REPORTS_DIR avec _DATA_DIR

@@ -78,7 +78,7 @@ echo "  → http://localhost:$PORT"
 echo "  Ctrl+C pour arrêter"
 echo ""
 cd "$APP_DIR"
-python server.py
+python src/server.py
 EOF
 chmod +x "$LAUNCH"
 info "Script run.sh créé"
@@ -93,6 +93,6 @@ echo "    bash run.sh"
 echo ""
 echo "  Ou manuellement :"
 echo "    source .venv/bin/activate"
-echo "    python server.py"
+echo "    python src/server.py"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""

@@ -13,15 +13,16 @@ Serveur Flask + UI web, piloté par configuration YAML.
 ## Architecture des modules
 
 ```
-server.py        Flask + SSE streaming + apply_filters
-config_loader.py Validation YAML (ConfigError)
-parser.py        CSV / DAT / JSON / XLSX → DataFrame
-normalizer.py    Typage pandas (string/integer/decimal/date/boolean/skip)
-unpivot.py       Dépivotage format large → long
-comparator.py    Jointure + rules + génération SSE progress
-report.py        Export CSV/HTML + historisation JSON (reports/)
-index.html       UI complète (thème clair, SSE, prévisualisation)
-docs/            Manuel utilisateur (usermanual.md) + Spec (specifications.md)
+src/server.py        Flask + SSE streaming + apply_filters
+src/config_loader.py Validation YAML (ConfigError)
+src/parser.py        CSV / DAT / JSON / XLSX → DataFrame
+src/normalizer.py    Typage pandas (string/integer/decimal/date/boolean/skip)
+src/unpivot.py       Dépivotage format large → long
+src/comparator.py    Jointure + rules + génération SSE progress
+src/report.py        Export CSV/HTML + historisation JSON (reports/)
+src/settings.py      Paramètres persistants (settings.json)
+index.html           UI complète (thème clair, SSE, prévisualisation)
+docs/                Manuel utilisateur (usermanual.md) + Spec (specifications.md)
 ```
 
 ## Modèle conceptuel — Types de contrôles

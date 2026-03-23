@@ -224,8 +224,8 @@ icon = icon_path if os.path.exists(icon_path) else None
 # Analysis
 # ---------------------------------------------------------------------------
 a = Analysis(
-    [src('server.py')],
-    pathex=[HERE],
+    [src(os.path.join('src', 'server.py'))],
+    pathex=[HERE, src('src')],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,

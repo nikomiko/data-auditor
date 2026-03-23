@@ -1,2 +1,9 @@
-CLAUDE.md export-ignore
-.claude/ export-ignore
+# Fichiers exclus de l'archive source (git archive / GitHub release auto-zip)
+CLAUDE.md       export-ignore
+.claude/        export-ignore
+.gitattributes  export-ignore
+.github/        export-ignore
+build.spec      export-ignore
+installer.iss   export-ignore
+tools/          export-ignore
+debug.log       export-ignore

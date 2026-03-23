@@ -77,7 +77,7 @@ echo echo   Ouvrir http://localhost:5000
 echo echo   Ctrl+C pour arreter
 echo echo.
 echo cd /d "%%APP_DIR%%"
-echo python server.py
+echo python src\server.py
 echo pause
 ) > "%LAUNCH%"
 
@@ -95,4 +95,3 @@ echo =================================================
 echo.
 pause
 endlocal
-``

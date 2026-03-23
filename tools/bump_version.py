@@ -35,7 +35,7 @@ def bump(version: str) -> None:
 
     targets = [
         (
-            ROOT / "server.py",
+            ROOT / "src" / "server.py",
             r'(APP_VERSION\s*=\s*")[^"]+(")',
             rf'\g<1>{v}\2',
         ),
