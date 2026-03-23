@@ -1,12 +1,13 @@
 @echo off
 REM ──────────────────────────────────────────────────────────────
 REM  DataAuditor — script d'installation (Windows)
-REM  Usage : double-cliquez ou lancez depuis une invite de commandes
 REM ──────────────────────────────────────────────────────────────
-setlocal enabledelayedexpansion
+setlocal
 
 set APP_DIR=%~dp0
 set VENV_DIR=%APP_DIR%.venv
+set REQ_FILE=%APP_DIR%requirements.txt
+set LAUNCH=%APP_DIR%dataAuditorServer.bat
 
 echo.
 echo   DataAuditor - Installation
@@ -18,8 +19,9 @@ echo [*] Verification Python...
 
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo [!] Python introuvable. Installez Python 3.10+ depuis https://python.org
-    echo     Cochez "Add Python to PATH" lors de l'installation.
+    echo [!] Python introuvable.
+    echo     Installez Python 3.10+ depuis https://python.org
+    echo     Cochez "Add Python to PATH"
     pause
     exit /b 1
 )
@@ -31,35 +33,47 @@ REM ── 2. Environnement virtuel ──────────────�
 echo.
 echo [*] Environnement virtuel...
 
-if exist "%VENV_DIR%" (
-    echo [!] Environnement existant - mise a jour
-) else (
+if not exist "%VENV_DIR%" (
     python -m venv "%VENV_DIR%"
-    echo [OK] Environnement cree dans .venv\
+    if errorlevel 1 (
+        echo [!] Erreur creation environnement virtuel
+        exit /b 1
+    )
+    echo [OK] Environnement cree
+) else (
+    echo [OK] Environnement existant
 )
-
-call "%VENV_DIR%\Scripts\activate.bat"
 
 REM ── 3. Dépendances ────────────────────────────────────────────
 echo.
 echo [*] Installation des dependances...
 
-pip install --upgrade pip --quiet
-pip install -r "%APP_DIR%requirements.txt" --quiet
+if not exist "%REQ_FILE%" (
+    echo [!] requirements.txt introuvable
+    exit /b 1
+)
+
+"%VENV_DIR%\Scripts\python.exe" -m pip install --upgrade pip 
+"%VENV_DIR%\Scripts\python.exe" -m pip install -r "%REQ_FILE%" 
+
+if errorlevel 1 (
+    echo [!] Erreur lors de l'installation des dependances
+    exit /b 1
+)
+
 echo [OK] Dependances installees
 
 REM ── 4. Script de lancement ────────────────────────────────────
 echo.
 echo [*] Creation du script de lancement...
 
-set LAUNCH=%APP_DIR%dataAuditorServer.bat
 (
 echo @echo off
 echo set APP_DIR=%%~dp0
 echo call "%%APP_DIR%%.venv\Scripts\activate.bat"
 echo echo.
 echo echo   DataAuditor
-echo echo   Browse to http://localhost:5000
+echo echo   Ouvrir http://localhost:5000
 echo echo   Ctrl+C pour arreter
 echo echo.
 echo cd /d "%%APP_DIR%%"
@@ -67,7 +81,8 @@ echo python server.py
 echo pause
 ) > "%LAUNCH%"
 
-echo [OK] Script run.bat cree
+echo [OK] Script dataAuditorServer.bat cree
+
 
 REM ── 5. Résumé ─────────────────────────────────────────────────
 echo.
@@ -76,10 +91,8 @@ echo   Installation terminee.
 echo.
 echo   Lancer l'application :
 echo     dataAuditorServer.bat
-echo.
-echo   Ou manuellement avec les deux commandes suivantes 
-echo     .venv\Scripts\activate
-echo     python server.py
 echo =================================================
 echo.
 pause
+endlocal
+``
