@@ -965,7 +965,13 @@ function wizBuildSourcesObj() {
     if (s.fixed_width) {
       if (s.column_positions.length) sr.column_positions = s.column_positions.map(f=>({name:f.name, position:Number(f.position), width:Number(f.width), type:f.type||'string'}));
     } else {
-      if (s.fields.length) sr.fields = s.fields.map(f=>({name:f.name, type:f.type||'string'}));
+      if (s.fields.length) sr.fields = s.fields.map(f => {
+        const o = {name:f.name, type:f.type||'string'};
+        if (f.path)        o.path        = f.path;
+        if (f.date_format) o.date_format = f.date_format;
+        if (f.ignored)     o.ignored     = true;
+        return o;
+      });
     }
     if (s.unpivot_enabled) {
       const fieldList2    = s.fixed_width ? s.column_positions : s.fields;
