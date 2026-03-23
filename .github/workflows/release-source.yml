@@ -1,0 +1,41 @@
+name: Release (source only)
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*'
+
+permissions:
+  contents: write
+
+jobs:
+  release-source:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "DataAuditor v${{ steps.version.outputs.version }}"
+          body: |
+            ## Utilisation
+
+            ```bash
+            pip install flask pandas openpyxl pyyaml jinja2
+            python server.py
+            ```
+
+            Ouvrir http://localhost:5000 dans le navigateur.
+
+            ---
+
+            > L'installeur Windows (.exe) sera ajouté dans une prochaine release.
+          draft: false
+          prerelease: false
