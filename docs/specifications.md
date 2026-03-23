@@ -5,7 +5,7 @@ updated: 2026-03-23
 
 # DataAuditor — Spécification fonctionnelle
 
-**Version de référence : v3.6.0**
+**Version de référence : v3.7.0**
 
 ---
 
@@ -730,4 +730,311 @@ _renderCtxPanels(data) :
       srcFieldRuleMap[src_field].add(rule_name)
       tgtFieldRuleMap[tgt_field].add(rule_name)
   Chaque cellule avec ≥1 règle active → bullet + surlignage
+```
+
+---
+
+## Tooling & CI/CD
+
+Cette section décrit les scripts de développement, la chaîne de build et le pipeline de release automatisé mis en place à partir de la v3.7.0.
+
+---
+
+### RG-TOOL — Scripts de développement
+
+#### RG-TOOL-01 — Gestion des versions (`tools/bump_version.py`)
+
+| Métadonnée | Valeur |
+|---|---|
+| Commit | `v3.7.0` |
+| Tests | — |
+
+**Résumé :** Script unique responsable de la synchronisation de la version dans tous les fichiers du projet. À appeler avant chaque commit qui change un comportement visible.
+
+**Algorithme :**
+```
+Invocation : python3 tools/bump_version.py <X.Y.Z>
+
+Fichiers mis à jour (substitution regex) :
+  server.py          APP_VERSION = "X.Y.Z"
+  static/js/state.js UI_VERSION  = 'X.Y.Z'
+  static/sw.js       CACHE_VERSION = 'vX.Y.Z'
+  index.html         <span id="logo-ver">vX.Y.Z</span>
+  installer.iss      #define AppVersion "X.Y.Z"
+```
+
+**Convention de bump :**
+
+| Préfixe commit | Bump | Exemple |
+|---|---|---|
+| `fix:` | PATCH — `x.y.Z+1` | correction de bug, ajustement mineur |
+| `feat:` | MINOR — `x.Y+1.0` | nouvelle fonctionnalité |
+| breaking change | MAJOR — `X+1.0.0` | rupture de schéma YAML ou API |
+
+**Workflow type :**
+```bash
+python3 tools/bump_version.py 3.8.0
+git add -p
+git commit -m "feat: v3.8.0 — description"
+git push && git tag v3.8.0 && git push origin v3.8.0
+```
+
+---
+
+#### RG-TOOL-02 — Tests automatisés (`sample/run_tests.py`)
+
+| Métadonnée | Valeur |
+|---|---|
+| Commit | `v3.5.0` |
+| Tests | auto-référentiel |
+
+**Résumé :** Suite de tests de non-régression qui lance des audits réels via l'API HTTP et vérifie les résultats attendus. Chaque scénario couvre un format de fichier ou une combinaison de formats.
+
+**Algorithme :**
+```
+Prérequis : serveur lancé sur localhost:5000
+
+Pour chaque scénario dans sample/jdd/ :
+  1. POST /api/upload  → upload des deux fichiers source
+  2. POST /api/audit   → soumettre le YAML de configuration
+  3. GET  /api/stream  → consommer les événements SSE jusqu'à "done"
+  4. Comparer summary { orphelins_a, orphelins_b, divergents, ok }
+     avec les valeurs attendues déclarées dans le scénario
+  5. Afficher ✓ ou ✗ avec détail en cas d'échec
+
+Invocation :
+  python3 sample/run_tests.py [--url http://localhost:5000] [--filter <nom>]
+```
+
+**Scénarios couverts (sample/jdd/) :**
+
+| Config YAML | Formats | Couverture |
+|---|---|---|
+| `cfg_csv.yaml` | CSV ↔ CSV | format de base, règles standard |
+| `cfg_txt.yaml` | TXT positionnel ↔ TXT positionnel | format fixe |
+| `cfg_txt_vs_csv.yaml` | TXT ↔ CSV | cross-format |
+| `cfg_json.yaml` | JSON ↔ JSON | json_path, fields avec path imbriqué |
+| `cfg_jsonl.yaml` | JSONL ↔ JSONL | une ligne = un enregistrement |
+| `cfg_csv_vs_jsonl.yaml` | CSV ↔ JSONL | cross-format |
+| `cfg_json_vs_csv.yaml` | JSON ↔ CSV | cross-format |
+| `cfg_xlsx.yaml` | XLSX ↔ XLSX | tableur Excel |
+| `cfg_xlsx_vs_jsonl.yaml` | XLSX ↔ JSONL | cross-format |
+| `cfg_wide_csv.yaml` | CSV large ↔ CSV large | dépivotage unpivot |
+| `cfg_wide_txt.yaml` | TXT large ↔ TXT large | dépivotage unpivot positionnel |
+
+---
+
+#### RG-TOOL-03 — Génération des icônes PWA (`tools/make_pwa_icons.py`)
+
+| Métadonnée | Valeur |
+|---|---|
+| Commit | `v3.7.0` |
+| Tests | — |
+
+**Résumé :** Génère les icônes PNG requises par le Web App Manifest sans dépendance externe (PNG écrit en Python pur via `zlib` + `struct`).
+
+**Algorithme :**
+```
+Invocation : python3 tools/make_pwa_icons.py
+
+Produit :
+  static/icons/icon-192.png          192×192 px  (any)
+  static/icons/icon-512.png          512×512 px  (any)
+  static/icons/icon-maskable-512.png 512×512 px  (maskable, safe-zone 10 %)
+
+Dessin : fond bleu (#2563eb), deux colonnes de données blanches,
+         ligne KO rouge, barre diagonale jaune — logo DataAuditor
+```
+
+À relancer uniquement si le logo est modifié. Les PNG sont committés dans le dépôt.
+
+---
+
+#### RG-TOOL-04 — Génération de l'icône Windows (`tools/make_icon.py`)
+
+| Métadonnée | Valeur |
+|---|---|
+| Commit | `v3.7.0` |
+| Tests | — |
+
+**Résumé :** Génère `tools/DataAuditor.ico` au format ICO multi-résolution (16/32/48/256 px) sans dépendance externe (ICO écrit en Python pur via `struct`).
+
+**Algorithme :**
+```
+Invocation : python3 tools/make_icon.py
+
+Produit :
+  tools/DataAuditor.ico  (multi-résolution : 16, 32, 48, 256 px)
+
+Utilisé par :
+  build.spec     → exe PyInstaller (icône barre des tâches Windows)
+  installer.iss  → SetupIconFile (icône de l'installeur)
+```
+
+À relancer uniquement si le logo est modifié. L'ICO est committé dans le dépôt.
+
+---
+
+### RG-BUILD — Build Windows
+
+#### RG-BUILD-01 — Bundle PyInstaller (`build.spec`)
+
+| Métadonnée | Valeur |
+|---|---|
+| Commit | `v3.7.0` |
+| Tests | — |
+
+**Résumé :** Spécification PyInstaller qui produit un bundle Windows autonome (mode `onedir`) incluant Python, Flask, pandas, openpyxl et toutes les ressources statiques.
+
+**Algorithme :**
+```
+Mode : onedir (--onedir)
+  → répertoire dist/DataAuditor/ contenant DataAuditor.exe + dépendances
+  → démarrage plus rapide que --onefile (pas d'extraction au lancement)
+
+Résolution des chemins au runtime (server.py) :
+  Si sys.frozen == True (mode PyInstaller) :
+    _BASE_DIR = sys._MEIPASS          ← ressources en lecture seule
+    _DATA_DIR = dirname(sys.executable) ← données persistantes (reports/)
+  Sinon :
+    _BASE_DIR = _DATA_DIR = dirname(__file__)
+
+Ressources embarquées :
+  index.html, static/, docs/, sample/
+  jinja2 (templates), openpyxl (styles Excel)
+
+Exclusions (-X) :
+  tkinter, PyQt5/6, matplotlib, scipy, PIL, Jupyter, pytest
+```
+
+**Invocation manuelle (Windows) :**
+```bat
+pip install pyinstaller flask pandas openpyxl pyyaml jinja2
+pyinstaller build.spec
+```
+Résultat : `dist/DataAuditor/DataAuditor.exe`
+
+---
+
+#### RG-BUILD-02 — Installeur Inno Setup (`installer.iss`)
+
+| Métadonnée | Valeur |
+|---|---|
+| Commit | `v3.7.0` |
+| Tests | — |
+
+**Résumé :** Script Inno Setup 6 qui emballe le bundle PyInstaller dans un installeur Windows professionnel (`.exe`).
+
+**Algorithme :**
+```
+Source       : dist\DataAuditor\* (bundle PyInstaller)
+Destination  : C:\Program Files\DataAuditor\
+Résultat     : dist\installer\DataAuditor_Setup_vX.Y.Z.exe
+
+Options installeur :
+  Compression : LZMA ultra64 + solid (taille minimale)
+  Tâches      : raccourci bureau (coché), démarrage auto (décoché)
+  Langue      : français (principal), anglais (secondaire)
+  Prérequis   : Windows 10/11 64 bits (rejet 32 bits)
+  Désinstall. : propose la suppression du dossier reports/ (avec confirmation)
+
+Surcharge de version (CI) :
+  iscc /DAppVersion=X.Y.Z installer.iss
+  → remplace la valeur #define AppVersion sans modifier le fichier
+```
+
+**Invocation manuelle (Windows) :**
+```bat
+choco install innosetup
+iscc installer.iss
+```
+
+---
+
+### RG-CICD — Pipeline de release
+
+#### RG-CICD-01 — Workflow GitHub Actions (`.github/workflows/release.yml`)
+
+| Métadonnée | Valeur |
+|---|---|
+| Commit | `v3.7.0` |
+| Tests | — |
+
+**Résumé :** Workflow déclenché sur tout push de tag `v*` qui build l'installeur Windows et publie automatiquement la release GitHub avec le binaire joint.
+
+**Algorithme :**
+```
+Déclencheur : git push origin vX.Y.Z
+
+Environnement : windows-latest (GitHub Actions)
+
+Étapes :
+  1. Checkout du dépôt
+  2. Installer Python 3.13 + dépendances (pip)
+  3. Extraire la version depuis le nom du tag (ex. v3.7.0 → 3.7.0)
+  4. Lancer PyInstaller : pyinstaller build.spec
+       → dist/DataAuditor/ (bundle onedir)
+  5. Installer Inno Setup (choco install innosetup)
+  6. Lancer ISCC : iscc /DAppVersion=X.Y.Z installer.iss
+       → dist/installer/DataAuditor_Setup_vX.Y.Z.exe
+  7. Créer la release GitHub (softprops/action-gh-release@v2)
+       → Titre : "DataAuditor vX.Y.Z"
+       → Asset : DataAuditor_Setup_vX.Y.Z.exe
+
+Permissions requises : contents: write (pour créer la release)
+```
+
+**Workflow de release complet :**
+```bash
+# 1. Développer + committer sur main
+python3 tools/bump_version.py X.Y.Z
+git add -p && git commit -m "feat: vX.Y.Z — description"
+git push origin main
+
+# 2. Tagger → déclenche le build CI
+git tag vX.Y.Z && git push origin vX.Y.Z
+
+# 3. Suivre le build
+gh run watch
+
+# 4. Résultat : release GitHub avec installeur Windows attaché
+```
+
+**Durée estimée du build CI :** 5-10 minutes (pip install + PyInstaller + Inno Setup).
+
+---
+
+#### RG-CICD-02 — PWA (Progressive Web App)
+
+| Métadonnée | Valeur |
+|---|---|
+| Commit | `v3.7.0` |
+| Tests | — |
+
+**Résumé :** DataAuditor est installable comme application native depuis le navigateur (Chrome/Edge). Le Service Worker assure le fonctionnement hors-ligne pour l'interface et invalide automatiquement le cache lors d'une mise à jour.
+
+**Algorithme :**
+```
+Manifeste : /static/manifest.json (servi aussi sur /manifest.json)
+  display: standalone  → lance sans barre d'adresse
+  theme_color: #2563eb
+
+Service Worker : /sw.js (scope = / via route Flask dédiée)
+  Stratégie :
+    /api/*     → réseau uniquement (jamais mis en cache)
+    tout autre → cache-first + revalidation arrière-plan (stale-while-revalidate)
+  Hors-ligne   → sert la version en cache ou 503
+
+Invite d'installation :
+  beforeinstallprompt → mémorisé dans _pwaPrompt
+  Bouton ⬇ dans le header (affiché uniquement si le navigateur propose l'invite)
+  Après installation → bouton masqué
+
+Notification de mise à jour :
+  SW détecte une nouvelle version → postMessage({ type: 'SW_UPDATED' })
+  UI affiche une barre fixe en bas avec bouton "Recharger"
+
+Cache invalidation :
+  CACHE_VERSION dans sw.js = 'vX.Y.Z'
+  Mis à jour par tools/bump_version.py → force le remplacement du cache au démarrage
 ```
