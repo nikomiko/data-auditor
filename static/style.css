@@ -493,7 +493,5 @@ body.results-fs .th-fs-btn svg{stroke:#2563eb}
 .xc{max-width:120px;overflow:hidden;text-overflow:ellipsis;font-size:.72rem}
 .xc-ref{color:var(--ok)}
 .xc-tgt{color:var(--ob)}
-.xc-hidden .xc,.xc-hidden .th-extra{display:none}
-.col-pick-tog{border-left:1px solid var(--border);padding-left:.6rem;margin-left:.2rem;color:var(--muted)}
 .th-extra-ref{border-top:2px solid var(--ok-bd)}
 .th-extra-tgt{border-top:2px solid var(--ob-bd)}

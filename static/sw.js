@@ -8,7 +8,7 @@
  *   Hors-ligne     → sert la version en cache si disponible
  */
 
-const CACHE_VERSION = 'v3.23.1';
+const CACHE_VERSION = 'v3.23.2';
 const CACHE_NAME    = `dataauditor-${CACHE_VERSION}`;
 
 // Ressources pré-cachées à l'installation
