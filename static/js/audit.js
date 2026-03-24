@@ -139,10 +139,11 @@ function listenSSE(token) {
       fetchPage(1);
       fetchMeta();
 
-      // Activer exports
+      // Activer exports + badge "export complet"
       document.getElementById('btn-csv').disabled  = false;
       document.getElementById('btn-html').disabled = false;
       document.getElementById('btn-xlsx').disabled = false;
+      _updateExportBadge(ev.total_results, config?.report?.max_diff_preview || 500);
 
       // Débloquer l'étape résultats
       wfUnlocked = 6;

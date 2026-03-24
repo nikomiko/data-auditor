@@ -154,6 +154,8 @@ textarea#yaml::placeholder{color:var(--muted)}
 .global-nav-bar{display:flex;align-items:center;gap:.4rem;padding:.35rem .85rem;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0;position:sticky;top:50px;z-index:90;flex-wrap:nowrap;overflow:hidden}
 .gnav-sep{width:1px;height:18px;background:var(--border);margin:0 .15rem;flex-shrink:0;align-self:center}
 .gnav-exports-group{display:flex;align-items:center;gap:.4rem}
+.export-complete-badge{font-size:.68rem;color:var(--muted);white-space:nowrap;padding:0 .5rem}
+.export-complete-badge.truncated{color:var(--acc);font-weight:500}
 
 /* ── Results panel ── */
 

@@ -573,6 +573,23 @@ function _rowMatchesText(r) {
 // ═══════════════════════════════════════════════════════════
 //  EXPORT
 // ═══════════════════════════════════════════════════════════
+function _updateExportBadge(total, maxPreview) {
+  const badge = document.getElementById('export-complete-badge');
+  if (!badge) return;
+  if (!total) { badge.style.display = 'none'; return; }
+  const n = total.toLocaleString('fr-FR');
+  if (total > maxPreview) {
+    badge.textContent = `↓ export complet — ${n} résultats`;
+    badge.classList.add('truncated');
+    badge.title = `L'affichage est limité à ${maxPreview} lignes, mais les exports CSV/XLSX contiennent les ${n} résultats complets.`;
+  } else {
+    badge.textContent = `${n} résultats`;
+    badge.classList.remove('truncated');
+    badge.title = '';
+  }
+  badge.style.display = '';
+}
+
 function exportReport(fmt) {
   if (!currentToken) { exportHTMLDynamic(); return; }
 
@@ -594,6 +611,14 @@ function exportReport(fmt) {
     if (filterText) p.set('q', filterText);
   }
   // CSV et XLSX : tous les résultats (pas de filtre), extra cols seulement
+
+  if (fmt === 'xlsx') {
+    const btn = document.getElementById('btn-xlsx');
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spin"></div> Génération…';
+    setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 8000);
+  }
 
   window.location.href = `/api/export?${p}`;
 }
