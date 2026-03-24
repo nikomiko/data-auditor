@@ -174,6 +174,40 @@ function listenSSE(token) {
 }
 
 // ═══════════════════════════════════════════════════════════
+//  CONFIG VALIDATION  (/api/validate)
+// ═══════════════════════════════════════════════════════════
+async function validateConfig() {
+  const el = document.getElementById('cfg-validate-status');
+  if (!el) return;
+  _saveCurrentWFStep();
+  const yamlText = wizBuildYaml();
+  if (!yamlText.trim()) { el.style.display = 'none'; return; }
+
+  el.className = 'cfg-validate-status validating';
+  el.textContent = 'Validation…';
+  el.style.display = '';
+
+  try {
+    const fd = new FormData();
+    fd.append('config_yaml', yamlText);
+    if (fileRef) fd.append('file_ref', fileRef);
+    if (fileTgt) fd.append('file_tgt', fileTgt);
+
+    const data = await fetch('/api/validate', { method: 'POST', body: fd }).then(r => r.json());
+    if (data.valid) {
+      el.className = 'cfg-validate-status valid';
+      el.textContent = '✓ Configuration valide';
+    } else {
+      el.className = 'cfg-validate-status invalid';
+      el.innerHTML = '⚠ ' + (data.errors || []).map(e => esc(e)).join('<br>⚠ ');
+    }
+  } catch(e) {
+    el.className = 'cfg-validate-status invalid';
+    el.textContent = '⚠ Impossible de contacter le serveur.';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
 //  HISTORY
 // ═══════════════════════════════════════════════════════════
 async function loadHistory() {

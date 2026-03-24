@@ -31,7 +31,7 @@ from report        import save_history, list_history, load_history, to_csv, to_h
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
 
-APP_VERSION = "3.20.0"
+APP_VERSION = "3.21.0"
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
 # _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
@@ -106,6 +106,68 @@ def serve_sample(filename):
     if not os.path.exists(os.path.join(sample_dir, filename)):
         sample_dir = _BASE_DIR   # fallback : fichiers à la racine
     return send_from_directory(sample_dir, filename, as_attachment=True)
+
+
+# ─────────────────────────────────────────────────────────────
+#  POST /api/validate  — valide la config YAML (sans lancer l'audit)
+# ─────────────────────────────────────────────────────────────
+@app.route("/api/validate", methods=["POST"])
+def validate_config():
+    """Valide la configuration YAML.
+
+    Body (multipart ou form) :
+        config_yaml : texte YAML obligatoire
+        file_ref    : fichier optionnel — si fourni, vérifie les noms de champs de jointure
+        file_tgt    : fichier optionnel — idem pour la cible
+
+    Returns :
+        {"valid": true}
+        {"valid": false, "errors": ["…"]}
+    """
+    config_yaml = request.form.get("config_yaml", "")
+    if not config_yaml.strip():
+        return jsonify({"valid": False, "errors": ["config_yaml manquant."]}), 400
+
+    errors = []
+
+    # 1. Validation structurelle YAML
+    try:
+        config = load_config(config_yaml)
+    except ConfigError as e:
+        return jsonify({"valid": False, "errors": [str(e)]}), 200
+
+    # 2. Validation optionnelle des colonnes si les fichiers sont fournis
+    for role, form_key in [("reference", "file_ref"), ("target", "file_tgt")]:
+        if form_key not in request.files:
+            continue
+        try:
+            fbytes = request.files[form_key].read()
+            src    = config["sources"][role]
+            df     = parse_file(fbytes, src)
+            df     = normalize_dataframe(df, src)
+
+            # Vérifier les clés de jointure
+            join_keys = config.get("join", {}).get("keys", [])
+            fld_key   = "source_field" if role == "reference" else "target_field"
+            for jk in join_keys:
+                col = jk.get(fld_key)
+                if col and col not in df.columns:
+                    errors.append(f"Clé de jointure '{col}' introuvable dans la source '{role}'.")
+
+            # Vérifier les champs de règles
+            for rule in config.get("rules", []):
+                for rf in rule.get("fields", []):
+                    fld = rf.get("source_field" if role == "reference" else "target_field")
+                    if fld and fld not in df.columns:
+                        errors.append(
+                            f"Règle '{rule.get('name','')}' : champ '{fld}' introuvable dans '{role}'."
+                        )
+        except Exception as e:
+            errors.append(f"Erreur lors de la lecture de la source '{role}' : {e}")
+
+    if errors:
+        return jsonify({"valid": False, "errors": errors}), 200
+    return jsonify({"valid": True, "errors": []}), 200
 
 
 # ─────────────────────────────────────────────────────────────

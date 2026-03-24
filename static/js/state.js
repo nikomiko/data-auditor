@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 //  VERSION
 // ═══════════════════════════════════════════════════════════
-const UI_VERSION = '3.20.0';
+const UI_VERSION = '3.21.0';
 
 (async function checkVersion() {
   try {
@@ -120,7 +120,7 @@ function goWFStep(n) {
   else if (n === 2) onEnterTgt();
   else if (n === 3) wizRenderJoin();
   else if (n === 4) wizRenderRules();
-  else if (n === 5) wizRenderFilters();
+  else if (n === 5) { wizRenderFilters(); validateConfig(); }
   updateGlobalNav(n);
 }
 
