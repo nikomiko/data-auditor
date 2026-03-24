@@ -315,6 +315,8 @@ function _toggleExtraCol(side, col, checked) {
 function appendRow(r) {
   if (r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') {
     if (!activeFilters.has(r.type_ecart)) return;
+  } else {
+    if (!activeFilters.has('BOTH')) return;
   }
   if (activeRuleFilters !== null && r.rule_name && !activeRuleFilters.has(r.rule_name)) return;
   if (!_rowMatchesText(r)) return;
@@ -347,7 +349,11 @@ function rebuildTable() {
   const empty = document.getElementById('empty');
 
   let rows = allResults.filter(r => {
-    if ((r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') && !activeFilters.has(r.type_ecart)) return false;
+    if (r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') {
+      if (!activeFilters.has(r.type_ecart)) return false;
+    } else {
+      if (!activeFilters.has('BOTH')) return false;
+    }
     if (activeRuleFilters !== null && r.rule_name && !activeRuleFilters.has(r.rule_name)) return false;
     if (!_rowMatchesText(r)) return false;
     return true;

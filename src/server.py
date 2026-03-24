@@ -31,7 +31,7 @@ from report        import save_history, list_history, load_history, to_csv, to_h
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
 
-APP_VERSION = "3.23.5"
+APP_VERSION = "3.24.1"
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
 # _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
@@ -412,7 +412,12 @@ def get_results_page(token):
     extra_tgt = [c for c in request.args.get("extra_tgt", "").split(",") if c]
 
     raw          = sess.get("results", [])
-    active_types = set(types_str.split(",")) if types_str else None
+    # 'types' présent mais vide → aucun type sélectionné → 0 lignes (set vide)
+    # 'types' absent → pas de filtre (None = tout afficher)
+    if 'types' in request.args:
+        active_types = set(t for t in types_str.split(",") if t) if types_str else set()
+    else:
+        active_types = None
     # 'rules' présent dans la requête = filtre explicite ; absent = pas de filtre
     if 'rules' in request.args:
         active_rules = set(rules_str.split(",")) if rules_str else set()
