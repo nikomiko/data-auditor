@@ -290,6 +290,9 @@ body.results-fs .th-fs-btn svg{stroke:#2563eb}
 .hist-main{display:flex;flex-direction:column;gap:.25rem;flex:1;cursor:pointer}
 .hist-header{display:flex;align-items:center;gap:.6rem}
 .hist-run-label{font-size:.7rem;background:var(--acc);color:#fff;border-radius:3px;padding:.1rem .4rem;font-weight:500}
+.hist-actions{display:flex;align-items:center;gap:.25rem;flex-shrink:0}
+.hist-replay{background:none;border:1px solid var(--border);color:var(--dim);cursor:pointer;font-size:.7rem;padding:.2rem .55rem;border-radius:4px;transition:all .15s;white-space:nowrap}
+.hist-replay:hover{border-color:var(--acc);color:var(--acc);background:var(--acc-bg)}
 .hist-del{background:none;border:none;cursor:pointer;font-size:.85rem;opacity:.35;padding:.2rem .4rem;border-radius:4px;transition:opacity .15s,background .15s;flex-shrink:0}
 .hist-del:hover{opacity:1;background:#fee2e2}
 .hist-purge-bar{display:flex;justify-content:flex-end;margin-bottom:.5rem}

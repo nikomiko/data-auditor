@@ -236,7 +236,10 @@ async function loadHistory() {
             ${meta ? `<span class="hs meta">${esc(meta)}</span>` : ''}
           </div>
         </div>
-        <button class="hist-del" title="Supprimer" onclick="deleteHistoryEntry(event,'${esc(h.filename)}')">🗑</button>
+        <div class="hist-actions">
+          <button class="hist-replay" title="Relancer cet audit avec de nouveaux fichiers" onclick="replayAudit(event,'${esc(h.filename)}')">↺ Relancer</button>
+          <button class="hist-del" title="Supprimer" onclick="deleteHistoryEntry(event,'${esc(h.filename)}')">🗑</button>
+        </div>
       </div>`;
     }).join('');
     const purgeBtn = `<div class="hist-purge-bar"><button class="btn-xs btn-danger" onclick="purgeAllHistory()">🗑 Tout supprimer</button></div>`;
@@ -297,3 +300,24 @@ async function loadHistoryEntry(filename) {
     }
   } catch(e) { showErr('Impossible de charger l\'audit : ' + e.message); }
 }
+
+async function replayAudit(ev, filename) {
+  ev.stopPropagation();
+  try {
+    const data   = await fetch(`/api/history/${encodeURIComponent(filename)}`).then(r => r.json());
+    const config = data.config;
+    if (!config) { showErr('Config introuvable dans cet audit.'); return; }
+
+    // Sérialiser le config dict en YAML
+    const yamlText = jsyaml.dump(config, { indent: 2, lineWidth: -1 });
+    applyYamlContent(yamlText, 'config.yaml');
+
+    // Réinitialiser fichiers et résultats, aller à l'étape ①
+    fileRef = null; fileTgt = null;
+    allResults = []; lastSummary = {}; currentToken = null;
+    wfUnlocked = 1;
+    goWFStep(1);
+    showErr('Configuration restaurée depuis l\'historique. Chargez les fichiers source et cible pour relancer l\'audit.');
+  } catch(e) { showErr('Erreur lors du rechargement : ' + e.message); }
+}
+
