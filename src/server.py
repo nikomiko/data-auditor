@@ -31,7 +31,7 @@ from report        import save_history, list_history, load_history, to_csv, to_h
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
 
-APP_VERSION = "3.23.0"
+APP_VERSION = "3.23.4"
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
 # _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
@@ -504,10 +504,17 @@ def get_results_page(token):
     elif sort_col.startswith("xc_ref:") or sort_col.startswith("xc_tgt:"):
         _xc_side, _xc_col = sort_col.split(":", 1)
         _xc_map = sess.get("ref_rows_map" if _xc_side == "xc_ref" else "tgt_rows_map", {})
-        rows.sort(
-            key=lambda r: str(_xc_map.get(r["join_key"], {}).get(_xc_col, "") or "").lower(),
-            reverse=reverse,
-        )
+
+        def _xc_sort_key(r, _m=_xc_map, _c=_xc_col):
+            s = str(_m.get(r["join_key"], {}).get(_c, "") or "").strip()
+            if not s:
+                return (2, 0.0, "")          # vide → toujours en dernier
+            try:
+                return (0, float(s.replace(",", ".")), "")   # numérique
+            except ValueError:
+                return (1, 0.0, s.lower())   # texte / date ISO (tri lexico correct)
+
+        rows.sort(key=_xc_sort_key, reverse=reverse)
 
     # ── Pagination ───────────────────────────────────────────
     total  = len(rows)
