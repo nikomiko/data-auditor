@@ -23,7 +23,7 @@
 <header>
   <div class="logo"><a href="https://github.com/nikomiko/data-auditor" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:.4rem"><img src="/static/icons/icon-192.png" alt="" style="width:20px;height:20px;border-radius:4px;vertical-align:middle">data<em>/</em>auditor</a>
     <span class="logo-tag">server</span>
-    <span class="logo-ver" id="logo-ver">v3.22.0</span>
+    <span class="logo-ver" id="logo-ver">v3.23.0</span>
     <span id="version-mismatch" style="display:none" title="" class="version-mismatch-badge">⚠ version</span>
     <span id="server-offline" style="display:none" class="server-offline-badge" title="Le serveur ne répond plus. Relancez dataAuditor.sh puis rechargez la page.">⚡ Serveur hors ligne</span>
   </div>
@@ -303,9 +303,17 @@
   </div>
 
   <!-- ⑦ Historique -->
-  <div class="wf-view" id="wfv-7">
-    <div class="history-list" id="history-list">
-      <div class="hist-empty">Chargement…</div>
+  <div class="wf-view" id="wfv-7" style="flex-direction:column">
+    <div id="hist-delta-bar" class="hist-delta-bar" style="display:none">
+      <span id="hist-delta-info">Sélectionnez 2 audits pour comparer</span>
+      <button id="hist-delta-btn" class="btn-sm" onclick="showDelta()" disabled>⇄ Comparer</button>
+      <button class="btn-sm btn-ghost" onclick="clearDeltaSelection()">✕ Annuler</button>
+    </div>
+    <div style="display:flex;flex:1;overflow:hidden">
+      <div class="history-list" id="history-list">
+        <div class="hist-empty">Chargement…</div>
+      </div>
+      <div id="hist-delta-panel" class="hist-delta-panel" style="display:none"></div>
     </div>
   </div>
 

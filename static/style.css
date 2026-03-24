@@ -140,6 +140,10 @@ textarea#yaml{flex:1;background:#f8fff8;border:none;color:#1e4620;font-family:va
 
 .btn-xs{background:none;border:1px solid var(--border);color:var(--muted);font-size:.75rem;padding:0 .85rem;border-radius:var(--r);cursor:pointer;font-family:var(--sans);transition:all .15s;height:var(--btn-h);display:inline-flex;align-items:center;white-space:nowrap}
 .btn-xs:hover{border-color:var(--acc);color:var(--acc)}
+.btn-sm{background:var(--acc);color:#fff;border:none;font-size:.75rem;padding:.25rem .75rem;border-radius:var(--r);cursor:pointer;font-family:var(--sans);transition:all .15s;white-space:nowrap}
+.btn-sm:hover{opacity:.9}.btn-sm:disabled{opacity:.4;pointer-events:none}
+.btn-ghost{background:none;border:1px solid var(--border);color:var(--dim);font-size:.75rem;padding:.25rem .75rem;border-radius:var(--r);cursor:pointer;font-family:var(--sans);transition:all .15s;white-space:nowrap}
+.btn-ghost:hover{border-color:var(--dim)}
 textarea#yaml::placeholder{color:var(--muted)}
 
 .btn-run{width:100%;height:var(--btn-h);padding:0 1.5rem;background:#15803d;color:#fff;border:none;border-radius:var(--r);font-family:var(--sans);font-size:.88rem;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.5rem;white-space:nowrap}
@@ -304,6 +308,24 @@ body.results-fs .th-fs-btn svg{stroke:#2563eb}
 .hs{font-family:var(--mono);font-size:.75rem}
 .hs.a{color:var(--oa)}.hs.b{color:var(--ob)}.hs.d{color:var(--dv)}.hs.meta{color:var(--muted)}
 .hist-empty{color:var(--muted);text-align:center;padding:3rem;font-size:.875rem}
+/* Checkbox delta selection */
+.hist-chk-wrap{cursor:pointer;flex-shrink:0;display:flex;align-items:center}
+.hist-chk{width:14px;height:14px;cursor:pointer;accent-color:var(--acc)}
+/* Delta bar */
+.hist-delta-bar{display:flex;align-items:center;gap:.75rem;padding:.5rem 1.25rem;background:var(--s2);border-bottom:1px solid var(--border);font-size:.78rem;flex-shrink:0}
+#hist-delta-info{flex:1;color:var(--dim)}
+/* Delta panel */
+.hist-delta-panel{width:40%;min-width:300px;border-left:1px solid var(--border);overflow-y:auto;flex-shrink:0}
+.delta-header{padding:.75rem 1rem;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:.25rem;background:var(--s1)}
+.delta-run{font-size:.72rem;color:var(--muted)}
+.delta-run-lbl{font-weight:600;color:var(--dim);margin-right:.4rem}
+.delta-section{padding:.75rem 1rem;border-bottom:1px solid var(--border)}
+.delta-section-title{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.5rem}
+.delta-apparus{color:var(--dv)}.delta-resolus{color:var(--ok)}.delta-persistants{color:var(--muted)}
+.delta-row{display:flex;align-items:center;gap:.5rem;padding:.2rem 0;font-size:.75rem;border-bottom:1px solid var(--border-light, #f0f0f0)}
+.delta-key{font-family:var(--mono);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.delta-type{font-family:var(--mono);font-size:.65rem;opacity:.7;flex-shrink:0}
+.delta-rule{font-size:.65rem;color:var(--muted);flex-shrink:0}
 
 /* Spinner */
 @keyframes spin{to{transform:rotate(360deg)}}

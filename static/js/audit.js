@@ -208,9 +208,82 @@ async function validateConfig() {
 }
 
 // ═══════════════════════════════════════════════════════════
+//  HISTORY — DELTA SELECTION
+// ═══════════════════════════════════════════════════════════
+let _deltaSelected = new Set();
+
+function _toggleDeltaSel(filename, cb) {
+  if (cb.checked) _deltaSelected.add(filename);
+  else            _deltaSelected.delete(filename);
+  _updateDeltaBar();
+}
+
+function _updateDeltaBar() {
+  const bar  = document.getElementById('hist-delta-bar');
+  const info = document.getElementById('hist-delta-info');
+  const btn  = document.getElementById('hist-delta-btn');
+  if (!bar) return;
+  const n = _deltaSelected.size;
+  if (n === 0) { bar.style.display = 'none'; return; }
+  bar.style.display = '';
+  if (n === 1) {
+    info.textContent = 'Sélectionnez un deuxième audit à comparer';
+    btn.disabled = true;
+  } else if (n === 2) {
+    info.textContent = '2 audits sélectionnés';
+    btn.disabled = false;
+  } else {
+    info.textContent = `${n} audits sélectionnés (max 2)`;
+    btn.disabled = true;
+  }
+}
+
+function clearDeltaSelection() {
+  _deltaSelected.clear();
+  document.querySelectorAll('.hist-chk').forEach(cb => { cb.checked = false; });
+  _updateDeltaBar();
+  document.getElementById('hist-delta-panel').style.display = 'none';
+}
+
+async function showDelta() {
+  const [fa, fb] = [..._deltaSelected];
+  const panel = document.getElementById('hist-delta-panel');
+  panel.style.display = '';
+  panel.innerHTML = '<div style="padding:1.5rem;color:var(--muted)">Calcul du delta…</div>';
+  try {
+    const p = new URLSearchParams({ a: fa, b: fb });
+    const data = await fetch(`/api/history/delta?${p}`).then(r => r.json());
+    if (data.error) { panel.innerHTML = `<div class="hist-empty">⚠ ${esc(data.error)}</div>`; return; }
+    const _fmtMeta = m => `${fmtTs(m.timestamp || '')}${m.audit_name ? ' · ' + esc(m.audit_name) : ''}${m.run_label ? ' · ' + esc(m.run_label) : ''}`;
+    const _row = r => `<div class="delta-row ${r.type_ecart==='ORPHELIN_A'?'oa':r.type_ecart==='ORPHELIN_B'?'ob':'ko'}">
+      <span class="delta-key">${esc(r.join_key)}</span>
+      <span class="delta-type">${esc(r.type_ecart)}</span>
+      ${r.rule_name ? `<span class="delta-rule">${esc(r.rule_name)}</span>` : ''}
+    </div>`;
+    const _section = (title, cls, rows) => rows.length ? `
+      <div class="delta-section">
+        <div class="delta-section-title ${cls}">${title} (${rows.length})</div>
+        ${rows.map(_row).join('')}
+      </div>` : '';
+    panel.innerHTML = `
+      <div class="delta-header">
+        <div class="delta-run"><span class="delta-run-lbl">A (ancien)</span>${_fmtMeta(data.meta_a)}</div>
+        <div class="delta-run"><span class="delta-run-lbl">B (nouveau)</span>${_fmtMeta(data.meta_b)}</div>
+      </div>
+      ${_section('⬆ Apparus', 'delta-apparus', data.apparus)}
+      ${_section('✓ Résolus',  'delta-resolus',  data.resolus)}
+      ${_section('⚠ Persistants', 'delta-persistants', data.persistants)}
+      ${!data.apparus.length && !data.resolus.length && !data.persistants.length
+        ? '<div class="hist-empty">Aucun écart dans les deux runs.</div>' : ''}
+    `;
+  } catch(e) { panel.innerHTML = `<div class="hist-empty">Erreur : ${esc(e.message)}</div>`; }
+}
+
+// ═══════════════════════════════════════════════════════════
 //  HISTORY
 // ═══════════════════════════════════════════════════════════
 async function loadHistory() {
+  _deltaSelected.clear();
   const c = document.getElementById('history-list');
   c.innerHTML = '<div class="hist-empty">Chargement…</div>';
   try {
@@ -223,6 +296,9 @@ async function loadHistory() {
       const meta = [dur, tot].filter(Boolean).join(' · ');
       return `
       <div class="hist-item">
+        <label class="hist-chk-wrap" title="Sélectionner pour comparer">
+          <input type="checkbox" class="hist-chk" onchange="_toggleDeltaSel('${esc(h.filename)}',this)" onclick="event.stopPropagation()">
+        </label>
         <div class="hist-main" onclick="loadHistoryEntry('${esc(h.filename)}')">
           <div class="hist-header">
             <span class="hist-ts">${fmtTs(h.timestamp)}</span>

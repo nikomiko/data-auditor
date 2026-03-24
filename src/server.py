@@ -31,7 +31,7 @@ from report        import save_history, list_history, load_history, to_csv, to_h
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
 
-APP_VERSION = "3.22.0"
+APP_VERSION = "3.23.0"
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
 # _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
@@ -896,6 +896,50 @@ def get_history_entry(filename: str):
         })
     except FileNotFoundError as e:
         return jsonify({"error": str(e)}), 404
+
+
+@app.route("/api/history/delta")
+def history_delta():
+    """Compare deux runs : retourne les écarts apparus, résolus et persistants.
+
+    Query params : a=<filename_ancien> & b=<filename_nouveau>
+    La convention est A = ancien run, B = nouveau run.
+    """
+    import re
+    fa = request.args.get("a", "")
+    fb = request.args.get("b", "")
+    for fn in (fa, fb):
+        if not re.match(r'^[\w\-\.]+\.json$', fn):
+            return jsonify({"error": f"Nom de fichier invalide : {fn!r}"}), 400
+    try:
+        da = load_history(fa)
+        db = load_history(fb)
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 404
+
+    def _sig(r):
+        """Signature unique d'un résultat (hors valeurs, seulement la clé fonctionnelle)."""
+        return (r.get("join_key",""), r.get("type_ecart",""), r.get("rule_name","") or "")
+
+    set_a = {_sig(r): r for r in da.get("results", []) if r.get("type_ecart") != "OK"}
+    set_b = {_sig(r): r for r in db.get("results", []) if r.get("type_ecart") != "OK"}
+
+    keys_a = set(set_a)
+    keys_b = set(set_b)
+
+    apparus    = [set_b[k] for k in sorted(keys_b - keys_a)]   # nouveaux dans B
+    resolus    = [set_a[k] for k in sorted(keys_a - keys_b)]   # disparus de B (résolus)
+    persistants = [set_b[k] for k in sorted(keys_a & keys_b)]  # présents dans les deux
+
+    return jsonify({
+        "apparus":     apparus,
+        "resolus":     resolus,
+        "persistants": persistants,
+        "summary_a":   da.get("summary", {}),
+        "summary_b":   db.get("summary", {}),
+        "meta_a":      {k: v for k, v in da.get("meta", {}).items() if k != "config"},
+        "meta_b":      {k: v for k, v in db.get("meta", {}).items() if k != "config"},
+    })
 
 
 @app.route("/api/history/<filename>", methods=["DELETE"])
