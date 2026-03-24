@@ -731,6 +731,12 @@ function wizRemoveCol(srcKey, idx) {
   const s = WS.sources[srcKey];
   if (s.fixed_width) s.column_positions.splice(idx,1);
   else s.fields.splice(idx,1);
+  // Si plus aucun champ, re-rendre toute l'étape pour faire réapparaître le bouton Détecter
+  if (!_hasSourceConfig(srcKey)) {
+    if (srcKey === 'reference') onEnterRef();
+    else onEnterTgt();
+    return;
+  }
   const tbody = document.getElementById('ctbody-'+srcKey);
   if (tbody) tbody.innerHTML = wizColRows(srcKey, s);
 }
