@@ -44,6 +44,7 @@ async function runAudit() {
   fd.append('file_ref', fileRef);
   fd.append('file_tgt', fileTgt);
   fd.append('config_yaml', yamlText);
+  fd.append('run_label', WS.meta.run_label || '');
 
   // Toujours basculer vers la page résultats (step 6) dès le lancement
   if (wfUnlocked < 6) wfUnlocked = 6;
@@ -180,19 +181,29 @@ async function loadHistory() {
   try {
     const data = await fetch('/api/history').then(r => r.json());
     if (!data.length) { c.innerHTML = '<div class="hist-empty">Aucun audit historisé.</div>'; return; }
-    const items = data.map(h => `
+    const items = data.map(h => {
+      const dur = h.duration_s != null ? `${h.duration_s}s` : '';
+      const tot = h.total_results != null ? `${h.total_results.toLocaleString('fr-FR')} résultats` : '';
+      const runLbl = h.run_label ? `<span class="hist-run-label">${esc(h.run_label)}</span>` : '';
+      const meta = [dur, tot].filter(Boolean).join(' · ');
+      return `
       <div class="hist-item">
         <div class="hist-main" onclick="loadHistoryEntry('${esc(h.filename)}')">
-          <span class="hist-ts">${fmtTs(h.timestamp)}</span>
+          <div class="hist-header">
+            <span class="hist-ts">${fmtTs(h.timestamp)}</span>
+            ${runLbl}
+          </div>
           <span class="hist-name">${esc(h.audit_name)}</span>
           <div class="hist-stats">
             <span class="hs a">A:${h.summary.orphelins_a||0}</span>
             <span class="hs b">B:${h.summary.orphelins_b||0}</span>
             <span class="hs d">Δ:${h.summary.divergents||0}</span>
+            ${meta ? `<span class="hs meta">${esc(meta)}</span>` : ''}
           </div>
         </div>
         <button class="hist-del" title="Supprimer" onclick="deleteHistoryEntry(event,'${esc(h.filename)}')">🗑</button>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     const purgeBtn = `<div class="hist-purge-bar"><button class="btn-xs btn-danger" onclick="purgeAllHistory()">🗑 Tout supprimer</button></div>`;
     c.innerHTML = purgeBtn + items;
   } catch(e) { c.innerHTML = '<div class="hist-empty">Erreur de chargement.</div>'; }

@@ -12,7 +12,7 @@ function wizSrcDefault() {
   };
 }
 const WS = {
-  meta:{ name:'', version:'' },
+  meta:{ name:'', version:'', run_label:'' },
   sources:{ reference: wizSrcDefault(), target: wizSrcDefault() },
   join:{ keys:[] },
   rules:[],
@@ -1185,6 +1185,7 @@ function wizRenderFilters() {
       <div class="wiz-grid">
         ${wizField("Nom de l'audit", wizInput('w-meta-name', WS.meta.name, 'Audit …'))}
         ${wizField('Version', wizInput('w-meta-ver', WS.meta.version, '1.0'))}
+        ${wizField('Libellé du run', wizInput('w-meta-run-label', WS.meta.run_label, 'ex: Clôture mars 2026'))}
       </div>
     </div>`;
 }
@@ -1255,8 +1256,10 @@ function wizReadFiltersForm() {
   const sm  = document.getElementById('w-rp-sm');
   const mn  = document.getElementById('w-meta-name');
   const mv  = document.getElementById('w-meta-ver');
+  const mrl = document.getElementById('w-meta-run-label');
   if (mdp) WS.report.max_diff_preview = Number(mdp.value)||500;
   if (sm)  WS.report.show_matching    = sm.checked;
-  if (mn)  WS.meta.name    = mn.value;
-  if (mv)  WS.meta.version = mv.value;
+  if (mn)  WS.meta.name      = mn.value;
+  if (mv)  WS.meta.version   = mv.value;
+  if (mrl) WS.meta.run_label = mrl.value;
 }

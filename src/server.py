@@ -31,7 +31,7 @@ from report        import save_history, list_history, load_history, to_csv, to_h
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
 
-APP_VERSION = "3.18.0"
+APP_VERSION = "3.19.0"
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
 # _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
@@ -120,6 +120,7 @@ def start_audit():
     config_yaml = request.form.get("config_yaml", "")
     if not config_yaml.strip():
         return jsonify({"error": "config_yaml manquant."}), 400
+    run_label = request.form.get("run_label", "").strip()
 
     file_ref_bytes = request.files["file_ref"].read()
     file_tgt_bytes = request.files["file_tgt"].read()
@@ -133,13 +134,14 @@ def start_audit():
     token = str(uuid.uuid4())
     with _sessions_lock:
         _sessions[token] = {
-            "status":  "running",
-            "results": [],
-            "summary": {},
-            "config":  config,
-            "events":  [],          # buffer d'événements SSE
-            "done":    False,
-            "error":   None,
+            "status":    "running",
+            "results":   [],
+            "summary":   {},
+            "config":    config,
+            "run_label": run_label,
+            "events":    [],
+            "done":      False,
+            "error":     None,
         }
 
     thread = threading.Thread(
@@ -153,6 +155,7 @@ def start_audit():
 
 def _run_audit(token: str, ref_bytes: bytes, tgt_bytes: bytes, config: dict):
     sess = _sessions[token]
+    sess["started_at"] = datetime.now().isoformat()
     try:
         src_ref = config["sources"]["reference"]
         src_tgt = config["sources"]["target"]
@@ -230,7 +233,13 @@ def _run_audit(token: str, ref_bytes: bytes, tgt_bytes: bytes, config: dict):
         sess["tgt_columns"]     = [c for c in df_tgt.columns.tolist() if c not in tgt_key_cols]
 
         # Historisation
-        history_file = save_history(results, summary, config)
+        finished_at = datetime.now().isoformat()
+        history_file = save_history(
+            results, summary, config,
+            run_label   = sess.get("run_label", ""),
+            started_at  = sess.get("started_at", ""),
+            finished_at = finished_at,
+        )
         _push(token, {"event": "done", "history_file": history_file,
                       "total_results": len(results)})
 

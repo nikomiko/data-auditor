@@ -30,17 +30,30 @@ _BASE_FIELDS = ["join_key", "type_ecart", "rule_name", "champ",
 #  Historisation
 # ─────────────────────────────────────────────────────────────
 
-def save_history(results: list, summary: dict, config: dict) -> str:
+def save_history(results: list, summary: dict, config: dict,
+                 run_label: str = "", started_at: str = "", finished_at: str = "") -> str:
     os.makedirs(REPORTS_DIR, exist_ok=True)
     ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
     name     = config.get("meta", {}).get("name", "audit").replace(" ", "_")
     filename = f"{ts}_{name}.json"
     path     = os.path.join(REPORTS_DIR, filename)
-    payload  = {
-        "meta":    {"timestamp": datetime.now().isoformat(), "audit_name": name, "config": config},
-        "summary": summary,
-        "results": results,
+    meta: dict = {
+        "timestamp":    datetime.now().isoformat(),
+        "audit_name":   name,
+        "config":       config,
+        "total_results": len(results),
     }
+    if run_label:    meta["run_label"]    = run_label
+    if started_at:   meta["started_at"]  = started_at
+    if finished_at:  meta["finished_at"] = finished_at
+    if started_at and finished_at:
+        try:
+            from datetime import datetime as _dt
+            d = (_dt.fromisoformat(finished_at) - _dt.fromisoformat(started_at)).total_seconds()
+            meta["duration_s"] = round(d, 1)
+        except Exception:
+            pass
+    payload  = {"meta": meta, "summary": summary, "results": results}
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
     return filename
@@ -54,11 +67,15 @@ def list_history() -> list:
         try:
             with open(os.path.join(REPORTS_DIR, fname), encoding="utf-8") as f:
                 d = json.load(f)
+            m = d.get("meta", {})
             out.append({
-                "filename":   fname,
-                "timestamp":  d.get("meta", {}).get("timestamp", ""),
-                "audit_name": d.get("meta", {}).get("audit_name", ""),
-                "summary":    d.get("summary", {}),
+                "filename":      fname,
+                "timestamp":     m.get("timestamp", ""),
+                "audit_name":    m.get("audit_name", ""),
+                "run_label":     m.get("run_label", ""),
+                "duration_s":    m.get("duration_s"),
+                "total_results": m.get("total_results", len(d.get("results", []))),
+                "summary":       d.get("summary", {}),
             })
         except Exception:
             continue
