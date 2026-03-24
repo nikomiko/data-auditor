@@ -285,7 +285,7 @@ function resetAll() {
   // Drop zone référence
   document.getElementById('dz-ref').classList.remove('loaded', 'hinted');
   document.getElementById('dz-ref-label').textContent = 'Glissez votre fichier ici';
-  document.getElementById('dz-ref-sub').textContent   = 'ou cliquez pour parcourir — CSV, TXT, JSON, JSONL, XLSX';
+  document.getElementById('dz-ref-sub').textContent   = 'ou cliquez pour parcourir — CSV, TXT, JSON, JSONL';
   document.getElementById('eye-ref').style.display    = 'none';
   document.getElementById('val-ref').style.display    = 'none';
   document.getElementById('val-badge-ref').style.display = 'none';
@@ -295,7 +295,7 @@ function resetAll() {
   // Drop zone cible
   document.getElementById('dz-tgt').classList.remove('loaded', 'hinted');
   document.getElementById('dz-tgt-label').textContent = 'Glissez votre fichier ici';
-  document.getElementById('dz-tgt-sub').textContent   = 'ou cliquez pour parcourir — CSV, TXT, JSON, JSONL, XLSX';
+  document.getElementById('dz-tgt-sub').textContent   = 'ou cliquez pour parcourir — CSV, TXT, JSON, JSONL';
   document.getElementById('eye-tgt').style.display    = 'none';
   document.getElementById('val-tgt').style.display    = 'none';
   document.getElementById('val-badge-tgt').style.display = 'none';

@@ -193,7 +193,7 @@ function wizBuildYaml() {
     if (s.label)    sr.label    = s.label;
     if (s.file)     sr.file     = s.file;
     if (s.encoding) sr.encoding = s.encoding;
-    const noDelim = ['json','jsonl','xlsx','positionnel'].includes(s.format);
+    const noDelim = ['json','jsonl','positionnel'].includes(s.format);
     if (!noDelim && s.delimiter !== undefined) sr.delimiter = s.delimiter;
     if (s.format === 'json' && s.json_path) sr.json_path = s.json_path;
     const isJsonFmt = s.format === 'json' || s.format === 'jsonl';
@@ -205,7 +205,7 @@ function wizBuildYaml() {
     }
     if (s.fixed_width) sr.fixed_width = true;
     // colonnes
-    const noFields = ['xlsx'].includes(s.format);
+    const noFields = false;
     if (!noFields) {
       if (s.fixed_width) {
         sr.column_positions = s.column_positions.map(f => {
@@ -416,7 +416,7 @@ function wizValidateStep(step) {
   if (step === 1) {
     const s = WS.sources.reference;
     if (!s.format) return 'Sélectionnez un format pour la source A.';
-    if (!['json','jsonl','xlsx'].includes(s.format)) {
+    if (!['json','jsonl'].includes(s.format)) {
       const list = s.fixed_width ? s.column_positions : s.fields;
       if (!list.length) return 'Déclarez au moins une colonne pour la source A.';
     }
@@ -424,7 +424,7 @@ function wizValidateStep(step) {
   if (step === 2) {
     const s = WS.sources.target;
     if (!s.format) return 'Sélectionnez un format pour la source B.';
-    if (!['json','jsonl','xlsx'].includes(s.format)) {
+    if (!['json','jsonl'].includes(s.format)) {
       const list = s.fixed_width ? s.column_positions : s.fields;
       if (!list.length) return 'Déclarez au moins une colonne pour la source B.';
     }
@@ -491,8 +491,8 @@ function toggleFixedInput(inputId, val) {
 // ═══════════════════════════════════════════════════════════
 function wizRenderSource(stepEl, srcKey, label) {
   const s = WS.sources[srcKey];
-  const noDelim  = ['json','jsonl','xlsx','positionnel'].includes(s.format);
-  const noFields = ['xlsx'].includes(s.format);
+  const noDelim  = ['json','jsonl','positionnel'].includes(s.format);
+  const noFields = false;
   const isJson   = s.format === 'json' || s.format === 'jsonl';
 
   const fileLoaded = srcKey === 'reference' ? !!fileRef : !!fileTgt;
@@ -541,7 +541,7 @@ function wizRenderSource(stepEl, srcKey, label) {
     <div class="wiz-section">
       <div class="wiz-section-title">${label}</div>
       <div class="wiz-grid">
-        ${wizField('Format', wizSelect('w-fmt-'+srcKey, [['csv','CSV'],['positionnel','Positionnel'],['json','JSON'],['jsonl','JSONL'],['xlsx','XLSX']], s.format))}
+        ${wizField('Format', wizSelect('w-fmt-'+srcKey, [['csv','CSV'],['positionnel','Positionnel'],['json','JSON'],['jsonl','JSONL']], s.format))}
         ${wizField('Label', wizInput('w-lbl-'+srcKey, s.label, 'ex: Stock WMS'))}
         ${wizField('Chemin du fichier', wizInput('w-file-'+srcKey, s.file, 'ex: /data/export.csv'))}
         ${wizField('Encodage', wizSelect('w-enc-'+srcKey, [['utf-8','UTF-8'],['utf-8-sig','UTF-8 avec BOM'],['windows-1252','Windows-1252 (ANSI)'],['latin-1','Latin-1 / ISO-8859-1']], s.encoding||'utf-8'))}
