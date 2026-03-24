@@ -173,6 +173,12 @@ function wizLoadFromYaml(parsed) {
   const rp = parsed.report || {};
   WS.report.show_matching   = !!rp.show_matching;
   WS.report.max_diff_preview = rp.max_diff_preview || 500;
+  // Restaurer la sélection de colonnes perso
+  extraRefCols    = Array.isArray(rp.extra_cols_ref) ? rp.extra_cols_ref.map(String) : [];
+  extraTgtCols    = Array.isArray(rp.extra_cols_tgt) ? rp.extra_cols_tgt.map(String) : [];
+  _extraColOrder  = Array.isArray(rp.extra_col_order)
+    ? rp.extra_col_order.filter(e => e && (e.side === 'ref' || e.side === 'tgt') && e.col)
+    : [];
 }
 
 // ── WizardState → YAML ─────────────────────────────────────
@@ -304,6 +310,9 @@ function wizBuildYaml() {
     show_matching:    WS.report.show_matching,
     max_diff_preview: Number(WS.report.max_diff_preview) || 500,
   };
+  if (extraRefCols.length) obj.report.extra_cols_ref = extraRefCols;
+  if (extraTgtCols.length) obj.report.extra_cols_tgt = extraTgtCols;
+  if (_extraColOrder.length) obj.report.extra_col_order = _extraColOrder.map(e => ({side: e.side, col: e.col}));
   return jsyaml.dump(obj, { lineWidth: 120, noRefs: true });
 }
 
