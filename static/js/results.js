@@ -135,7 +135,7 @@ function _typeLabel(t) {
 
 // ── En-têtes colonnes clé (dynamiques) ─────────────────────
 function _rebuildKeyHeaders() {
-  const tr = document.querySelector('#wfv-6 table thead tr');
+  const tr = document.querySelector('#wfv-5 table thead tr');
   if (!tr) return;
   tr.querySelectorAll('.th-key').forEach(th => th.remove());
   const keys   = (lastConfig?.join?.keys || []);
@@ -152,7 +152,7 @@ function _rebuildKeyHeaders() {
 
 // ── En-têtes colonnes supplémentaires ─────────────────────
 function _syncExtraHeaders() {
-  const tr    = document.querySelector('#wfv-6 table thead tr');
+  const tr    = document.querySelector('#wfv-5 table thead tr');
   if (!tr) return;
   tr.querySelectorAll('.th-extra').forEach(th => th.remove());
 

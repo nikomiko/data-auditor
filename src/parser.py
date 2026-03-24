@@ -201,12 +201,17 @@ def _parse_text(data: bytes, cfg: dict, encoding: str) -> pd.DataFrame:
         for i, line in enumerate(lines):
             row = {}
             for p in positions:
-                start = p["position"]
-                end   = start + p["width"] if "width" in p else p.get("end", len(line))
-                if start > len(line):
+                start = p["position"] - 1       # 1-based → 0-based
+                if "width" in p:
+                    end = start + p["width"]
+                elif "end" in p:
+                    end = p["end"] - 1          # 1-based → 0-based
+                else:
+                    end = len(line)
+                if start < 0 or start > len(line):
                     raise ConfigError(
                         f"Ligne {i+1} trop courte ({len(line)} car.) "
-                        f"pour le champ '{p['name']}' (position {start})."
+                        f"pour le champ '{p['name']}' (position {p['position']})."
                     )
                 row[p["name"]] = line[start:end].strip()
             records.append(row)

@@ -13,44 +13,44 @@ sources:
     fixed_width: true
     column_positions:
       - name: RecordType
-        position: 0
+        position: 1
         width: 1
       - name: Site
-        position: 1
+        position: 2
         width: 3
       - name: Depot
-        position: 4
+        position: 5
         width: 3
       - name: SKU
-        position: 7
+        position: 8
         width: 10
       - name: EAN
-        position: 17
+        position: 18
         width: 13
       - name: DateMvt
-        position: 30
+        position: 31
         width: 8
         type: date
         date_format: '%Y%m%d'
       - name: Qty
-        position: 38
+        position: 39
         width: 7
         type: integer
       - name: Statut
-        position: 45
+        position: 46
         width: 2
       - name: Classe
-        position: 47
+        position: 48
         width: 1
       - name: Type
-        position: 48
+        position: 49
         width: 4
       - name: Prix
-        position: 52
+        position: 53
         width: 7
         type: decimal
       - name: Poids
-        position: 59
+        position: 60
         width: 6
         type: decimal
   target:

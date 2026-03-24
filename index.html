@@ -23,20 +23,19 @@
 <header>
   <div class="logo"><a href="https://github.com/nikomiko/data-auditor" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:.4rem"><img src="/static/icons/icon-192.png" alt="" style="width:20px;height:20px;border-radius:4px;vertical-align:middle">data<em>/</em>auditor</a>
     <span class="logo-tag">server</span>
-    <span class="logo-ver" id="logo-ver">v3.24.0</span>
+    <span class="logo-ver" id="logo-ver">v3.25.0</span>
     <span id="version-mismatch" style="display:none" title="" class="version-mismatch-badge">⚠ version</span>
   </div>
   <div class="wf-steps" id="wf-steps">
     <button class="wf-chev reset" onclick="resetAll()" title="Réinitialiser toute la configuration"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.36"/></svg><span class="wf-chev-lbl">Reset</span></button>
     <button class="wf-chev opt active" id="wfs-0" onclick="goWFStep(0)"><span class="wf-chev-num">⓪</span><span class="wf-chev-lbl">Config</span></button>
-    <button class="wf-chev" id="wfs-1" onclick="goWFStep(1)"><span class="wf-chev-num">①</span><span class="wf-chev-lbl"><span class="wf-chev-role">Source</span><span class="wf-chev-sub" id="lbl-ref"></span></span></button>
-    <button class="wf-chev" id="wfs-2" onclick="goWFStep(2)" disabled><span class="wf-chev-num">②</span><span class="wf-chev-lbl"><span class="wf-chev-role">Cible</span><span class="wf-chev-sub" id="lbl-tgt"></span></span></button>
-    <button class="wf-chev" id="wfs-3" onclick="goWFStep(3)" disabled><span class="wf-chev-num">③</span><span class="wf-chev-lbl">Jointure et filtres</span></button>
-    <button class="wf-chev" id="wfs-4" onclick="goWFStep(4)" disabled><span class="wf-chev-num">④</span><span class="wf-chev-lbl">Règles</span></button>
-    <button class="wf-chev" id="wfs-5" onclick="goWFStep(5)" disabled><span class="wf-chev-num">⑤</span><span class="wf-chev-lbl">Options</span></button>
-    <button class="wf-chev" id="wfs-6" onclick="goWFStep(6)" disabled><span class="wf-chev-num">⑥</span><span class="wf-chev-lbl">Résultats</span></button>
+    <button class="wf-chev" id="wfs-1" onclick="goWFStep(1)"><span class="wf-chev-num">①</span><span class="wf-chev-lbl">Datasets</span></button>
+    <button class="wf-chev" id="wfs-2" onclick="goWFStep(2)" disabled><span class="wf-chev-num">②</span><span class="wf-chev-lbl">Jointure</span></button>
+    <button class="wf-chev" id="wfs-3" onclick="goWFStep(3)" disabled><span class="wf-chev-num">③</span><span class="wf-chev-lbl">Règles</span></button>
+    <button class="wf-chev" id="wfs-4" onclick="goWFStep(4)" disabled><span class="wf-chev-num">④</span><span class="wf-chev-lbl">Options</span></button>
+    <button class="wf-chev" id="wfs-5" onclick="goWFStep(5)" disabled><span class="wf-chev-num">⑤</span><span class="wf-chev-lbl">Résultats</span></button>
   </div>
-  <button class="tab-btn" id="tab-history" onclick="goWFStep(7); loadHistory()">Historique</button>
+  <button class="tab-btn" id="tab-history" onclick="goWFStep(6); loadHistory()">Historique</button>
   <button class="btn-help" id="pwa-install-btn" onclick="installPWA()" title="Installer l'application" style="display:none">⬇</button>
   <button class="btn-help" onclick="openHelp()" title="Manuel utilisateur">?</button>
 </header>
@@ -144,112 +143,114 @@
       </details>
 
       <div class="file-step-nav">
-        <button class="btn-nav" onclick="goWFStep(1)">Suivant : <span id="nav-lbl-ref0">Référence</span> →</button>
+        <button class="btn-nav" onclick="goWFStep(1)">Suivant : Datasets →</button>
       </div>
     </div>
   </div>
 
-  <!-- ① Référence -->
+  <!-- ① Datasets (Source A + Cible B) -->
   <div class="wf-view" id="wfv-1">
     <div class="file-step-full">
-      <div class="file-step-top">
-        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;width:min(480px,90%)">
-          <span class="file-step-badge A">A</span>
-          <span class="file-step-title">Fichier de référence</span>
-          <input class="source-name-input" id="inp-ref-label" placeholder="Nommer la source (ex : Stock WMS)"
-                 value="" oninput="refLabel=this.value.trim();updateSourceLabels()">
-        </div>
-        <div class="file-drop-zone" id="dz-ref" onclick="document.getElementById('f-ref').click()"
-             ondragover="event.preventDefault();this.classList.add('hover')"
-             ondragleave="this.classList.remove('hover')"
-             ondrop="handleDrop(event,'ref')">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-          <div class="file-drop-text">
-            <div class="file-drop-label" id="dz-ref-label">Glissez votre fichier ici</div>
-            <div class="file-drop-sub" id="dz-ref-sub">ou cliquez pour parcourir — CSV, TXT, JSON, JSONL</div>
+      <div class="datasets-panel">
+
+        <!-- Moitié gauche : Source A -->
+        <div class="ds-half ds-half--ref active" id="ds-half-ref" onclick="dsActivate('reference')">
+          <div class="ds-half-header">
+            <span class="ds-half-icon">A</span>
+            <input class="source-name-input ds-name-input" id="inp-ref-label" placeholder="Nommer la source A"
+                   value="" onclick="event.stopPropagation()" oninput="refLabel=this.value.trim();updateSourceLabels()">
+            <span id="lbl-ref" style="display:none"></span>
           </div>
-          <input type="file" id="f-ref" accept=".csv,.txt,.json,.jsonl" style="display:none">
+          <div class="file-drop-zone ds-drop" id="dz-ref" onclick="event.stopPropagation();document.getElementById('f-ref').click()"
+               ondragover="event.preventDefault();event.stopPropagation();this.classList.add('hover')"
+               ondragleave="this.classList.remove('hover')"
+               ondrop="event.stopPropagation();handleDrop(event,'ref')">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            <div class="file-drop-text">
+              <div class="file-drop-label" id="dz-ref-label">Glissez votre fichier ici</div>
+              <div class="file-drop-sub" id="dz-ref-sub">ou cliquez — CSV, TXT, JSON, JSONL</div>
+            </div>
+            <input type="file" id="f-ref" accept=".csv,.txt,.json,.jsonl" style="display:none">
+          </div>
+          <div class="ds-topbar">
+            <button class="btn-nav btn-nav-sec" id="eye-ref" style="display:none" title="Prévisualiser" onclick="event.stopPropagation();previewFile('ref', event)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              Prévisualiser
+            </button>
+            <button class="btn-nav btn-nav-sec" id="val-ref" style="display:none" title="Vérifier la compatibilité colonnes/configuration" onclick="event.stopPropagation();validateColumns('ref', event)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              Vérifier
+            </button>
+            <span id="val-badge-ref" style="display:none"></span>
+          </div>
         </div>
+
+        <!-- Séparateur -->
+        <div class="ds-separator"><span>&lt;&gt;</span></div>
+
+        <!-- Moitié droite : Cible B -->
+        <div class="ds-half ds-half--tgt" id="ds-half-tgt" onclick="dsActivate('target')">
+          <div class="ds-half-header">
+            <span class="ds-half-icon ds-half-icon--b">B</span>
+            <input class="source-name-input ds-name-input" id="inp-tgt-label" placeholder="Nommer la source B"
+                   value="" onclick="event.stopPropagation()" oninput="tgtLabel=this.value.trim();updateSourceLabels()">
+            <span id="lbl-tgt" style="display:none"></span>
+          </div>
+          <div class="file-drop-zone ds-drop" id="dz-tgt" onclick="event.stopPropagation();document.getElementById('f-tgt').click()"
+               ondragover="event.preventDefault();event.stopPropagation();this.classList.add('hover')"
+               ondragleave="this.classList.remove('hover')"
+               ondrop="event.stopPropagation();handleDrop(event,'tgt')">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            <div class="file-drop-text">
+              <div class="file-drop-label" id="dz-tgt-label">Glissez votre fichier ici</div>
+              <div class="file-drop-sub" id="dz-tgt-sub">ou cliquez — CSV, TXT, JSON, JSONL</div>
+            </div>
+            <input type="file" id="f-tgt" accept=".csv,.txt,.json,.jsonl" style="display:none">
+          </div>
+          <div class="ds-topbar">
+            <button class="btn-nav btn-nav-sec" id="eye-tgt" style="display:none" title="Prévisualiser" onclick="event.stopPropagation();previewFile('tgt', event)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              Prévisualiser
+            </button>
+            <button class="btn-nav btn-nav-sec" id="val-tgt" style="display:none" title="Vérifier la compatibilité colonnes/configuration" onclick="event.stopPropagation();validateColumns('tgt', event)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              Vérifier
+            </button>
+            <span id="val-badge-tgt" style="display:none"></span>
+          </div>
+        </div>
+
       </div>
-      <div class="wfv-topbar">
-        <button class="btn-nav btn-nav-sec" id="eye-ref" style="display:none" title="Prévisualiser" onclick="previewFile('ref', event)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          Prévisualiser
-        </button>
-        <button class="btn-nav btn-nav-sec" id="val-ref" style="display:none" title="Vérifier la compatibilité colonnes/configuration" onclick="validateColumns('ref', event)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-          Vérifier les colonnes
-        </button>
-        <span id="val-badge-ref" style="display:none"></span>
-      </div>
+      <!-- Zone de config contextuelle — s'ajuste au côté actif -->
       <div class="file-step-cfg" id="wfv-1-src">
-        <p style="color:var(--muted);font-size:.78rem;text-align:center;padding:2rem">Chargez un fichier ou configurez la source manuellement ci-dessous une fois le fichier chargé.</p>
+        <p style="color:var(--muted);font-size:.78rem;text-align:center;padding:2rem">Cliquez sur une source pour configurer ses colonnes.</p>
       </div>
     </div>
   </div>
 
-  <!-- ② Cible -->
+  <!-- ② Jointure -->
   <div class="wf-view" id="wfv-2">
-    <div class="file-step-full">
-      <div class="file-step-top">
-        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;width:min(480px,90%)">
-          <span class="file-step-badge B">B</span>
-          <span class="file-step-title">Fichier cible</span>
-          <input class="source-name-input" id="inp-tgt-label" placeholder="Nommer la source (ex : Export ERP)"
-                 value="" oninput="tgtLabel=this.value.trim();updateSourceLabels()">
-        </div>
-        <div class="file-drop-zone" id="dz-tgt" onclick="document.getElementById('f-tgt').click()"
-             ondragover="event.preventDefault();this.classList.add('hover')"
-             ondragleave="this.classList.remove('hover')"
-             ondrop="handleDrop(event,'tgt')">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-          <div class="file-drop-text">
-            <div class="file-drop-label" id="dz-tgt-label">Glissez votre fichier ici</div>
-            <div class="file-drop-sub" id="dz-tgt-sub">ou cliquez pour parcourir — CSV, TXT, JSON, JSONL</div>
-          </div>
-          <input type="file" id="f-tgt" accept=".csv,.txt,.json,.jsonl" style="display:none">
-        </div>
-      </div>
-      <div class="wfv-topbar">
-        <button class="btn-nav btn-nav-sec" id="eye-tgt" style="display:none" title="Prévisualiser" onclick="previewFile('tgt', event)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          Prévisualiser
-        </button>
-        <button class="btn-nav btn-nav-sec" id="val-tgt" style="display:none" title="Vérifier la compatibilité colonnes/configuration" onclick="validateColumns('tgt', event)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-          Vérifier les colonnes
-        </button>
-        <span id="val-badge-tgt" style="display:none"></span>
-      </div>
-      <div class="file-step-cfg" id="wfv-2-src">
-        <p style="color:var(--muted);font-size:.78rem;text-align:center;padding:2rem">Chargez un fichier ou configurez la source manuellement ci-dessous une fois le fichier chargé.</p>
-      </div>
+    <div class="config-view">
+      <div id="wfv-2-body" class="wizard-body"></div>
     </div>
   </div>
 
-  <!-- ③ Jointure -->
+  <!-- ③ Règles -->
   <div class="wf-view" id="wfv-3">
     <div class="config-view">
       <div id="wfv-3-body" class="wizard-body"></div>
     </div>
   </div>
 
-  <!-- ④ Règles -->
+  <!-- ④ Options -->
   <div class="wf-view" id="wfv-4">
     <div class="config-view">
       <div id="wfv-4-body" class="wizard-body"></div>
     </div>
   </div>
 
-  <!-- ⑤ Options -->
+  <!-- ⑤ Résultats -->
   <div class="wf-view" id="wfv-5">
-    <div class="config-view">
-      <div id="wfv-5-body" class="wizard-body"></div>
-    </div>
-  </div>
-
-  <!-- ⑥ Résultats -->
-  <div class="wf-view" id="wfv-6">
 
     <div class="err-box" id="err"></div>
 
@@ -308,8 +309,8 @@
     </div>
   </div>
 
-  <!-- ⑦ Historique -->
-  <div class="wf-view" id="wfv-7" style="flex-direction:column">
+  <!-- ⑥ Historique -->
+  <div class="wf-view" id="wfv-6" style="flex-direction:column">
     <div id="hist-delta-bar" class="hist-delta-bar" style="display:none">
       <span id="hist-delta-info">Sélectionnez 2 audits pour comparer</span>
       <button id="hist-delta-btn" class="btn-sm" onclick="showDelta()" disabled>⇄ Comparer</button>
@@ -346,8 +347,9 @@ document.getElementById('f-ref').addEventListener('change', e => {
   document.getElementById('val-badge-ref').style.display = 'none';
   document.getElementById('cfg-ref-pill').textContent = f.name;
   updateGlobalNav(wfCurrentStep);
-  if (wfUnlocked < 2) { wfUnlocked = 2; updateWFSteps(); }
+  if (fileRef && fileTgt && wfUnlocked < 2) { wfUnlocked = 2; updateWFSteps(); }
   _onFileLoaded('reference', f);
+  if (wfCurrentStep === 1) dsActivate('reference');
   sessionSave();
 });
 
@@ -365,8 +367,9 @@ document.getElementById('f-tgt').addEventListener('change', e => {
   document.getElementById('val-badge-tgt').style.display = 'none';
   document.getElementById('cfg-tgt-pill').textContent = f.name;
   updateGlobalNav(wfCurrentStep);
-  if (wfUnlocked < 3) { wfUnlocked = 3; updateWFSteps(); }
+  if (fileRef && fileTgt && wfUnlocked < 2) { wfUnlocked = 2; updateWFSteps(); }
   _onFileLoaded('target', f);
+  if (wfCurrentStep === 1) dsActivate('target');
   sessionSave();
 });
 

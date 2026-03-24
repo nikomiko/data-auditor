@@ -82,7 +82,7 @@ function wizLoadFromYaml(parsed) {
     if (s.fixed_width) s.format = 'positionnel';
     if (src.column_positions && src.column_positions.length) {
       s.column_positions = src.column_positions.map(f => ({
-        name: f.name||'', position: f.position||0, width: f.width||0,
+        name: f.name||'', position: f.position||1, width: f.width||0,
         type: f.type||'string', date_format: f.date_format||'', ignored: !!f.ignored
       }));
       s.fields = [];
@@ -346,11 +346,10 @@ function closeYamlModal(e) {
       if (parsed && typeof parsed === 'object') {
         wizLoadFromYaml(parsed);
         // Re-render l'étape courante
-        if (wfCurrentStep === 1) onEnterRef();
-        else if (wfCurrentStep === 2) onEnterTgt();
-        else if (wfCurrentStep === 3) wizRenderJoin();
-        else if (wfCurrentStep === 4) wizRenderRules();
-        else if (wfCurrentStep === 5) wizRenderFilters();
+        if (wfCurrentStep === 1) onEnterDatasets();
+        else if (wfCurrentStep === 2) wizRenderJoin();
+        else if (wfCurrentStep === 3) wizRenderRules();
+        else if (wfCurrentStep === 4) wizRenderFilters();
       }
       yamlOriginal = content;
       updateSaveBtn();
@@ -421,28 +420,26 @@ function wizShowErr(msg) {
 function wizClearErr() { wizShowErr(''); }
 
 function wizValidateStep(step) {
-  // step = wfCurrentStep (1=ref, 2=tgt, 3=join, 4=rules)
+  // step = wfCurrentStep (1=datasets, 2=jointure, 3=règles, 4=options)
   if (step === 1) {
-    const s = WS.sources.reference;
-    if (!s.format) return 'Sélectionnez un format pour la source A.';
-    if (!['json','jsonl'].includes(s.format)) {
-      const list = s.fixed_width ? s.column_positions : s.fields;
+    const sR = WS.sources.reference;
+    if (!sR.format) return 'Sélectionnez un format pour la source A.';
+    if (!['json','jsonl'].includes(sR.format)) {
+      const list = sR.fixed_width ? sR.column_positions : sR.fields;
       if (!list.length) return 'Déclarez au moins une colonne pour la source A.';
     }
-  }
-  if (step === 2) {
-    const s = WS.sources.target;
-    if (!s.format) return 'Sélectionnez un format pour la source B.';
-    if (!['json','jsonl'].includes(s.format)) {
-      const list = s.fixed_width ? s.column_positions : s.fields;
+    const sT = WS.sources.target;
+    if (!sT.format) return 'Sélectionnez un format pour la source B.';
+    if (!['json','jsonl'].includes(sT.format)) {
+      const list = sT.fixed_width ? sT.column_positions : sT.fields;
       if (!list.length) return 'Déclarez au moins une colonne pour la source B.';
     }
   }
-  if (step === 3) {
+  if (step === 2) {
     const valid = WS.join.keys.filter(k => k.source_field && k.target_field);
     if (!valid.length) return 'Définissez au moins une clé de jointure.';
   }
-  if (step === 4) {
+  if (step === 3) {
     for (const r of WS.rules) {
       if (!r.name) return 'Chaque règle doit avoir un nom.';
       if (!r.fields.length) return `La règle "${r.name}" doit avoir au moins un champ.`;
@@ -518,10 +515,10 @@ function wizRenderSource(stepEl, srcKey, label) {
     ? `<div class="wiz-warn">Format <strong>${s.format}</strong> : colonnes détectées automatiquement au parsing.</div>`
     : `<table class="col-table" id="ctbl-${srcKey}">
         <thead><tr>${isFixed
-          ? `<th>Nom</th><th>Position</th><th>Largeur</th><th>Type</th><th ${dfTip}>Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>`
+          ? `<th></th><th>Nom</th><th>Position</th><th>Largeur</th><th>Type</th><th ${dfTip}>Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>`
           : isJson
-            ? `<th>Nom</th><th title="Chemin dot-notation depuis chaque enregistrement (ex: customer.name). Laisser vide = utilise le nom du champ.">Chemin (path) ⓘ</th><th>Type</th><th ${dfTip}>Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>`
-            : `<th>Nom</th><th>Type</th><th ${dfTip}>Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>`
+            ? `<th></th><th>Nom</th><th title="Chemin dot-notation depuis chaque enregistrement (ex: customer.name). Laisser vide = utilise le nom du champ.">Chemin (path) ⓘ</th><th>Type</th><th ${dfTip}>Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>`
+            : `<th></th><th>Nom</th><th>Type</th><th ${dfTip}>Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>`
         }</tr></thead>
         <tbody id="ctbody-${srcKey}">
           ${wizColRows(srcKey, s)}
@@ -606,7 +603,7 @@ function wizRenderSource(stepEl, srcKey, label) {
     const newFW = s2.fixed_width;
     if (!prevFW && newFW) {
       // csv → positionnel : migrer fields → column_positions
-      s2.column_positions = s2.fields.map(f => ({name:f.name, position:0, width:1, type:f.type, date_format:f.date_format||'', ignored:!!f.ignored}));
+      s2.column_positions = s2.fields.map((f, i) => ({name:f.name, position:i+1, width:1, type:f.type, date_format:f.date_format||'', ignored:!!f.ignored}));
       s2.fields = [];
     } else if (prevFW && !newFW) {
       // positionnel → csv : migrer column_positions → fields
@@ -628,7 +625,14 @@ function wizRenderSource(stepEl, srcKey, label) {
 function wizColRows(srcKey, s) {
   const list = s.fixed_width ? s.column_positions : s.fields;
   const typeOpts = [['string','string'],['integer','integer'],['decimal','decimal'],['date','date'],['boolean','boolean']];
+  const dragAttrs = `class="col-row" draggable="true"
+    ondragstart="_colDragStart(event,'${srcKey}',__IDX__)"
+    ondragover="_colDragOver(event)"
+    ondragleave="_colDragLeave(event)"
+    ondrop="_colDrop(event,'${srcKey}',__IDX__)"
+    ondragend="_colDragEnd(event)"`;
   return list.map((f, i) => {
+    const da = dragAttrs.replace(/__IDX__/g, i);
     const type = f.type || 'string';
     const typeSelHtml = `<select class="wiz-select" id="w-ct-${srcKey}-${i}" onchange="wizToggleDateFmt('${srcKey}',${i},this.value)">`
       + typeOpts.map(([v,l]) => `<option value="${v}"${v===type?' selected':''}>${l}</option>`).join('')
@@ -639,10 +643,12 @@ function wizColRows(srcKey, s) {
       + `<span id="w-df-preview-${srcKey}-${i}" style="font-size:.7rem;color:var(--muted);margin-left:.4rem">${dfPreview}</span>`
       + `</div>`;
     const ignHtml = `<input type="checkbox" id="w-ig-${srcKey}-${i}" title="Ignorer ce champ"${f.ignored?' checked':''} style="cursor:pointer">`;
+    const handle = `<td class="col-drag-handle" title="Réordonner">⠿</td>`;
     if (s.fixed_width) {
-      return `<tr${f.ignored?' style="opacity:.45"':''}>
+      return `<tr ${da}${f.ignored?' style="opacity:.45"':''}>
+        ${handle}
         <td>${wizInput(`w-cn-${srcKey}-${i}`, f.name, 'nom')}</td>
-        <td>${wizInput(`w-cp-${srcKey}-${i}`, f.position, '0')}</td>
+        <td>${wizInput(`w-cp-${srcKey}-${i}`, f.position, '1')}</td>
         <td>${wizInput(`w-cw-${srcKey}-${i}`, f.width, '1')}</td>
         <td>${typeSelHtml}</td>
         <td>${dfHtml}</td>
@@ -650,7 +656,8 @@ function wizColRows(srcKey, s) {
         <td><button class="btn-icon" onclick="wizRemoveCol('${srcKey}',${i})" title="Supprimer">✕</button></td>
       </tr>`;
     } else if (s.format === 'json' || s.format === 'jsonl') {
-      return `<tr${f.ignored?' style="opacity:.45"':''}>
+      return `<tr ${da}${f.ignored?' style="opacity:.45"':''}>
+        ${handle}
         <td>${wizInput(`w-cn-${srcKey}-${i}`, f.name, 'nom')}</td>
         <td>${wizInput(`w-jpf-${srcKey}-${i}`, f.path||'', 'ex: customer.name')}</td>
         <td>${typeSelHtml}</td>
@@ -659,7 +666,8 @@ function wizColRows(srcKey, s) {
         <td><button class="btn-icon" onclick="wizRemoveCol('${srcKey}',${i})" title="Supprimer">✕</button></td>
       </tr>`;
     } else {
-      return `<tr${f.ignored?' style="opacity:.45"':''}>
+      return `<tr ${da}${f.ignored?' style="opacity:.45"':''}>
+        ${handle}
         <td>${wizInput(`w-cn-${srcKey}-${i}`, f.name, 'nom')}</td>
         <td>${typeSelHtml}</td>
         <td>${dfHtml}</td>
@@ -668,6 +676,61 @@ function wizColRows(srcKey, s) {
       </tr>`;
     }
   }).join('');
+}
+
+// ── Drag-and-drop réordonnancement des colonnes ────────────
+let _dragSrcKey = null, _dragIdx = null;
+
+function _colDragStart(e, srcKey, idx) {
+  _dragSrcKey = srcKey;
+  _dragIdx    = idx;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function _colDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const row = e.currentTarget;
+  row.closest('tbody').querySelectorAll('tr').forEach(r => r.classList.remove('drag-over'));
+  row.classList.add('drag-over');
+}
+
+function _colDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+
+function _colDrop(e, srcKey, toIdx) {
+  e.preventDefault();
+  if (_dragSrcKey !== srcKey || _dragIdx === null || _dragIdx === toIdx) {
+    _colDragEnd(e);
+    return;
+  }
+  wizReadSourceForm(srcKey);
+  const s    = WS.sources[srcKey];
+  const list = s.fixed_width ? s.column_positions : s.fields;
+  const [moved] = list.splice(_dragIdx, 1);
+  list.splice(toIdx, 0, moved);
+  if (s.fixed_width) _recalcFixedPositions(srcKey);
+  const tbody = document.getElementById('ctbody-' + srcKey);
+  if (tbody) tbody.innerHTML = wizColRows(srcKey, s);
+}
+
+function _colDragEnd(e) {
+  _dragSrcKey = null;
+  _dragIdx    = null;
+  document.querySelectorAll('tr.col-row').forEach(r => r.classList.remove('dragging', 'drag-over'));
+}
+
+function _recalcFixedPositions(srcKey) {
+  const s = WS.sources[srcKey];
+  if (!s.fixed_width) return;
+  let pos = 1; // 1-based
+  s.column_positions.forEach(f => {
+    const width = Number(f.width) || 1;
+    f.position = pos;
+    pos += width;
+  });
 }
 
 function wizToggleDateFmt(srcKey, i, type) {
@@ -718,7 +781,7 @@ function wizAddCol(srcKey) {
   const s = WS.sources[srcKey];
   if (s.fixed_width) {
     const prev = s.column_positions[s.column_positions.length - 1];
-    const nextPos = prev ? (Number(prev.position) + Number(prev.width)) : 0;
+    const nextPos = prev ? (Number(prev.position) + Number(prev.width)) : 1; // 1-based
     s.column_positions.push({name:'', position:nextPos, width:1, type:'string', date_format:'', ignored:false});
   }
   else s.fields.push({name:'', type:'string', date_format:'', ignored:false});
@@ -733,8 +796,7 @@ function wizRemoveCol(srcKey, idx) {
   else s.fields.splice(idx,1);
   // Si plus aucun champ, re-rendre toute l'étape pour faire réapparaître le bouton Détecter
   if (!_hasSourceConfig(srcKey)) {
-    if (srcKey === 'reference') onEnterRef();
-    else onEnterTgt();
+    dsActivate(srcKey);
     return;
   }
   const tbody = document.getElementById('ctbody-'+srcKey);
@@ -761,7 +823,7 @@ function wizToggleFW(srcKey) {
   s.fixed_width = !s.fixed_width;
   const dfTooltip = 'title="Format Python strftime. Exemples&#10;%d/%m/%Y → 31/12/2024&#10;%Y-%m-%d → 2024-12-31&#10;%Y%m%d → 20241231&#10;%d/%m/%Y %H:%M:%S → date+heure&#10;Codes : %Y=année %m=mois %d=jour %H=heure %M=minute %S=seconde"';
   if (s.fixed_width) {
-    s.column_positions = s.fields.map(f => ({name:f.name, position:0, width:1, type:f.type, date_format:f.date_format, ignored:!!f.ignored}));
+    s.column_positions = s.fields.map((f, i) => ({name:f.name, position:i+1, width:1, type:f.type, date_format:f.date_format, ignored:!!f.ignored}));
     s.fields = [];
   } else {
     s.fields = s.column_positions.map(f => ({name:f.name, type:f.type, date_format:f.date_format, ignored:!!f.ignored}));
@@ -770,8 +832,8 @@ function wizToggleFW(srcKey) {
   const tbody = document.getElementById('ctbody-'+srcKey);
   const thead = tbody?.closest('table')?.querySelector('thead tr');
   if (thead) thead.innerHTML = s.fixed_width
-    ? `<th>Nom</th><th>Position</th><th>Largeur</th><th>Type</th><th ${dfTooltip}>Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>`
-    : `<th>Nom</th><th>Type</th><th ${dfTooltip}>Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>`;
+    ? `<th></th><th>Nom</th><th>Position</th><th>Largeur</th><th>Type</th><th ${dfTooltip}>Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>`
+    : `<th></th><th>Nom</th><th>Type</th><th ${dfTooltip}>Date fmt ⓘ</th><th title="Exclure ce champ des jointures et des règles">Ign.</th><th></th>`;
   if (tbody) tbody.innerHTML = wizColRows(srcKey, s);
 }
 
@@ -799,7 +861,7 @@ function wizReadSourceForm(srcKey) {
     const igEl = document.getElementById(`w-ig-${srcKey}-${i}`);
     if (igEl !== null) f.ignored = igEl.checked;
     if (s.fixed_width) {
-      if (g(`w-cp-${srcKey}-${i}`) !== null) f.position = Number(g(`w-cp-${srcKey}-${i}`))||0;
+      if (g(`w-cp-${srcKey}-${i}`) !== null) f.position = Number(g(`w-cp-${srcKey}-${i}`))||1;
       if (g(`w-cw-${srcKey}-${i}`) !== null) f.width    = Number(g(`w-cw-${srcKey}-${i}`))||1;
     }
     if (s.format === 'json' || s.format === 'jsonl') {
@@ -815,8 +877,7 @@ function wizReadSourceForm(srcKey) {
   });
 }
 
-function wizRenderSource0() { onEnterRef(); }
-function wizRenderSource1() { onEnterTgt(); }
+function wizRenderSource0() { onEnterDatasets(); }
 
 // ═══════════════════════════════════════════════════════════
 //  WIZARD — Étape 2 : Jointure
@@ -836,7 +897,7 @@ function wizRenderJoin() {
   const labelA = esc(WS.sources.reference.label || 'Source A');
   const labelB = esc(WS.sources.target.label    || 'Source B');
 
-  document.getElementById('wfv-3-body').innerHTML = `
+  document.getElementById('wfv-2-body').innerHTML = `
     <div class="wiz-section">
       <div class="wiz-section-title">Clés de jointure</div>
       ${warn}
@@ -1038,7 +1099,7 @@ function wizBuildSourcesObj() {
 //  WIZARD — Étape 3 : Règles
 // ═══════════════════════════════════════════════════════════
 function wizRenderRules() {
-  const el = document.getElementById('wfv-4-body');
+  const el = document.getElementById('wfv-3-body');
   const refNames = wGetFieldNames('reference');
   const tgtNames = wGetFieldNames('target');
 
@@ -1172,7 +1233,7 @@ function wizRemoveRuleField(ri, fi) {
 //  WIZARD — Étape 4 : Options (Rapport + Méta)
 // ═══════════════════════════════════════════════════════════
 function wizRenderFilters() {
-  document.getElementById('wfv-5-body').innerHTML = `
+  document.getElementById('wfv-4-body').innerHTML = `
     <div class="wiz-section wiz-section-narrow">
       <div class="wiz-section-title">Rapport</div>
       <div class="wiz-grid">

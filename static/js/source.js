@@ -60,11 +60,10 @@ function applyYamlContent(content, filename) {
       document.getElementById('dz-yaml-sub').textContent   = 'YAML chargé — cliquez pour changer';
     }
     // Re-render step en cours si applicable
-    if (wfCurrentStep === 1) onEnterRef();
-    else if (wfCurrentStep === 2) onEnterTgt();
-    else if (wfCurrentStep === 3) wizRenderJoin();
-    else if (wfCurrentStep === 4) wizRenderRules();
-    else if (wfCurrentStep === 5) wizRenderFilters();
+    if (wfCurrentStep === 1) onEnterDatasets();
+    else if (wfCurrentStep === 2) wizRenderJoin();
+    else if (wfCurrentStep === 3) wizRenderRules();
+    else if (wfCurrentStep === 4) wizRenderFilters();
     sessionSave();
   } catch(_) {}
 }
@@ -291,8 +290,7 @@ async function _onFileLoaded(srcKey, file) {
   if (_hasSourceConfig(srcKey)) {
     await _quickConformityCheck(srcKey, file);
   }
-  if (wfCurrentStep === 1 && srcKey === 'reference') onEnterRef();
-  else if (wfCurrentStep === 2 && srcKey === 'target') onEnterTgt();
+  if (wfCurrentStep === 1) dsActivate(srcKey);
 }
 
 async function _quickConformityCheck(srcKey, file) {
@@ -329,8 +327,7 @@ async function detectAndApply(srcKey) {
   // JSON / JSONL : déléguer à _autoDetectJson puis re-rendre
   if (src.format === 'json' || src.format === 'jsonl') {
     await _autoDetectJson(srcKey, file);
-    if (srcKey === 'reference') onEnterRef();
-    else onEnterTgt();
+    if (wfCurrentStep === 1) dsActivate(srcKey);
     return;
   }
 
@@ -368,8 +365,7 @@ async function detectAndApply(srcKey) {
       src.fields = names.map(n => ({name: n, type: 'string', date_format: '', ignored: false}));
     }
 
-    if (srcKey === 'reference') onEnterRef();
-    else onEnterTgt();
+    if (wfCurrentStep === 1) dsActivate(srcKey);
   } catch(e) { console.error('detectAndApply failed', e); }
 }
 

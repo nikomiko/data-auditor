@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 //  VERSION
 // ═══════════════════════════════════════════════════════════
-const UI_VERSION = '3.24.1';
+const UI_VERSION = '3.25.0';
 
 (async function checkVersion() {
   try {
@@ -48,6 +48,7 @@ let ruleFilterLogic  = 'OR';   // 'OR' | 'AND'
 let filterText     = '';
 let sortCol        = null;   // 'key'|'type'|'rule'|'ref'|'tgt'
 let sortDir        = 1;      // 1=asc, -1=desc
+let dsActiveSide   = 'reference'; // côté actif dans l'étape Datasets : 'reference' | 'target'
 
 // Pagination serveur
 let _pageNum   = 1;
@@ -98,9 +99,10 @@ function updateSourceLabels() {
   const e = id => document.getElementById(id);
   if (e('lbl-ref'))       e('lbl-ref').textContent       = refLabel || '';
   if (e('lbl-tgt'))       e('lbl-tgt').textContent       = tgtLabel || '';
+  if (e('ds-lbl-ref'))    e('ds-lbl-ref').textContent    = refLabel || 'Source A';
+  if (e('ds-lbl-tgt'))    e('ds-lbl-tgt').textContent    = tgtLabel || 'Cible B';
   if (e('nav-lbl-tgt'))   e('nav-lbl-tgt').textContent   = tL;
   if (e('nav-lbl-ref'))   e('nav-lbl-ref').textContent   = rL;
-  if (e('nav-lbl-ref0'))  e('nav-lbl-ref0').textContent  = rL;
   if (e('nav-lbl-tgt2'))  e('nav-lbl-tgt2').textContent  = tL;
   if (e('ctx-title-ref')) e('ctx-title-ref').textContent = rL;
   if (e('ctx-title-tgt')) e('ctx-title-tgt').textContent = tL;
@@ -108,19 +110,44 @@ function updateSourceLabels() {
   if (!WS.sources.target.label)    WS.sources.target.label    = tgtLabel;
 }
 
+function dsActivate(side) {
+  if (wfCurrentStep === 1) wizReadSourceForm(dsActiveSide); // sauvegarde le côté courant avant de changer
+  dsActiveSide = side;
+  const halfRef = document.getElementById('ds-half-ref');
+  const halfTgt = document.getElementById('ds-half-tgt');
+  if (halfRef) halfRef.classList.toggle('active', side === 'reference');
+  if (halfTgt) halfTgt.classList.toggle('active', side === 'target');
+  const label = side === 'reference'
+    ? 'Source A — ' + (refLabel || 'Référence')
+    : 'Source B — ' + (tgtLabel || 'Cible');
+  wizRenderSource(document.getElementById('wfv-1-src'), side, label);
+}
+
+function onEnterDatasets() {
+  const lblRef = document.getElementById('ds-lbl-ref');
+  const lblTgt = document.getElementById('ds-lbl-tgt');
+  if (lblRef) lblRef.textContent = refLabel || 'Source A';
+  if (lblTgt) lblTgt.textContent = tgtLabel || 'Cible B';
+  // Synchroniser les inputs de label
+  const inpRef = document.getElementById('inp-ref-label');
+  const inpTgt = document.getElementById('inp-tgt-label');
+  if (inpRef && !inpRef.value && refLabel) inpRef.value = refLabel;
+  if (inpTgt && !inpTgt.value && tgtLabel) inpTgt.value = tgtLabel;
+  dsActivate(dsActiveSide || 'reference');
+}
+
 function goWFStep(n) {
-  if (n > wfUnlocked && n < 7) return;
+  if (n > wfUnlocked && n < 6) return;
   // Sauvegarder l'étape courante avant de partir
   _saveCurrentWFStep();
   wfCurrentStep = n;
   document.querySelectorAll('.wf-view').forEach((el, i) => el.classList.toggle('active', i === n));
   updateWFSteps(n);
   // Actions à l'entrée d'une étape
-  if (n === 1) onEnterRef();
-  else if (n === 2) onEnterTgt();
-  else if (n === 3) wizRenderJoin();
-  else if (n === 4) wizRenderRules();
-  else if (n === 5) wizRenderFilters();
+  if (n === 1) onEnterDatasets();
+  else if (n === 2) wizRenderJoin();
+  else if (n === 3) wizRenderRules();
+  else if (n === 4) wizRenderFilters();
   updateGlobalNav(n);
 }
 
@@ -132,33 +159,32 @@ function updateGlobalNav(n) {
   const exports = document.getElementById('gnav-exports');
   if (!prev) return;
 
-  // Masquer sur Historique (step 7)
-  navBar.style.display = (n === 7) ? 'none' : '';
+  // Masquer sur Historique (step 6)
+  navBar.style.display = (n === 6) ? 'none' : '';
 
   // Bouton Précédent : invisible à l'étape 0
   prev.style.visibility = (n === 0) ? 'hidden' : '';
 
-  // Exports : visibles uniquement à l'étape ⑥
-  if (exports) exports.style.display = (n === 6) ? 'flex' : 'none';
+  // Exports : visibles uniquement à l'étape ⑤
+  if (exports) exports.style.display = (n === 5) ? 'flex' : 'none';
 
-  // Bouton Valider (uniquement étape ⑤)
+  // Bouton Valider (uniquement étape ④)
   const validate = document.getElementById('gnav-validate');
-  if (validate) validate.style.display = (n === 5) ? '' : 'none';
+  if (validate) validate.style.display = (n === 4) ? '' : 'none';
 
   // Bouton Suivant vs Lancer l'audit
-  if (n === 5) {
+  if (n === 4) {
     next.style.display = 'none';
     run.style.display  = '';
-  } else if (n >= 6) {
+  } else if (n >= 5) {
     next.style.display = 'none';
     run.style.display  = 'none';
   } else {
     next.style.display = '';
     run.style.display  = 'none';
-    // Disabled si fichier non chargé (étapes 1 et 2)
-    if (n === 1)      next.disabled = !fileRef;
-    else if (n === 2) next.disabled = !fileTgt;
-    else              next.disabled = false;
+    // Disabled si les deux fichiers ne sont pas chargés (étape ①)
+    if (n === 1) next.disabled = !(fileRef && fileTgt);
+    else         next.disabled = false;
   }
 }
 
@@ -171,18 +197,17 @@ function globalPrev() {
 function globalNext() {
   const n = wfCurrentStep;
   if (n === 0)      goWFStep(1);
-  else if (n === 1) { if (fileRef)  goWFStep(2); }
-  else if (n === 2) { if (fileTgt) goWFStep(3); }
+  else if (n === 1) { if (fileRef && fileTgt) saveStepAndGo(2); }
+  else if (n === 2) saveStepAndGo(3);
   else if (n === 3) saveStepAndGo(4);
   else if (n === 4) saveStepAndGo(5);
 }
 
 function _saveCurrentWFStep() {
-  if (wfCurrentStep === 1) wizReadSourceForm('reference');
-  else if (wfCurrentStep === 2) wizReadSourceForm('target');
-  else if (wfCurrentStep === 3) wizReadJoinForm();
-  else if (wfCurrentStep === 4) wizReadRulesForm();
-  else if (wfCurrentStep === 5) wizReadFiltersForm();
+  if (wfCurrentStep === 1) wizReadSourceForm(dsActiveSide);
+  else if (wfCurrentStep === 2) wizReadJoinForm();
+  else if (wfCurrentStep === 3) wizReadRulesForm();
+  else if (wfCurrentStep === 4) wizReadFiltersForm();
 }
 
 function saveStepAndGo(n) {
@@ -193,23 +218,12 @@ function saveStepAndGo(n) {
   goWFStep(n);
 }
 
-function onEnterRef() {
-  if (refLabel && !WS.sources.reference.label) WS.sources.reference.label = refLabel;
-  wizRenderSource(document.getElementById('wfv-1-src'), 'reference',
-    'Source A — ' + (refLabel || 'Référence'));
-}
-
-function onEnterTgt() {
-  if (tgtLabel && !WS.sources.target.label) WS.sources.target.label = tgtLabel;
-  wizRenderSource(document.getElementById('wfv-2-src'), 'target',
-    'Source B — ' + (tgtLabel || 'Cible'));
-}
 
 function updateWFSteps(activeStep) {
   if (activeStep === undefined) {
     activeStep = [...document.querySelectorAll('.wf-view')].findIndex(el => el.classList.contains('active'));
   }
-  for (let i = 0; i <= 6; i++) {
+  for (let i = 0; i <= 5; i++) {
     const btn = document.getElementById('wfs-' + i);
     if (!btn) continue;
     btn.classList.remove('active', 'done');
@@ -218,7 +232,7 @@ function updateWFSteps(activeStep) {
     else if (i < activeStep && i <= wfUnlocked) btn.classList.add('done');
   }
   const tabHist = document.getElementById('tab-history');
-  if (tabHist) tabHist.classList.toggle('active', activeStep === 7);
+  if (tabHist) tabHist.classList.toggle('active', activeStep === 6);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -286,7 +300,7 @@ function resetAll() {
   allResults = []; lastSummary = {}; lastConfig = {}; currentToken = null;
   refLabel = ''; tgtLabel = '';
   filterText = ''; sortCol = null; sortDir = 1;
-  wfUnlocked = 1; wfCurrentStep = 0;
+  wfUnlocked = 1; wfCurrentStep = 0; dsActiveSide = 'reference';
   activeFilters = new Set(['BOTH']);
   activeRuleFilters = null;
   ruleFilterLogic = 'OR';
@@ -303,7 +317,7 @@ function resetAll() {
   // Drop zone référence
   document.getElementById('dz-ref').classList.remove('loaded', 'hinted');
   document.getElementById('dz-ref-label').textContent = 'Glissez votre fichier ici';
-  document.getElementById('dz-ref-sub').textContent   = 'ou cliquez pour parcourir — CSV, TXT, JSON, JSONL';
+  document.getElementById('dz-ref-sub').textContent   = 'ou cliquez — CSV, TXT, JSON, JSONL';
   document.getElementById('eye-ref').style.display    = 'none';
   document.getElementById('val-ref').style.display    = 'none';
   document.getElementById('val-badge-ref').style.display = 'none';
@@ -313,7 +327,7 @@ function resetAll() {
   // Drop zone cible
   document.getElementById('dz-tgt').classList.remove('loaded', 'hinted');
   document.getElementById('dz-tgt-label').textContent = 'Glissez votre fichier ici';
-  document.getElementById('dz-tgt-sub').textContent   = 'ou cliquez pour parcourir — CSV, TXT, JSON, JSONL';
+  document.getElementById('dz-tgt-sub').textContent   = 'ou cliquez — CSV, TXT, JSON, JSONL';
   document.getElementById('eye-tgt').style.display    = 'none';
   document.getElementById('val-tgt').style.display    = 'none';
   document.getElementById('val-badge-tgt').style.display = 'none';
@@ -350,10 +364,12 @@ function resetAll() {
   WS.report     = { show_matching: false, max_diff_preview: 500 };
   WS.meta       = { name: '', version: '' };
 
-  // Vider le rendu des étapes source pour ne pas afficher de contenu résiduel
+  // Vider le rendu de la zone config contextuelle
   const src1 = document.getElementById('wfv-1-src');
-  const src2 = document.getElementById('wfv-2-src');
-  const placeholder = '<p style="color:var(--muted);font-size:.78rem;text-align:center;padding:2rem">Chargez un fichier ou configurez la source manuellement ci-dessous une fois le fichier chargé.</p>';
-  if (src1) src1.innerHTML = placeholder;
-  if (src2) src2.innerHTML = placeholder;
+  if (src1) src1.innerHTML = '<p style="color:var(--muted);font-size:.78rem;text-align:center;padding:2rem">Cliquez sur une source pour configurer ses colonnes.</p>';
+  // Réinitialiser l'état visuel des moitiés
+  const halfRef = document.getElementById('ds-half-ref');
+  const halfTgt = document.getElementById('ds-half-tgt');
+  if (halfRef) halfRef.classList.add('active');
+  if (halfTgt) halfTgt.classList.remove('active');
 }

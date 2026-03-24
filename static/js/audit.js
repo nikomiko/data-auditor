@@ -46,9 +46,9 @@ async function runAudit() {
   fd.append('config_yaml', yamlText);
   fd.append('run_label', WS.meta.run_label || '');
 
-  // Toujours basculer vers la page résultats (step 6) dès le lancement
-  if (wfUnlocked < 6) wfUnlocked = 6;
-  goWFStep(6);
+  // Toujours basculer vers la page résultats (step 5) dès le lancement
+  if (wfUnlocked < 5) wfUnlocked = 5;
+  goWFStep(5);
   showProgress(true);
   updateProgress({ pct: 0, done: 0, total: 0, step: 'Envoi de la configuration…' });
 
@@ -146,7 +146,7 @@ function listenSSE(token) {
       _updateExportBadge(ev.total_results, config?.report?.max_diff_preview || 500);
 
       // Débloquer l'étape résultats
-      wfUnlocked = 6;
+      wfUnlocked = 5;
       updateWFSteps();
 
       // Avertissement si troncature
@@ -355,8 +355,8 @@ async function purgeAllHistory() {
 async function loadHistoryEntry(filename) {
   try {
     const data = await fetch(`/api/history/${filename}`).then(r => r.json());
-    wfUnlocked = 6;
-    goWFStep(6);
+    wfUnlocked = 5;
+    goWFStep(5);
     allResults  = data.results || [];
     lastSummary = data.summary || {};
     lastConfig  = data.config  || {};

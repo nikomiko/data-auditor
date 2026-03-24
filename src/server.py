@@ -31,7 +31,7 @@ from report        import save_history, list_history, load_history, to_csv, to_h
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
 
-APP_VERSION = "3.24.1"
+APP_VERSION = "3.25.0"
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
 # _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
