@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 //  VERSION
 // ═══════════════════════════════════════════════════════════
-const UI_VERSION = '3.23.2';
+const UI_VERSION = '3.23.3';
 
 (async function checkVersion() {
   try {
@@ -120,7 +120,7 @@ function goWFStep(n) {
   else if (n === 2) onEnterTgt();
   else if (n === 3) wizRenderJoin();
   else if (n === 4) wizRenderRules();
-  else if (n === 5) { wizRenderFilters(); validateConfig(); }
+  else if (n === 5) wizRenderFilters();
   updateGlobalNav(n);
 }
 
@@ -140,6 +140,10 @@ function updateGlobalNav(n) {
 
   // Exports : visibles uniquement à l'étape ⑥
   if (exports) exports.style.display = (n === 6) ? 'flex' : 'none';
+
+  // Bouton Valider (uniquement étape ⑤)
+  const validate = document.getElementById('gnav-validate');
+  if (validate) validate.style.display = (n === 5) ? '' : 'none';
 
   // Bouton Suivant vs Lancer l'audit
   if (n === 5) {

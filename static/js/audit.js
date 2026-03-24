@@ -176,16 +176,20 @@ function listenSSE(token) {
 // ═══════════════════════════════════════════════════════════
 //  CONFIG VALIDATION  (/api/validate)
 // ═══════════════════════════════════════════════════════════
+function closeValidateModal(e) {
+  if (e && e.target !== document.getElementById('validate-modal')) return;
+  document.getElementById('validate-modal').style.display = 'none';
+}
+
 async function validateConfig() {
-  const el = document.getElementById('cfg-validate-status');
-  if (!el) return;
   _saveCurrentWFStep();
   const yamlText = wizBuildYaml();
-  if (!yamlText.trim()) { el.style.display = 'none'; return; }
+  if (!yamlText.trim()) { showErr('La configuration YAML est vide.'); return; }
 
-  el.className = 'cfg-validate-status validating';
-  el.textContent = 'Validation…';
-  el.style.display = '';
+  const btn = document.getElementById('gnav-validate');
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spin"></div>';
 
   try {
     const fd = new FormData();
@@ -194,16 +198,28 @@ async function validateConfig() {
     if (fileTgt) fd.append('file_tgt', fileTgt);
 
     const data = await fetch('/api/validate', { method: 'POST', body: fd }).then(r => r.json());
+
+    const modal  = document.getElementById('validate-modal');
+    const title  = document.getElementById('validate-modal-title');
+    const body   = document.getElementById('validate-modal-body');
+
     if (data.valid) {
-      el.className = 'cfg-validate-status valid';
-      el.textContent = '✓ Configuration valide';
+      title.textContent = '✓ Configuration valide';
+      title.style.color = 'var(--ok)';
+      body.innerHTML = '<p style="color:var(--muted);font-size:.85rem">Aucune erreur détectée. Vous pouvez lancer l\'audit.</p>';
     } else {
-      el.className = 'cfg-validate-status invalid';
-      el.innerHTML = '⚠ ' + (data.errors || []).map(e => esc(e)).join('<br>⚠ ');
+      const errors = data.errors || ['Erreur inconnue.'];
+      title.textContent = `⚠ ${errors.length} problème${errors.length > 1 ? 's' : ''} détecté${errors.length > 1 ? 's' : ''}`;
+      title.style.color = 'var(--dv)';
+      body.innerHTML = '<ol class="validate-error-list">' +
+        errors.map(e => `<li>${esc(e)}</li>`).join('') + '</ol>';
     }
+    modal.style.display = 'flex';
   } catch(e) {
-    el.className = 'cfg-validate-status invalid';
-    el.textContent = '⚠ Impossible de contacter le serveur.';
+    showErr('Impossible de contacter le serveur.');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
   }
 }
 
