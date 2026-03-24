@@ -31,7 +31,7 @@ from report        import save_history, list_history, load_history, to_csv, to_h
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
 
-APP_VERSION = "3.17.0"
+APP_VERSION = "3.18.0"
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
 # _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
@@ -855,6 +855,51 @@ def delete_all_history():
 @app.route("/api/settings", methods=["GET"])
 def get_settings():
     return jsonify(load_settings())
+
+
+@app.route("/api/configs")
+def list_configs():
+    """Liste les fichiers YAML dans le dossier folder_default_configs."""
+    settings = load_settings()
+    folder_rel = settings.get("folder_default_configs") or settings.get("folder_default_datasets") or ""
+    if not folder_rel:
+        return jsonify([])
+    folder = resolve_path(folder_rel, _DATA_DIR)
+    if not os.path.isdir(folder):
+        return jsonify([])
+    entries = []
+    for fname in sorted(os.listdir(folder)):
+        if fname.lower().endswith((".yaml", ".yml")):
+            fpath = os.path.join(folder, fname)
+            try:
+                stat = os.stat(fpath)
+                entries.append({
+                    "filename": fname,
+                    "modified": datetime.fromtimestamp(stat.st_mtime).strftime("%d/%m/%Y %H:%M"),
+                    "size_kb":  round(stat.st_size / 1024, 1),
+                })
+            except OSError:
+                pass
+    return jsonify(entries)
+
+
+@app.route("/api/configs/<filename>")
+def get_config_file(filename: str):
+    """Retourne le contenu d'un fichier YAML de la bibliothèque."""
+    import re
+    if not re.match(r'^[\w\-\.]+\.(yaml|yml)$', filename, re.IGNORECASE):
+        return jsonify({"error": "Nom de fichier invalide"}), 400
+    settings = load_settings()
+    folder_rel = settings.get("folder_default_configs") or settings.get("folder_default_datasets") or ""
+    if not folder_rel:
+        return jsonify({"error": "Dossier de configurations non configuré"}), 404
+    folder = resolve_path(folder_rel, _DATA_DIR)
+    path = os.path.join(folder, filename)
+    if not os.path.isfile(path):
+        return jsonify({"error": "Fichier introuvable"}), 404
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read()
+    return jsonify({"filename": filename, "content": content})
 
 
 @app.route("/api/settings", methods=["POST"])
