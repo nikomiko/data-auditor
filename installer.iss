@@ -3,7 +3,7 @@
 ; Output: dist\installer\DataAuditor_Setup_v3.6.0.exe
 
 #define AppName      "DataAuditor"
-#define AppVersion   "3.23.4"
+#define AppVersion   "3.23.5"
 #define AppPublisher "DataAuditor"
 #define AppURL       "https://github.com/your-org/data_auditor"
 #define AppExeName   "DataAuditor.exe"

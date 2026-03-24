@@ -31,7 +31,7 @@ from report        import save_history, list_history, load_history, to_csv, to_h
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
 
-APP_VERSION = "3.23.4"
+APP_VERSION = "3.23.5"
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
 # _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
@@ -145,6 +145,8 @@ def validate_config():
             src    = config["sources"][role]
             df     = parse_file(fbytes, src)
             df     = normalize_dataframe(df, src)
+            if src.get("unpivot"):
+                df = unpivot_dataframe(df, src["unpivot"])
 
             # Vérifier les clés de jointure
             join_keys = config.get("join", {}).get("keys", [])
