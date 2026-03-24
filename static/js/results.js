@@ -166,13 +166,20 @@ function _syncExtraHeaders() {
 
   const mkTh = (side, col) => {
     const th = document.createElement('th');
-    th.className = `th-extra th-extra-${side}`;
+    th.className = `th-extra th-extra-${side} sortable`;
     th.style.position = 'relative';
     th.title = `Source ${side === 'ref' ? 'A' : 'B'} — ${col}`;
+    th.dataset.xcside = side;
+    th.dataset.xccol  = col;
     const file = side === 'ref' ? refFile : tgtFile;
     const fmt  = side === 'ref' ? refFmt  : tgtFmt;
     const meta = [file, fmt].filter(Boolean).join(' · ');
-    th.innerHTML = `<div class="th-meta">${esc(meta)}</div><div class="th-field">${esc(col)}</div><div class="col-resize-handle"></div>`;
+    const xcKey = `xc_${side}:${col}`;
+    const isActive = sortCol === xcKey;
+    const ic = isActive ? (sortDir === 1 ? '↑' : '↓') : '↕';
+    th.innerHTML = `<div class="th-meta">${esc(meta)}</div><div class="th-field">${esc(col)}<span class="sort-ic">${ic}</span></div><div class="col-resize-handle"></div>`;
+    if (isActive) th.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
+    th.addEventListener('click', e => { if (!e.target.classList.contains('col-resize-handle')) setSortCol(xcKey); });
     _addColResize(th);
     _addColDrag(th, side, col);
     tr.insertBefore(th, fsTh);
@@ -517,6 +524,7 @@ function setFilterText(v) {
 function setSortCol(col) {
   if (sortCol === col) { sortDir = -sortDir; }
   else { sortCol = col; sortDir = 1; }
+  // Réinitialiser les indicateurs fixes
   ['key','type'].forEach(c => {
     const th = document.getElementById('si-' + c)?.parentElement;
     const ic = document.getElementById('si-' + c);
@@ -527,6 +535,16 @@ function setSortCol(col) {
       th.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
       ic.textContent = sortDir === 1 ? '↑' : '↓';
     }
+  });
+  // Réinitialiser les indicateurs sur les th-extra
+  document.querySelectorAll('.th-extra').forEach(th => {
+    const side = th.dataset.xcside, col2 = th.dataset.xccol;
+    if (!side || !col2) return;
+    const xcKey = `xc_${side}:${col2}`;
+    const ic = th.querySelector('.sort-ic');
+    th.classList.remove('sort-asc','sort-desc');
+    if (ic) ic.textContent = xcKey === sortCol ? (sortDir === 1 ? '↑' : '↓') : '↕';
+    if (xcKey === sortCol) th.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
   });
   _refresh();
 }

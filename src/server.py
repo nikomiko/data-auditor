@@ -30,7 +30,7 @@ from report        import save_history, list_history, load_history, to_csv, to_h
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
 
-APP_VERSION = "3.12.1"
+APP_VERSION = "3.13.0"
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
 # _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
@@ -533,6 +533,13 @@ def get_results_page(token):
     elif sort_col == "type":
         rows.sort(
             key=lambda r: min((_GRAVITY.get(e["type_ecart"], 99) for e in r["ecarts"]), default=99),
+            reverse=reverse,
+        )
+    elif sort_col.startswith("xc_ref:") or sort_col.startswith("xc_tgt:"):
+        _xc_side, _xc_col = sort_col.split(":", 1)
+        _xc_map = sess.get("ref_rows_map" if _xc_side == "xc_ref" else "tgt_rows_map", {})
+        rows.sort(
+            key=lambda r: str(_xc_map.get(r["join_key"], {}).get(_xc_col, "") or "").lower(),
             reverse=reverse,
         )
 
