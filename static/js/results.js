@@ -248,7 +248,7 @@ function _renderPagination() {
   const from = ((_pageNum - 1) * _pageSize + 1).toLocaleString('fr-FR');
   const to   = Math.min(_pageNum * _pageSize, _pageTot).toLocaleString('fr-FR');
   const tot  = _pageTot.toLocaleString('fr-FR');
-  const sizeSel = [50, 100, 200, 500].map(n =>
+  const sizeSel = [50, 100, 200, 500, 1000, 2000].map(n =>
     `<option value="${n}"${n === _pageSize ? ' selected' : ''}>${n}</option>`).join('');
   const pageSel = Array.from({length: _pagePages}, (_, i) =>
     `<option value="${i+1}"${i+1 === _pageNum ? ' selected' : ''}>${i+1}</option>`).join('');

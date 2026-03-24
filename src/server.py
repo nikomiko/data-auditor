@@ -30,7 +30,7 @@ from report        import save_history, list_history, load_history, to_csv, to_h
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
 
-APP_VERSION = "3.12.0"
+APP_VERSION = "3.12.1"
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
 # _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
@@ -433,7 +433,7 @@ def get_results_page(token):
         return jsonify({"error": "Session introuvable"}), 404
 
     page      = max(1, int(request.args.get("page",  1)))
-    size      = min(500, max(1, int(request.args.get("size", 100))))
+    size      = min(5000, max(1, int(request.args.get("size", 100))))
     sort_col  = request.args.get("sort",  "")
     sort_dir  = request.args.get("dir",   "asc")
     types_str = request.args.get("types", "")
@@ -913,13 +913,10 @@ def get_history_entry(filename: str):
     try:
         data    = load_history(filename)
         results = data.get("results", [])
-        max_p   = data.get("meta", {}).get("config", {}).get(
-            "report", {}
-        ).get("max_diff_preview", MAX_PREVIEW)
         return jsonify({
             "summary":       data.get("summary", {}),
-            "results":       results[:max_p],
-            "truncated":     len(results) > max_p,
+            "results":       results,
+            "truncated":     False,
             "total_results": len(results),
             "config":        data.get("meta", {}).get("config", {}),
             "token":         None,
