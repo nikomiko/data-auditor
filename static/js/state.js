@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 //  VERSION
 // ═══════════════════════════════════════════════════════════
-const UI_VERSION = '3.15.0';
+const UI_VERSION = '3.16.0';
 
 (async function checkVersion() {
   try {
@@ -16,6 +16,20 @@ const UI_VERSION = '3.15.0';
       badge.style.display = '';
     }
   } catch (_) { /* serveur inaccessible au chargement */ }
+})();
+
+// ── Surveillance serveur (ping toutes les 15s) ─────────────
+(function _startServerWatch() {
+  let _offline = false;
+  const _badge = () => document.getElementById('server-offline');
+  setInterval(async () => {
+    try {
+      await fetch('/api/version', { cache: 'no-store' });
+      if (_offline) { _offline = false; const b = _badge(); if (b) b.style.display = 'none'; }
+    } catch(_) {
+      if (!_offline) { _offline = true; const b = _badge(); if (b) b.style.display = ''; }
+    }
+  }, 15000);
 })();
 
 // ═══════════════════════════════════════════════════════════
