@@ -25,12 +25,13 @@ from parser        import parse_file
 from normalizer    import normalize_dataframe
 from unpivot       import unpivot_dataframe
 from comparator    import compare_with_progress, _build_key_series
+from filters       import apply_filters as _apply_filters_base
 import report
 from report        import save_history, list_history, load_history, to_csv, to_html, to_xlsx
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
 
-APP_VERSION = "3.16.0"
+APP_VERSION = "3.17.0"
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
 # _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
@@ -242,114 +243,8 @@ def _run_audit(token: str, ref_bytes: bytes, tgt_bytes: bytes, config: dict):
 
 
 def apply_filters(df_ref, df_tgt, filters, config):
-    """
-    Filtre chaque source par les valeurs déclarées dans 'filters'.
-    Pas de propagation croisée : les orphelins restent visibles dans le comparateur.
-    """
-    for f in filters:
-        field      = f.get("field")
-        src        = f.get("source", "reference")
-        operator   = f.get("operator", "equals")
-        value_type = f.get("value_type", "value")
-        value      = f.get("value", "")
-        # Compat ascendante : ancien format { values: [...] }
-        legacy_values = f.get("values")
-
-        if not field:
-            continue
-
-        def _make_mask(fld, op, vt, val, lv):
-            import pandas as _pd
-
-            def _as_str(series):
-                """NaN → '' pour toutes les comparaisons string."""
-                return series.where(series.notna(), other="").astype(str).str.strip()
-
-            def _debug(fld, result, computed_series, raw_series=None, cmp_val=None):
-                if not app.debug:
-                    return
-                true_count  = int(result.sum())
-                false_count = int((~result).sum())
-                label = f"[filter debug] champ={fld!r}  op={op!r}  value_type={vt!r}"
-                if cmp_val is not None:
-                    label += f"  valeur_comparée={cmp_val!r}"
-                print(f"{label}  →  TRUE={true_count}  FALSE={false_count}  TOTAL={true_count+false_count}")
-                print(f"  {'#':>6}  {'valeur brute':30s}  {'notna':5}  {'_as_str':30s}  résultat")
-                print(f"  {'-'*6}  {'-'*30}  {'-'*5}  {'-'*30}  --------")
-                raw_list = list(raw_series) if raw_series is not None else list(computed_series)
-                str_list = list(computed_series)
-                res_list = list(result)
-                for idx, (raw_v, str_v, res_row) in enumerate(zip(raw_list, str_list, res_list)):
-                    notna_v = raw_series is not None and raw_v is not None and raw_v == raw_v
-                    print(f"  {idx:>6}  {repr(raw_v):30s}  {str(notna_v):5}  {repr(str_v):30s}  {'TRUE' if res_row else 'FALSE'}")
-
-            if vt == "empty":
-                def _m(df, _f=fld):
-                    s = df[_f].fillna("").astype(str).str.strip()
-                    r = s == ""
-                    _debug(_f, r, s, raw_series=df[_f])
-                    return r
-                return _m
-            if vt == "not_empty":
-                def _m(df, _f=fld):
-                    s = df[_f].fillna("").astype(str).str.strip()
-                    r = s != ""
-                    _debug(_f, r, s, raw_series=df[_f])
-                    return r
-                return _m
-            # value_type == "value" (ou valeur brute)
-            if lv is not None and not val:
-                vs = set(str(v) for v in lv)
-                def _m(df, _f=fld, _vs=vs):
-                    s = _as_str(df[_f])
-                    r = s.isin(_vs)
-                    _debug(_f, r, s, cmp_val=sorted(_vs))
-                    return r
-                return _m
-            v = str(val).strip() if val is not None else ""
-            if op == "equals":
-                def _m(df, _f=fld, _v=v):
-                    s = _as_str(df[_f]); r = s == _v; _debug(_f, r, s, cmp_val=_v); return r
-                return _m
-            if op == "differs":
-                def _m(df, _f=fld, _v=v):
-                    s = _as_str(df[_f]); r = s != _v; _debug(_f, r, s, cmp_val=_v); return r
-                return _m
-            if op == "greater":
-                def _m(df, _f=fld, _v=v):
-                    n = _pd.to_numeric(df[_f], errors="coerce")
-                    r = n > _pd.to_numeric(_v, errors="coerce")
-                    _debug(_f, r.fillna(False), n.astype(str), cmp_val=_v); return r
-                return _m
-            if op == "less":
-                def _m(df, _f=fld, _v=v):
-                    n = _pd.to_numeric(df[_f], errors="coerce")
-                    r = n < _pd.to_numeric(_v, errors="coerce")
-                    _debug(_f, r.fillna(False), n.astype(str), cmp_val=_v); return r
-                return _m
-            if op == "contains":
-                def _m(df, _f=fld, _v=v):
-                    s = _as_str(df[_f]); r = s.str.contains(_v, regex=False); _debug(_f, r, s, cmp_val=_v); return r
-                return _m
-            if op == "not_contains":
-                def _m(df, _f=fld, _v=v):
-                    s = _as_str(df[_f]); r = ~s.str.contains(_v, regex=False); _debug(_f, r, s, cmp_val=_v); return r
-                return _m
-            def _m(df, _f=fld, _v=v):
-                s = _as_str(df[_f]); r = s == _v; _debug(_f, r, s, cmp_val=_v); return r
-            return _m
-
-        mask = _make_mask(field, operator, value_type, value, legacy_values)
-
-        if src == "reference":
-            if field not in df_ref.columns:
-                raise ConfigError(f"filters: champ '{field}' introuvable dans la reference.")
-            df_ref = df_ref[mask(df_ref)].reset_index(drop=True)
-        elif src == "target":
-            if field not in df_tgt.columns:
-                raise ConfigError(f"filters: champ '{field}' introuvable dans la cible.")
-            df_tgt = df_tgt[mask(df_tgt)].reset_index(drop=True)
-    return df_ref, df_tgt
+    """Délègue à filters.apply_filters en passant le flag debug Flask."""
+    return _apply_filters_base(df_ref, df_tgt, filters, config, debug=app.debug)
 
 
 def _push(token: str, event: dict):
