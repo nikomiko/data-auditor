@@ -285,8 +285,17 @@ function _renderColumnPicker(refCols, tgtCols) {
     return `<div class="col-pick-group"><span class="col-pick-lbl" style="color:${color}">${label}</span>${checks}</div>`;
   };
 
+  const hidden = document.getElementById('tbl-wrap')?.classList.contains('xc-hidden');
+  const tog = `<label class="col-pick-item col-pick-tog" title="Masquer/afficher les colonnes supplémentaires dans le tableau">
+    <input type="checkbox" id="chk-xc-hide" ${hidden ? 'checked' : ''} onchange="_toggleHideExtraCols(this.checked)">
+    Masquer</label>`;
   document.getElementById('col-picker-body').innerHTML =
-    mkGroup(refLbl, refCols, 'ref') + mkGroup(tgtLbl, tgtCols, 'tgt');
+    tog + mkGroup(refLbl, refCols, 'ref') + mkGroup(tgtLbl, tgtCols, 'tgt');
+}
+
+function _toggleHideExtraCols(hide) {
+  const wrap = document.getElementById('tbl-wrap');
+  if (wrap) wrap.classList.toggle('xc-hidden', hide);
 }
 
 function _toggleExtraCol(side, col, checked) {
