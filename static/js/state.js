@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 //  VERSION
 // ═══════════════════════════════════════════════════════════
-const UI_VERSION = '3.23.0';
+const UI_VERSION = '3.23.1';
 
 (async function checkVersion() {
   try {
@@ -27,7 +27,7 @@ const UI_VERSION = '3.23.0';
       await fetch('/api/version', { cache: 'no-store' });
       if (_offline) { _offline = false; const b = _badge(); if (b) b.style.display = 'none'; }
     } catch(_) {
-      if (!_offline) { _offline = true; const b = _badge(); if (b) b.style.display = ''; }
+      if (!_offline) { _offline = true; const b = _badge(); if (b) b.style.display = 'flex'; }
     }
   }, 15000);
 })();
