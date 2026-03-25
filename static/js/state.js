@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 //  VERSION
 // ═══════════════════════════════════════════════════════════
-const UI_VERSION = '3.25.0';
+const UI_VERSION = '3.26.0';
 
 (async function checkVersion() {
   try {
@@ -117,6 +117,8 @@ function dsActivate(side) {
   const halfTgt = document.getElementById('ds-half-tgt');
   if (halfRef) halfRef.classList.toggle('active', side === 'reference');
   if (halfTgt) halfTgt.classList.toggle('active', side === 'target');
+  const cfg = document.getElementById('wfv-1-src');
+  if (cfg) { cfg.classList.toggle('cfg-ref', side === 'reference'); cfg.classList.toggle('cfg-tgt', side === 'target'); }
   const label = side === 'reference'
     ? 'Source A — ' + (refLabel || 'Référence')
     : 'Source B — ' + (tgtLabel || 'Cible');

@@ -31,7 +31,7 @@ from report        import save_history, list_history, load_history, to_csv, to_h
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
 
-APP_VERSION = "3.25.0"
+APP_VERSION = "3.26.0"
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
 # _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
@@ -390,7 +390,7 @@ def get_results_meta(token):
 # ─────────────────────────────────────────────────────────────
 #  GET /api/results/<token>  — résultats paginés + filtrés + triés
 # ─────────────────────────────────────────────────────────────
-_GRAVITY = {"ORPHELIN_A": 0, "ORPHELIN_B": 1, "KO": 2, "DIVERGENT": 2, "OK": 3}
+_GRAVITY = {"ORPHELIN_A": 0, "ORPHELIN_B": 1, "KO": 2, "DIVERGENT": 2, "OK": 3, "PRESENT": 4}
 
 
 @app.route("/api/results/<token>")
@@ -450,12 +450,12 @@ def get_results_page(token):
         # Filtrage par règle
         if active_rules is not None:
             orphan_ecarts = [e for e in ecarts
-                             if e["type_ecart"] in ("ORPHELIN_A", "ORPHELIN_B")]
-            # Aucune règle sélectionnée → n'afficher que les orphelins
+                             if e["type_ecart"] in ("ORPHELIN_A", "ORPHELIN_B", "PRESENT")]
+            # Aucune règle sélectionnée → n'afficher que les orphelins/présents
             if not active_rules:
                 return bool(orphan_ecarts)
             rule_ecarts = [e for e in ecarts
-                           if e["type_ecart"] not in ("ORPHELIN_A", "ORPHELIN_B")
+                           if e["type_ecart"] not in ("ORPHELIN_A", "ORPHELIN_B", "PRESENT")
                            and e.get("rule_name") in active_rules]
             if rule_logic == "AND":
                 # Toutes les règles actives doivent être présentes
@@ -571,12 +571,12 @@ def _filter_results_flat(results, active_types, active_rules, rule_logic,
 
         if active_rules is not None:
             orph_e = [e for e in ecarts
-                      if e.get("type_ecart") in ("ORPHELIN_A", "ORPHELIN_B")]
+                      if e.get("type_ecart") in ("ORPHELIN_A", "ORPHELIN_B", "PRESENT")]
             if not active_rules:
                 out.extend(orph_e)
                 continue
             rule_e = [e for e in ecarts
-                      if e.get("type_ecart") not in ("ORPHELIN_A", "ORPHELIN_B")
+                      if e.get("type_ecart") not in ("ORPHELIN_A", "ORPHELIN_B", "PRESENT")
                       and e.get("rule_name") in active_rules]
             if rule_logic == "AND":
                 matched = {e.get("rule_name") for e in rule_e}

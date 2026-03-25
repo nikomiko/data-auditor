@@ -24,12 +24,12 @@ async function fetchPage(page) {
 
   const p = new URLSearchParams({ page, size: _pageSize });
 
-  // Types actifs : orphelins depuis activeFilters, KO+OK si BOTH actif
-  const types = new Set();
-  if (activeFilters.has('ORPHELIN_A')) types.add('ORPHELIN_A');
-  if (activeFilters.has('ORPHELIN_B')) types.add('ORPHELIN_B');
-  if (activeFilters.has('BOTH'))       { types.add('KO'); types.add('OK'); }
-  p.set('types', [...types].join(','));
+  // Types actifs : union additive des chips (BOTH → KO+OK+DIVERGENT+PRESENT, orphelins → leur type)
+  const types = [];
+  if (activeFilters.has('BOTH'))       { types.push('KO', 'OK', 'DIVERGENT', 'PRESENT'); }
+  if (activeFilters.has('ORPHELIN_A')) types.push('ORPHELIN_A');
+  if (activeFilters.has('ORPHELIN_B')) types.push('ORPHELIN_B');
+  p.set('types', types.join(','));   // '' si aucun chip → serveur renvoie 0 résultats
 
   if (activeRuleFilters !== null) {
     p.set('rules', [...activeRuleFilters].join(','));
@@ -85,6 +85,7 @@ function _appendPageRow(r) {
 
   // Badges pour chaque écart
   const badges = (r.ecarts || []).map(e => {
+    if (e.type_ecart === 'PRESENT') return `<span class="badge badge-PRESENT">Apparié</span>`;
     const isOrphan = e.type_ecart === 'ORPHELIN_A' || e.type_ecart === 'ORPHELIN_B';
     const dotColor = (!isOrphan && e.rule_name) ? ruleColor(e.rule_name) : null;
     const dot      = dotColor ? `<span class="rule-dot" style="background:${dotColor}"></span>` : '';
@@ -313,11 +314,8 @@ function _toggleExtraCol(side, col, checked) {
 //  HISTORIQUE — rendu local (allResults)
 // ═══════════════════════════════════════════════════════════
 function appendRow(r) {
-  if (r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') {
-    if (!activeFilters.has(r.type_ecart)) return;
-  } else {
-    if (!activeFilters.has('BOTH')) return;
-  }
+  const _isOrphanA = r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B';
+  if (!activeFilters.has(_isOrphanA ? r.type_ecart : 'BOTH')) return;
   if (activeRuleFilters !== null && r.rule_name && !activeRuleFilters.has(r.rule_name)) return;
   if (!_rowMatchesText(r)) return;
   const tbody = document.getElementById('tbody');
@@ -349,11 +347,8 @@ function rebuildTable() {
   const empty = document.getElementById('empty');
 
   let rows = allResults.filter(r => {
-    if (r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') {
-      if (!activeFilters.has(r.type_ecart)) return false;
-    } else {
-      if (!activeFilters.has('BOTH')) return false;
-    }
+    const isOrphan = r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B';
+    if (!activeFilters.has(isOrphan ? r.type_ecart : 'BOTH')) return false;
     if (activeRuleFilters !== null && r.rule_name && !activeRuleFilters.has(r.rule_name)) return false;
     if (!_rowMatchesText(r)) return false;
     return true;
@@ -597,12 +592,12 @@ function exportReport(fmt) {
   if (extraTgtCols.length) p.set('extra_tgt', extraTgtCols.join(','));
 
   if (fmt === 'html') {
-    // Traduire activeFilters (BOTH → KO+OK) — le serveur ne connaît pas BOTH
-    const types = new Set();
-    if (activeFilters.has('ORPHELIN_A')) types.add('ORPHELIN_A');
-    if (activeFilters.has('ORPHELIN_B')) types.add('ORPHELIN_B');
-    if (activeFilters.has('BOTH')) { types.add('KO'); types.add('OK'); }
-    if (types.size) p.set('types', [...types].join(','));
+    // Traduire activeFilters vers types serveur (BOTH → KO+OK+DIVERGENT+PRESENT)
+    const types = [];
+    if (activeFilters.has('BOTH'))       { types.push('KO', 'OK', 'DIVERGENT', 'PRESENT'); }
+    if (activeFilters.has('ORPHELIN_A')) types.push('ORPHELIN_A');
+    if (activeFilters.has('ORPHELIN_B')) types.push('ORPHELIN_B');
+    if (types.length) p.set('types', types.join(','));
     if (activeRuleFilters !== null) p.set('rules', [...activeRuleFilters].join(','));
     if (ruleFilterLogic !== 'OR') p.set('rule_logic', ruleFilterLogic);
     if (filterText) p.set('q', filterText);
@@ -623,7 +618,8 @@ function exportReport(fmt) {
 function _getVisibleRows() {
   // Pour l'export HTML historique (sans token) uniquement
   const rows = allResults.filter(r => {
-    if ((r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B') && !activeFilters.has(r.type_ecart)) return false;
+    const _isOrphan = r.type_ecart === 'ORPHELIN_A' || r.type_ecart === 'ORPHELIN_B';
+    if (!activeFilters.has(_isOrphan ? r.type_ecart : 'BOTH')) return false;
     if (activeRuleFilters !== null && r.rule_name && !activeRuleFilters.has(r.rule_name)) return false;
     if (!_rowMatchesText(r)) return false;
     return true;

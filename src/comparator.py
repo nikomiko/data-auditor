@@ -373,6 +373,11 @@ def compare_with_progress(
                  "champ": "", "valeur_reference": "", "valeur_cible": "",
                  "detail": "Toutes les valeurs sont conformes"}
             results.append(r); yield {"event": "result", **r}; ok += 1
+        else:
+            r = {"join_key": key, "type_ecart": "PRESENT", "rule_name": "",
+                 "champ": "", "valeur_reference": "", "valeur_cible": "",
+                 "detail": "Clé présente dans les deux sources"}
+            results.append(r); yield {"event": "result", **r}
 
     rule_stats = {name: len(keys) for name, keys in rule_ko_keys.items()}
 

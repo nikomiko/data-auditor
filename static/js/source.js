@@ -457,10 +457,28 @@ function renderValidationCols(which, lines) {
   const srcKey = which === 'ref' ? 'reference' : 'target';
   const src    = WS.sources[srcKey];
 
-  // JSON / JSONL / XLSX : colonnes auto-détectées au parsing, pas de validation ligne par ligne
+  // JSON / JSONL / XLSX : afficher les colonnes déclarées dans la configuration
   if (['json','jsonl','xlsx'].includes(src.format)) {
-    wrap.innerHTML = '<div class="preview-na">Format ' + src.format + ' : colonnes détectées automatiquement au parsing, pas de validation possible ici.</div>';
-    _updateValBadge(which, null);
+    const declared = (src.fields || []).filter(f => f.name);
+    if (!declared.length) {
+      wrap.innerHTML = '<div class="preview-na">Aucune colonne déclarée. Utilisez "Détecter la structure" pour inférer les colonnes depuis le fichier.</div>';
+      _updateValBadge(which, null);
+      return;
+    }
+    let html = `<div class="val-summary"><span>${declared.length} colonne(s) déclarée(s)</span></div>`;
+    html += '<table class="val-table"><thead><tr><th>#</th><th>Nom</th><th>Type</th><th>Chemin (path)</th><th>Ignoré</th></tr></thead><tbody>';
+    declared.forEach((f, i) => {
+      html += `<tr class="ok">
+        <td style="color:var(--muted)">${i+1}</td>
+        <td>${esc(f.name)}</td>
+        <td style="color:var(--muted)">${esc(f.type||'string')}</td>
+        <td style="color:var(--muted);font-family:var(--mono);font-size:.72rem">${esc(f.path||'')}</td>
+        <td style="text-align:center">${f.ignored ? '✗' : ''}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+    _updateValBadge(which, { ok: declared.length, warn: 0, missing: 0 });
     return;
   }
 
