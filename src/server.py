@@ -31,7 +31,7 @@ from report        import save_history, list_history, load_history, to_csv, to_h
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
 
-APP_VERSION = "3.27.0"
+APP_VERSION = "3.28.0"
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
 # _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
@@ -503,6 +503,15 @@ def get_results_page(token):
     reverse = (sort_dir == "desc")
     if sort_col == "key":
         rows.sort(key=lambda r: str(r["join_key"]).lower(), reverse=reverse)
+    elif sort_col.startswith("key_"):
+        try:
+            _ki = int(sort_col[4:])
+        except ValueError:
+            _ki = 0
+        def _key_part(r, ki=_ki):
+            parts = str(r["join_key"] or "").split("§")
+            return parts[ki].lower() if ki < len(parts) else ""
+        rows.sort(key=_key_part, reverse=reverse)
     elif sort_col == "type":
         rows.sort(
             key=lambda r: min((_GRAVITY.get(e["type_ecart"], 99) for e in r["ecarts"]), default=99),
@@ -659,7 +668,8 @@ def export():
                                      ref_rows_map, tgt_rows_map,
                                      ref_label, tgt_label)
         raw      = content.encode("utf-8")
-        filename = f"audit_{audit_name}.csv"
+        ts       = datetime.now().strftime("%Y%m%d%H%M")
+        filename = f"audit_{audit_name}_{ts}.csv"
         _save_copy(filename, raw)
         return send_file(io.BytesIO(raw), mimetype="text/csv",
                          as_attachment=True, download_name=filename)
@@ -669,7 +679,8 @@ def export():
         content  = to_xlsx(results, summary, config,
                            extra_ref, extra_tgt, ref_rows_map, tgt_rows_map,
                            ref_label, tgt_label, ref_fmt, tgt_fmt)
-        filename = f"audit_{audit_name}.xlsx"
+        ts       = datetime.now().strftime("%Y%m%d%H%M")
+        filename = f"audit_{audit_name}_{ts}.xlsx"
         _save_copy(filename, content)
         return send_file(
             io.BytesIO(content),

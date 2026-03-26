@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 //  VERSION
 // ═══════════════════════════════════════════════════════════
-const UI_VERSION = '3.27.0';
+const UI_VERSION = '3.28.0';
 
 (async function checkVersion() {
   try {
@@ -235,15 +235,24 @@ function updateGlobalNav(n) {
   // Bouton Précédent : invisible à l'étape 0
   prev.style.visibility = (n === 0) ? 'hidden' : '';
 
-  // Nom de l'audit dans la nav (visible uniquement en résultats)
-  const auditNameEl = document.getElementById('audit-name-display');
+  // Badges fichiers et nom YAML : masqués en résultats
   const yamlNameEl  = document.getElementById('yaml-config-name');
-  if (auditNameEl) {
+  const pillRef     = document.getElementById('cfg-ref-pill');
+  const pillTgt     = document.getElementById('cfg-tgt-pill');
+  const onResults   = (n === 5);
+  if (yamlNameEl) yamlNameEl.style.display = onResults ? 'none' : '';
+  if (pillRef)    pillRef.style.display    = onResults ? 'none' : '';
+  if (pillTgt)    pillTgt.style.display    = onResults ? 'none' : '';
+  // audit-name-display : plus utilisé dans la nav
+  const auditNameEl = document.getElementById('audit-name-display');
+  if (auditNameEl)  auditNameEl.style.display = 'none';
+  // Titre de l'audit sur la page résultats (centré, gros)
+  const titleEl = document.getElementById('results-title');
+  if (titleEl) {
     const name = WS.meta.name || '';
-    auditNameEl.textContent = name;
-    auditNameEl.style.display = (n === 5 && name) ? '' : 'none';
+    titleEl.textContent = name;
+    titleEl.style.display = (onResults && name) ? '' : 'none';
   }
-  if (yamlNameEl) yamlNameEl.style.display = (n === 5) ? 'none' : '';
 
   // Exports : visibles uniquement à l'étape ⑤
   if (exports) exports.style.display = (n === 5) ? 'flex' : 'none';

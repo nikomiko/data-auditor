@@ -85,7 +85,7 @@ function _appendPageRow(r) {
 
   // Badges pour chaque écart
   const badges = (r.ecarts || []).map(e => {
-    if (e.type_ecart === 'PRESENT') return `<span class="badge badge-PRESENT">Apparié</span>`;
+    if (e.type_ecart === 'PRESENT') return `<span class="badge badge-PRESENT">Présence OK</span>`;
     const isOrphan = e.type_ecart === 'ORPHELIN_A' || e.type_ecart === 'ORPHELIN_B';
     const dotColor = (!isOrphan && e.rule_name) ? ruleColor(e.rule_name) : null;
     const dot      = dotColor ? `<span class="rule-dot" style="background:${dotColor}"></span>` : '';
@@ -145,8 +145,8 @@ function _rebuildKeyHeaders() {
   labels.forEach((label, i) => {
     const th = document.createElement('th');
     th.className = 'sortable th-key';
-    th.setAttribute('onclick', "setSortCol('key')");
-    th.innerHTML = `${esc(label)}<span class="sort-ic"${i === 0 ? ' id="si-key"' : ''}>↕</span>`;
+    th.setAttribute('onclick', `setSortCol('key_${i}')`);
+    th.innerHTML = `${esc(label)}<span class="sort-ic" id="si-key-${i}">↕</span>`;
     tr.insertBefore(th, anchor);
   });
 }
@@ -357,10 +357,17 @@ function rebuildTable() {
     return true;
   });
   if (sortCol) {
-    const key = _SORT_KEY[sortCol];
+    const _ki = sortCol.startsWith('key_') ? parseInt(sortCol.slice(4), 10) : -1;
+    const field = _SORT_KEY[sortCol];
     rows = rows.slice().sort((a, b) => {
-      const va = (a[key] || '').toString().toLowerCase();
-      const vb = (b[key] || '').toString().toLowerCase();
+      let va, vb;
+      if (_ki >= 0) {
+        const pa = (a.join_key || '').split('§'); va = (pa[_ki] || '').toLowerCase();
+        const pb = (b.join_key || '').split('§'); vb = (pb[_ki] || '').toLowerCase();
+      } else {
+        va = (a[field] || '').toString().toLowerCase();
+        vb = (b[field] || '').toString().toLowerCase();
+      }
       return va < vb ? -sortDir : va > vb ? sortDir : 0;
     });
   }
@@ -519,19 +526,28 @@ function setFilterText(v) {
 function setSortCol(col) {
   if (sortCol === col) { sortDir = -sortDir; }
   else { sortCol = col; sortDir = 1; }
-  // Réinitialiser les indicateurs fixes
-  ['key','type'].forEach(c => {
-    const th = document.getElementById('si-' + c)?.parentElement;
-    const ic = document.getElementById('si-' + c);
-    if (!th || !ic) return;
+  // Réinitialiser tous les indicateurs de clé
+  document.querySelectorAll('.th-key').forEach(th => {
     th.classList.remove('sort-asc','sort-desc');
-    ic.textContent = '↕';
-    if (c === sortCol) {
-      th.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
-      ic.textContent = sortDir === 1 ? '↑' : '↓';
-    }
+    const ic = th.querySelector('.sort-ic');
+    if (ic) ic.textContent = '↕';
   });
-  // Réinitialiser les indicateurs sur les th-extra
+  // Activer l'indicateur de la colonne clé sélectionnée
+  if (col.startsWith('key_')) {
+    const ic = document.getElementById(`si-key-${col.slice(4)}`);
+    if (ic) {
+      ic.textContent = sortDir === 1 ? '↑' : '↓';
+      ic.parentElement.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
+    }
+  }
+  // Indicateur type
+  const siType = document.getElementById('si-type');
+  if (siType) {
+    siType.textContent = col === 'type_ecart' ? (sortDir === 1 ? '↑' : '↓') : '↕';
+    siType.parentElement.classList.toggle('sort-asc',  col === 'type_ecart' && sortDir === 1);
+    siType.parentElement.classList.toggle('sort-desc', col === 'type_ecart' && sortDir === -1);
+  }
+  // Indicateurs colonnes supplémentaires
   document.querySelectorAll('.th-extra').forEach(th => {
     const side = th.dataset.xcside, col2 = th.dataset.xccol;
     if (!side || !col2) return;
