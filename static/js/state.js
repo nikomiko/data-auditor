@@ -168,8 +168,14 @@ function swapSources() {
   }
 
   updateSourceLabels();
-  // Re-render le panneau de config pour le côté actif
-  dsActivate(dsActiveSide);
+  // Re-render le panneau de config directement (sans re-lire le formulaire via dsActivate)
+  const _cfg = document.getElementById('wfv-1-src');
+  if (_cfg) {
+    const _label = dsActiveSide === 'reference'
+      ? 'Source A — ' + (refLabel || 'Référence')
+      : 'Source B — ' + (tgtLabel || 'Cible');
+    wizRenderSource(_cfg, dsActiveSide, _label);
+  }
 }
 
 function dsActivate(side) {
