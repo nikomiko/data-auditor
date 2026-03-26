@@ -23,7 +23,7 @@
 <header>
   <div class="logo"><a href="https://github.com/nikomiko/data-auditor" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:.4rem"><img src="/static/icons/icon-192.png" alt="" style="width:20px;height:20px;border-radius:4px;vertical-align:middle">data<em>/</em>auditor</a>
     <span class="logo-tag">server</span>
-    <span class="logo-ver" id="logo-ver">v3.28.0</span>
+    <span class="logo-ver" id="logo-ver">v3.29.0</span>
     <span id="version-mismatch" style="display:none" title="" class="version-mismatch-badge">⚠ version</span>
   </div>
   <div class="wf-steps" id="wf-steps">
@@ -498,12 +498,13 @@ document.addEventListener('keydown', e => {
       <div class="modal-tabs">
         <button class="modal-tab active" id="tab-table"   onclick="switchPreviewTab('table')">Tableau</button>
         <button class="modal-tab" id="tab-raw"            onclick="switchPreviewTab('raw')">Brut</button>
-        <button class="modal-tab" id="tab-cols"           onclick="switchPreviewTab('cols')">Colonnes</button>
+        <button class="modal-tab" id="tab-cols"   style="display:none" onclick="switchPreviewTab('cols')">Colonnes</button>
         <button class="modal-tab" id="tab-unpivot" style="display:none" onclick="switchPreviewTab('unpivot')">Dépivoté</button>
       </div>
       <button class="modal-close" onclick="closePreview()">✕</button>
     </div>
     <div class="modal-body">
+      <div id="preview-info" style="display:none;font-size:.72rem;color:var(--muted);padding:.3rem .5rem .1rem;display:none"></div>
       <div id="preview-table-wrap"></div>
       <div id="preview-raw-wrap"    style="display:none"></div>
       <div id="preview-cols-wrap"   style="display:none"></div>

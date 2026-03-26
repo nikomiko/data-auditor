@@ -411,7 +411,8 @@ function updateProgress(ev) {
 // ═══════════════════════════════════════════════════════════
 let previewData = { ref: null, tgt: null };
 
-async function previewFile(which, evt, openTab) {
+// mode : 'preview' (Tableau+Brut) | 'verify' (Colonnes seul)
+async function previewFile(which, evt, openTab, mode) {
   evt && evt.stopPropagation();
   const file = which === 'ref' ? fileRef : fileTgt;
   if (!file || isBinary(file)) return;
@@ -419,12 +420,13 @@ async function previewFile(which, evt, openTab) {
   // S'assurer que l'état wizard est à jour avant de lire WS.sources
   _saveCurrentWFStep();
 
-  const srcKey = which === 'ref' ? 'reference' : 'target';
-  const label  = which === 'ref' ? (refLabel || 'Référence') : (tgtLabel || 'Cible');
+  const srcKey  = which === 'ref' ? 'reference' : 'target';
+  const label   = which === 'ref' ? (refLabel || 'Référence') : (tgtLabel || 'Cible');
+  const _mode   = mode || (openTab === 'cols' ? 'verify' : 'preview');
   document.getElementById('preview-title').textContent =
-    `Prévisualisation — ${label} : ${file.name}`;
+    (_mode === 'verify' ? 'Vérification colonnes' : 'Prévisualisation') + ` — ${label} : ${file.name}`;
 
-  // Lire les premières lignes (max 50KB)
+  // Lire les premières lignes (max 512KB)
   const slice = file.slice(0, 512000);
   const text  = await slice.text();
   const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l => l.trim());
@@ -435,29 +437,75 @@ async function previewFile(which, evt, openTab) {
   const src   = WS.sources[srcKey];
   const delim = src.delimiter || ';';
 
-  if (['json','jsonl'].includes(src.format)) {
-    renderPreviewJson(which, text);
-  } else {
-    renderPreviewTable(lines, delim);
-  }
-  renderPreviewRaw(lines);
-  renderValidationCols(which, lines);
-
-  // Onglet Dépivoté : visible uniquement si unpivot activé avec au moins un pivot configuré
+  // Onglets visibles selon le mode
+  const tabTable   = document.getElementById('tab-table');
+  const tabRaw     = document.getElementById('tab-raw');
+  const tabCols    = document.getElementById('tab-cols');
   const tabUnpivot = document.getElementById('tab-unpivot');
-  const hasUnpivot = src.unpivot_enabled && (src.unpivot.pivot_fields || []).filter(p => p.source).length > 0;
-  tabUnpivot.style.display = hasUnpivot ? '' : 'none';
-  if (hasUnpivot) renderPreviewUnpivot(lines, srcKey, delim);
+  const isPreview  = _mode === 'preview';
+  tabTable.style.display   = isPreview ? '' : 'none';
+  tabRaw.style.display     = isPreview ? '' : 'none';
+  tabCols.style.display    = !isPreview ? '' : 'none';
 
-  switchPreviewTab(openTab || 'table');
+  if (isPreview) {
+    if (['json','jsonl'].includes(src.format)) {
+      renderPreviewJson(which, text);
+    } else {
+      renderPreviewTable(lines, delim);
+    }
+    renderPreviewRaw(lines);
+
+    // Bandeau lignes brutes / interprétées
+    const rawCount   = lines.length;
+    const intrCount  = _interpretedLineCount(lines, src);
+    const approx     = file.size > 512000;
+    const infoEl     = document.getElementById('preview-info');
+    if (infoEl) {
+      const rawLabel  = approx ? `≈${rawCount.toLocaleString('fr-FR')}+` : rawCount.toLocaleString('fr-FR');
+      const infoTxt   = `Lignes brutes : <strong>${rawLabel}</strong>${approx ? ' (aperçu 512 Ko)' : ''} — Lignes interprétées : <strong>${intrCount.toLocaleString('fr-FR')}</strong>`;
+      infoEl.innerHTML = infoTxt;
+      infoEl.style.display = '';
+    }
+
+    // Onglet Dépivoté : visible uniquement si unpivot activé
+    const hasUnpivot = src.unpivot_enabled && (src.unpivot.pivot_fields || []).filter(p => p.source).length > 0;
+    tabUnpivot.style.display = hasUnpivot ? '' : 'none';
+    if (hasUnpivot) renderPreviewUnpivot(lines, srcKey, delim);
+  } else {
+    // mode verify
+    const infoEl = document.getElementById('preview-info');
+    if (infoEl) infoEl.style.display = 'none';
+    tabUnpivot.style.display = 'none';
+    renderValidationCols(which, lines);
+  }
+
+  switchPreviewTab(openTab || (isPreview ? 'table' : 'cols'));
   document.getElementById('preview-modal').classList.add('show');
+}
+
+function _interpretedLineCount(lines, src) {
+  let rows = [...lines];
+  const skipRows = parseInt(src.skip_rows) || 0;
+  if (skipRows > 0) rows = rows.slice(skipRows);
+  if (src.record_filter_marker) {
+    try {
+      const rx = new RegExp(src.record_filter_marker);
+      rows = rows.filter(l => rx.test(l));
+    } catch(_) {}
+  }
+  if (src.has_header !== false && rows.length > 0) rows = rows.slice(1);
+  // Si unpivot actif, multiplier par le nombre de colonnes pivot
+  if (src.unpivot_enabled) {
+    const pivotCount = (src.unpivot?.pivot_fields || []).filter(p => p.source).length;
+    if (pivotCount > 0) return rows.length * pivotCount;
+  }
+  return rows.length;
 }
 
 async function validateColumns(which, evt) {
   evt && evt.stopPropagation();
-  // Save current form state before reading WS
   _saveCurrentWFStep();
-  await previewFile(which, null, 'cols');
+  await previewFile(which, null, 'cols', 'verify');
 }
 
 function renderValidationCols(which, lines) {
@@ -709,10 +757,10 @@ function switchPreviewTab(tab) {
   document.getElementById('preview-raw-wrap').style.display     = tab === 'raw'     ? '' : 'none';
   document.getElementById('preview-cols-wrap').style.display    = tab === 'cols'    ? '' : 'none';
   document.getElementById('preview-unpivot-wrap').style.display = tab === 'unpivot' ? '' : 'none';
-  document.getElementById('tab-table').classList.toggle('active',   tab === 'table');
-  document.getElementById('tab-raw').classList.toggle('active',     tab === 'raw');
-  document.getElementById('tab-cols').classList.toggle('active',    tab === 'cols');
-  document.getElementById('tab-unpivot').classList.toggle('active', tab === 'unpivot');
+  ['table','raw','cols','unpivot'].forEach(t => {
+    const el = document.getElementById('tab-' + t);
+    if (el) el.classList.toggle('active', t === tab);
+  });
 }
 
 function renderPreviewUnpivot(lines, srcKey, delim) {
