@@ -12,7 +12,7 @@ function wizSrcDefault() {
   };
 }
 const WS = {
-  meta:{ name:'', version:'', run_label:'' },
+  meta:{ name:'', version:'', run_label:'', description:'' },
   sources:{ reference: wizSrcDefault(), target: wizSrcDefault() },
   join:{ keys:[] },
   rules:[],
@@ -44,8 +44,9 @@ function wizLoadFromYaml(parsed) {
   if (!parsed || typeof parsed !== 'object') return;
   // meta
   const m = parsed.meta || {};
-  WS.meta.name    = m.name    || '';
-  WS.meta.version = m.version || '';
+  WS.meta.name        = m.name        || '';
+  WS.meta.version     = m.version     || '';
+  WS.meta.description = m.description || '';
   // Sync labels depuis les labels sources du YAML
   const rLabelYaml = ((parsed.sources||{}).reference||{}).label || '';
   const tLabelYaml = ((parsed.sources||{}).target||{}).label    || '';
@@ -185,10 +186,11 @@ function wizLoadFromYaml(parsed) {
 function wizBuildYaml() {
   const obj = {};
   // meta
-  if (WS.meta.name || WS.meta.version) {
+  if (WS.meta.name || WS.meta.version || WS.meta.description) {
     obj.meta = {};
-    if (WS.meta.name)    obj.meta.name    = WS.meta.name;
-    if (WS.meta.version) obj.meta.version = WS.meta.version;
+    if (WS.meta.name)        obj.meta.name        = WS.meta.name;
+    if (WS.meta.version)     obj.meta.version     = WS.meta.version;
+    if (WS.meta.description) obj.meta.description = WS.meta.description;
   }
   // sources
   obj.sources = {};
@@ -548,7 +550,6 @@ function wizRenderSource(stepEl, srcKey, label) {
       <div class="wiz-section-title">${label}</div>
       <div class="wiz-grid">
         ${wizField('Format', wizSelect('w-fmt-'+srcKey, [['csv','CSV'],['positionnel','Positionnel'],['json','JSON'],['jsonl','JSONL']], s.format))}
-        ${wizField('Label', wizInput('w-lbl-'+srcKey, s.label, 'ex: Stock WMS'))}
         ${wizField('Chemin du fichier', wizInput('w-file-'+srcKey, s.file, 'ex: /data/export.csv'))}
         ${wizField('Encodage', wizSelect('w-enc-'+srcKey, [['utf-8','UTF-8'],['utf-8-sig','UTF-8 avec BOM'],['windows-1252','Windows-1252 (ANSI)'],['latin-1','Latin-1 / ISO-8859-1']], s.encoding||'utf-8'))}
         ${noDelim ? '' : wizField('Délimiteur', wizInput('w-del-'+srcKey, s.delimiter, ';'))}
@@ -842,7 +843,7 @@ function wizReadSourceForm(srcKey) {
   const g  = id => { const el = document.getElementById(id); return el ? el.value : null; };
   const gc = id => { const el = document.getElementById(id); return el ? el.checked : null; };
   if (g('w-fmt-'+srcKey)  !== null) { s.format = g('w-fmt-'+srcKey); s.fixed_width = (s.format === 'positionnel'); }
-  if (g('w-lbl-'+srcKey)  !== null) s.label   = g('w-lbl-'+srcKey);
+  { const _li = document.getElementById(srcKey === 'reference' ? 'inp-ref-label' : 'inp-tgt-label'); if (_li) s.label = _li.value.trim(); }
   if (g('w-file-'+srcKey) !== null) s.file    = g('w-file-'+srcKey);
   if (g('w-enc-'+srcKey)  !== null) s.encoding = g('w-enc-'+srcKey);
   if (g('w-del-'+srcKey) !== null) s.delimiter = g('w-del-'+srcKey);
@@ -1248,6 +1249,7 @@ function wizRenderFilters() {
         ${wizField('Version', wizInput('w-meta-ver', WS.meta.version, '1.0'))}
         ${wizField('Libellé du run', wizInput('w-meta-run-label', WS.meta.run_label, 'ex: Clôture mars 2026'))}
       </div>
+      ${wizField('Description', `<textarea id="w-meta-desc" class="wiz-input" rows="3" placeholder="Objectif du contrôle, périmètre, source des données…" style="resize:vertical;width:100%;box-sizing:border-box">${esc(WS.meta.description)}</textarea>`)}
     </div>`;
 }
 
@@ -1320,7 +1322,9 @@ function wizReadFiltersForm() {
   const mrl = document.getElementById('w-meta-run-label');
   if (mdp) WS.report.max_diff_preview = Number(mdp.value)||500;
   if (sm)  WS.report.show_matching    = sm.checked;
-  if (mn)  WS.meta.name      = mn.value;
-  if (mv)  WS.meta.version   = mv.value;
-  if (mrl) WS.meta.run_label = mrl.value;
+  const mdc = document.getElementById('w-meta-desc');
+  if (mn)  WS.meta.name        = mn.value;
+  if (mv)  WS.meta.version     = mv.value;
+  if (mrl) WS.meta.run_label   = mrl.value;
+  if (mdc) WS.meta.description = mdc.value;
 }

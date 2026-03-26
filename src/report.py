@@ -492,7 +492,9 @@ def to_html(results: list, summary: dict, config: dict,
     ref_rows_map = ref_rows_map or {}
     tgt_rows_map = tgt_rows_map or {}
 
-    name      = config.get("meta", {}).get("name", "Audit")
+    meta_cfg    = config.get("meta", {})
+    name        = meta_cfg.get("name", "Audit")
+    description = meta_cfg.get("description", "")
     now       = datetime.now().strftime("%d/%m/%Y \u00e0 %H:%M:%S")
     rules     = config.get("rules", [])
     cfg_keys  = config.get("join", {}).get("keys", [])
@@ -563,22 +565,23 @@ def to_html(results: list, summary: dict, config: dict,
         # Header
         '<header>',
         f'<h1>\U0001f4c8 {_h(name)}</h1>',
+        *([ f'<p class="meta" style="margin:.2rem 0 0">{_h(description)}</p>' ] if description else []),
         f'<span class="meta">G\u00e9n\u00e9r\u00e9 le {_h(now)}</span>',
         '</header>\n',
         # Summary cards
         '<div class="cards">',
-        f'<div class="card"><div class="v">{s.get("total_reference",0)}</div><div class="l">R\u00e9f.</div></div>',
-        f'<div class="card"><div class="v">{s.get("total_cible",0)}</div><div class="l">Cible</div></div>',
-        f'<div class="card ca"><div class="v">{s.get("orphelins_a",0)}</div><div class="l">Pas dans la cible</div></div>',
-        f'<div class="card cb"><div class="v">{s.get("orphelins_b",0)}</div><div class="l">Pas dans la r\u00e9f.</div></div>',
+        f'<div class="card"><div class="v">{s.get("total_reference",0)}</div><div class="l">{_h(ref_label)}</div></div>',
+        f'<div class="card"><div class="v">{s.get("total_cible",0)}</div><div class="l">{_h(tgt_label)}</div></div>',
+        f'<div class="card ca"><div class="v">{s.get("orphelins_a",0)}</div><div class="l">Absent de {_h(tgt_label)}</div></div>',
+        f'<div class="card cb"><div class="v">{s.get("orphelins_b",0)}</div><div class="l">Absent de {_h(ref_label)}</div></div>',
         f'<div class="card cd"><div class="v">{s.get("divergents",0)}</div><div class="l">KO</div></div>',
         f'<div class="card co"><div class="v">{s.get("ok",0)}</div><div class="l">OK</div></div>',
         '</div>\n',
         # Filter bar
         '<div class="filter-bar">',
         '<span class="fl">Types</span>',
-        '<button class="chip ca on" data-k="type" data-v="ORPHELIN_A" onclick="toggleChip(this)">Pas dans la cible <span class="chip-c" id="cc-a">0</span></button>',
-        '<button class="chip cb on" data-k="type" data-v="ORPHELIN_B" onclick="toggleChip(this)">Pas dans la r\u00e9f. <span class="chip-c" id="cc-b">0</span></button>',
+        f'<button class="chip ca on" data-k="type" data-v="ORPHELIN_A" onclick="toggleChip(this)">Absent de {_h(tgt_label)} <span class="chip-c" id="cc-a">0</span></button>',
+        f'<button class="chip cb on" data-k="type" data-v="ORPHELIN_B" onclick="toggleChip(this)">Absent de {_h(ref_label)} <span class="chip-c" id="cc-b">0</span></button>',
         '<button class="chip cd on" data-k="type" data-v="KO" onclick="toggleChip(this)">KO <span class="chip-c" id="cc-ko">0</span></button>',
         '<button class="chip co on" data-k="type" data-v="OK" onclick="toggleChip(this)">OK <span class="chip-c" id="cc-ok">0</span></button>',
         rule_chips,

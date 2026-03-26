@@ -169,7 +169,10 @@ function _syncExtraHeaders() {
     const th = document.createElement('th');
     th.className = `th-extra th-extra-${side} sortable`;
     th.style.position = 'relative';
-    th.title = `Source ${side === 'ref' ? 'A' : 'B'} — ${col}`;
+    const _thLbl = side === 'ref'
+      ? (WS?.sources?.reference?.label || refLabel || 'Source A')
+      : (WS?.sources?.target?.label    || tgtLabel || 'Source B');
+    th.title = `${_thLbl} — ${col}`;
     th.dataset.xcside = side;
     th.dataset.xccol  = col;
     const file = side === 'ref' ? refFile : tgtFile;

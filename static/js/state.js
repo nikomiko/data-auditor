@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 //  VERSION
 // ═══════════════════════════════════════════════════════════
-const UI_VERSION = '3.26.0';
+const UI_VERSION = '3.27.0';
 
 (async function checkVersion() {
   try {
@@ -110,6 +110,68 @@ function updateSourceLabels() {
   if (!WS.sources.target.label)    WS.sources.target.label    = tgtLabel;
 }
 
+function swapSources() {
+  // Sauvegarder l'état du côté actif avant le swap
+  if (wfCurrentStep === 1) wizReadSourceForm(dsActiveSide);
+
+  // Swap données WS
+  const tmp = WS.sources.reference;
+  WS.sources.reference = WS.sources.target;
+  WS.sources.target    = tmp;
+
+  // Swap fichiers
+  const tmpFile = fileRef; fileRef = fileTgt; fileTgt = tmpFile;
+
+  // Swap labels
+  const tmpLabel = refLabel; refLabel = tgtLabel; tgtLabel = tmpLabel;
+
+  // Swap inputs label
+  const inpRef = document.getElementById('inp-ref-label');
+  const inpTgt = document.getElementById('inp-tgt-label');
+  if (inpRef && inpTgt) {
+    const tv = inpRef.value; inpRef.value = inpTgt.value; inpTgt.value = tv;
+  }
+
+  // Swap état visuel des drop zones
+  const _swapEl = (idA, idB, prop) => {
+    const a = document.getElementById(idA), b = document.getElementById(idB);
+    if (!a || !b) return;
+    const tv = a[prop]; a[prop] = b[prop]; b[prop] = tv;
+  };
+  const _swapDisplay = (idA, idB) => {
+    const a = document.getElementById(idA), b = document.getElementById(idB);
+    if (!a || !b) return;
+    const tv = a.style.display; a.style.display = b.style.display; b.style.display = tv;
+  };
+  const _swapClass = (idA, idB, cls) => {
+    const a = document.getElementById(idA), b = document.getElementById(idB);
+    if (!a || !b) return;
+    const ha = a.classList.contains(cls), hb = b.classList.contains(cls);
+    a.classList.toggle(cls, hb); b.classList.toggle(cls, ha);
+  };
+
+  _swapEl('dz-ref-label', 'dz-tgt-label', 'textContent');
+  _swapEl('dz-ref-sub',   'dz-tgt-sub',   'textContent');
+  _swapEl('cfg-ref-pill', 'cfg-tgt-pill',  'textContent');
+  _swapClass('dz-ref', 'dz-tgt', 'loaded');
+  _swapClass('dz-ref', 'dz-tgt', 'hinted');
+  _swapDisplay('eye-ref', 'eye-tgt');
+  _swapDisplay('val-ref', 'val-tgt');
+  _swapDisplay('val-badge-ref', 'val-badge-tgt');
+
+  // Swap contenu des badges de validation
+  const vbr = document.getElementById('val-badge-ref');
+  const vbt = document.getElementById('val-badge-tgt');
+  if (vbr && vbt) {
+    const th = vbr.innerHTML; vbr.innerHTML = vbt.innerHTML; vbt.innerHTML = th;
+    const tc = vbr.className; vbr.className = vbt.className; vbt.className = tc;
+  }
+
+  updateSourceLabels();
+  // Re-render le panneau de config pour le côté actif
+  dsActivate(dsActiveSide);
+}
+
 function dsActivate(side) {
   if (wfCurrentStep === 1) wizReadSourceForm(dsActiveSide); // sauvegarde le côté courant avant de changer
   dsActiveSide = side;
@@ -166,6 +228,16 @@ function updateGlobalNav(n) {
 
   // Bouton Précédent : invisible à l'étape 0
   prev.style.visibility = (n === 0) ? 'hidden' : '';
+
+  // Nom de l'audit dans la nav (visible uniquement en résultats)
+  const auditNameEl = document.getElementById('audit-name-display');
+  const yamlNameEl  = document.getElementById('yaml-config-name');
+  if (auditNameEl) {
+    const name = WS.meta.name || '';
+    auditNameEl.textContent = name;
+    auditNameEl.style.display = (n === 5 && name) ? '' : 'none';
+  }
+  if (yamlNameEl) yamlNameEl.style.display = (n === 5) ? 'none' : '';
 
   // Exports : visibles uniquement à l'étape ⑤
   if (exports) exports.style.display = (n === 5) ? 'flex' : 'none';
@@ -364,7 +436,7 @@ function resetAll() {
   WS.rules      = [];
   WS.filters    = [];
   WS.report     = { show_matching: false, max_diff_preview: 500 };
-  WS.meta       = { name: '', version: '' };
+  WS.meta       = { name: '', version: '', run_label: '', description: '' };
 
   // Vider le rendu de la zone config contextuelle
   const src1 = document.getElementById('wfv-1-src');
