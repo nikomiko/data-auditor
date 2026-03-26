@@ -420,6 +420,8 @@ function resetAll() {
   document.getElementById('dz-yaml-sub').textContent   = 'ou cliquez pour parcourir — .yaml, .yml';
   const yamlSum = document.getElementById('yaml-loaded-summary');
   if (yamlSum) yamlSum.style.display = 'none';
+  const btnRld = document.getElementById('btn-reload-yaml');
+  if (btnRld) btnRld.style.display = 'none';
 
   // Labels sources
   document.getElementById('inp-ref-label').value = '';

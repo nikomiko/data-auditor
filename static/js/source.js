@@ -55,6 +55,8 @@ function applyYamlContent(content, filename) {
       const keys  = ((parsed?.join||{}).keys||[]).length;
       sum.innerHTML = `✓ <strong>${esc(name)}${esc(ver)}</strong> — ${keys} clé(s) de jointure, ${rules} règle(s)`;
       sum.style.display = '';
+      const btnRld = document.getElementById('btn-reload-yaml');
+      if (btnRld) btnRld.style.display = '';
       dz.classList.add('loaded');
       document.getElementById('dz-yaml-label').textContent = filename || yamlFilename;
       document.getElementById('dz-yaml-sub').textContent   = 'YAML chargé — cliquez pour changer';
@@ -66,6 +68,12 @@ function applyYamlContent(content, filename) {
     else if (wfCurrentStep === 4) wizRenderFilters();
     sessionSave();
   } catch(_) {}
+}
+
+function reloadYamlConfig() {
+  const yaml = document.getElementById('yaml')?.value?.trim();
+  if (!yaml) return;
+  applyYamlContent(yaml, yamlFilename);
 }
 
 async function handleDropYaml(event) {

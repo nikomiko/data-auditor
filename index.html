@@ -103,7 +103,13 @@
         <div class="file-drop-sub" id="dz-yaml-sub">ou cliquez pour parcourir — .yaml, .yml</div>
         <input type="file" id="f-yaml" accept=".yaml,.yml" style="display:none">
       </div>
-      <div id="yaml-loaded-summary" style="display:none;background:var(--ok-bg);border:1px solid var(--ok-bd);border-radius:var(--r);padding:.65rem 1rem;font-size:.78rem;color:var(--ok);max-width:480px;width:100%"></div>
+      <div style="display:flex;align-items:center;gap:.5rem;max-width:480px;width:100%">
+        <div id="yaml-loaded-summary" style="display:none;background:var(--ok-bg);border:1px solid var(--ok-bd);border-radius:var(--r);padding:.65rem 1rem;font-size:.78rem;color:var(--ok);flex:1"></div>
+        <button id="btn-reload-yaml" onclick="reloadYamlConfig()" title="Recharger la configuration depuis le YAML en cours"
+                style="display:none;flex-shrink:0;background:none;border:1px solid var(--ok-bd);border-radius:var(--r);color:var(--ok);cursor:pointer;padding:.45rem .6rem;line-height:0">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </button>
+      </div>
 
       <!-- ── Bibliothèque de configurations ── -->
       <div id="config-library" style="display:none;width:min(520px,92%);margin-top:.5rem">
