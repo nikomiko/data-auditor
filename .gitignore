@@ -2,12 +2,16 @@ __pycache__/
 *.pyc
 *.pyo
 .env
+*.log
 reports/
 uploads/
 *.dat
 *.csv
-# Jeux de données de test : exception
-!sample/jdd/*.csv
-!sample/jdd/*.dat
 venv/
 .venv/
+# Config runtime (chemins locaux)
+settings.json
+# Claude Code
+.claude/
+# Script de lancement local
+dataAuditor.sh
