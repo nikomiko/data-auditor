@@ -34,6 +34,7 @@ async function loadYamlFile() {
 }
 
 function applyYamlContent(content, filename) {
+  if (filename) yamlFilename = filename;
   document.getElementById('yaml').value = content;
   yamlOriginal = content;
   _updateConfigName();
