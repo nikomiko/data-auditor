@@ -1,6 +1,6 @@
 ---
 tags: [spec, dataauditor]
-updated: 2026-03-23
+updated: 2026-03-28
 ---
 
 # DataAuditor — Spécification fonctionnelle
@@ -64,6 +64,32 @@ config
 | `fields[]` | Field[] | — | Colonnes (CSV/TXT/DAT) |
 | `column_positions[]` | ColumnPos[] | — | Colonnes positionnelles |
 | `unpivot` | UnpivotConfig | — | Dépivotage |
+| `calculated_fields[]` | CalcFieldDef[] | — | Colonnes virtuelles calculées (évaluées après normalisation) |
+
+#### CalcFieldDef
+
+| Champ | Type | Description |
+|---|---|---|
+| `name` | string | Nom de la colonne virtuelle résultante |
+| `formula` | string | Expression Python/pandas. Les colonnes de la source sont des variables. `np` (numpy) est disponible. |
+
+**Exemples de formules :**
+
+```yaml
+calculated_fields:
+  - name: total_ttc
+    formula: "Qty * Prix * 1.2"
+  - name: has_stock
+    formula: "np.where(Qty > 0, 1, 0)"        # IF vectorisé
+  - name: ecart_prix
+    formula: "Prix - PrixMinimum"              # comparaison intra-source
+  - name: weighted_avg
+    formula: "(Qty * Prix).sum() / Qty.sum()"  # agrégat → broadcasté
+```
+
+**Fonctions disponibles :** `np.*`, `abs`, `round`, `where`, `clip`, `sqrt`, `log`, `exp`, `str`, `int`, `float`, `bool`, `len`
+
+**Pipeline :** les champs calculés sont évalués après `normalize_dataframe` et avant `apply_filters`. Les colonnes calculées précédentes sont accessibles dans les formules suivantes. Les champs calculés sont utilisables dans les règles comme n'importe quel champ.
 
 #### Field / ColumnPos
 
@@ -214,6 +240,33 @@ Pour chaque colonne déclarée :
   WARN: colonne déclarée manquante dans le fichier
   ERR : incompatibilité de position ou largeur (fixed_width)
 Afficher un badge ✓ (vert) ou ⚠ (orange) sur le bouton
+```
+
+#### RG-SRC-04 — Champs calculés
+
+| Métadonnée | Valeur |
+|---|---|
+| Commit | `v3.30.0` |
+| Tests | — |
+
+**Résumé :** Des colonnes virtuelles peuvent être définies par source, via des expressions Python/pandas évaluées après normalisation. Elles sont utilisables dans les filtres et les règles comme tout autre champ.
+
+**Algorithme :**
+```
+Pour chaque calculated_field (dans l'ordre de déclaration) :
+  ns = { col: df[col] for col in df.columns }
+  ns += { np, abs, round, where, clip, sqrt, log, exp, str, int, float, bool, len }
+  ns["__builtins__"] = {}   # pas d'accès système
+  result = eval(formula, ns)
+  Si result est une Series → df[name] = result.values
+  Si result est un scalaire → df[name] = result  (broadcast)
+  Si eval() lève une exception → ConfigError avec message lisible
+
+Les champs calculés déclarés avant sont accessibles dans les formules suivantes.
+Évaluation : après normalize_dataframe, avant apply_filters.
+
+Validation syntaxique : /api/validate applique evaluate_calculated_fields sur le fichier
+réel → erreur de formule remontée avant le lancement de l'audit.
 ```
 
 ---

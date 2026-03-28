@@ -52,7 +52,7 @@ def normalize_dataframe(df: pd.DataFrame, src_cfg: dict, debug: bool = False) ->
                 fmt = fdef.get("date_format", "%Y-%m-%d")
                 df[col] = pd.to_datetime(
                     df[col].astype(str).str.strip(), format=fmt, errors="coerce"
-                ).dt.strftime("%Y-%m-%d")
+                )
             elif ftype == "decimal":
                 df[col] = (df[col].astype(str).str.strip()
                            .str.replace(",", ".", regex=False))

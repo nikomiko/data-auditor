@@ -65,12 +65,24 @@ def resolve_field_rule(field_rule: dict, ref_row, tgt_row) -> dict | None:
 def _fmt(v) -> str:
     if v is None or (isinstance(v, float) and math.isnan(v)):
         return ""
+    if isinstance(v, pd.Timestamp):
+        return "" if pd.isna(v) else str(v)
     return str(v)
 
 
 def _is_null(v) -> bool:
+    if isinstance(v, pd.Timestamp):
+        return pd.isna(v)
     return v is None or (isinstance(v, float) and math.isnan(v)) \
            or str(v).strip() in ("", "nan", "NaT", "None", "<NA>")
+
+
+def _ts_delta_seconds(a, b) -> float | None:
+    """Retourne l'écart en secondes entre deux valeurs datetime, ou None si impossible."""
+    try:
+        return abs((pd.Timestamp(a) - pd.Timestamp(b)).total_seconds())
+    except (ValueError, TypeError):
+        return None
 
 
 # ── Évaluation d'une condition de champ ───────────────────────
@@ -90,16 +102,27 @@ def check_field_condition(resolved: dict) -> bool:
     norm      = resolved.get("normalize", "none") or "none"
     op        = resolved["operator"]
 
+    is_ts = isinstance(v_ref, pd.Timestamp) or isinstance(v_tgt, pd.Timestamp)
+
     if op == "equals":
         if _is_null(v_ref) and _is_null(v_tgt):
             return True
         if _is_null(v_ref) != _is_null(v_tgt):
             return False
         if tolerance is not None:
+            if is_ts:
+                delta = _ts_delta_seconds(v_ref, v_tgt)
+                if delta is not None:
+                    return delta <= float(tolerance)
             try:
                 return abs(float(v_ref) - float(v_tgt)) <= float(tolerance)
             except (ValueError, TypeError):
                 pass
+        if is_ts:
+            try:
+                return pd.Timestamp(v_ref) == pd.Timestamp(v_tgt)
+            except (ValueError, TypeError):
+                return False
         return apply_comparison_norm(v_ref, norm) == apply_comparison_norm(v_tgt, norm)
 
     if op == "differs":
@@ -108,15 +131,30 @@ def check_field_condition(resolved: dict) -> bool:
         if _is_null(v_ref) != _is_null(v_tgt):
             return True
         if tolerance is not None:
+            if is_ts:
+                delta = _ts_delta_seconds(v_ref, v_tgt)
+                if delta is not None:
+                    return delta > float(tolerance)
             try:
                 return abs(float(v_ref) - float(v_tgt)) > float(tolerance)
             except (ValueError, TypeError):
                 pass
+        if is_ts:
+            try:
+                return pd.Timestamp(v_ref) != pd.Timestamp(v_tgt)
+            except (ValueError, TypeError):
+                return False
         return apply_comparison_norm(v_ref, norm) != apply_comparison_norm(v_tgt, norm)
 
     if op in ("greater", "less"):
         if _is_null(v_ref) or _is_null(v_tgt):
             return False
+        if is_ts:
+            try:
+                a, b = pd.Timestamp(v_ref), pd.Timestamp(v_tgt)
+                return a > b if op == "greater" else a < b
+            except (ValueError, TypeError):
+                return False
         try:
             a, b = float(str(v_ref)), float(str(v_tgt))
             return a > b if op == "greater" else a < b
@@ -153,18 +191,29 @@ def _check_detail(resolved: dict, condition_met: bool) -> str:
     op        = resolved["operator"]
     sym       = _OP_LABEL.get(op, op)
 
+    rv, tv = resolved["v_ref"], resolved["v_tgt"]
+    is_ts  = isinstance(rv, pd.Timestamp) or isinstance(tv, pd.Timestamp)
+
     if condition_met:
         if op == "equals" and tolerance is not None:
+            if is_ts:
+                delta = _ts_delta_seconds(rv, tv)
+                if delta is not None:
+                    return f"Condition {sym} vérifiée — écart : {delta:.3f}s ≤ {tolerance}s"
             try:
-                delta = abs(float(resolved["v_ref"]) - float(resolved["v_tgt"]))
+                delta = abs(float(rv) - float(tv))
                 return f"Condition {sym} vérifiée — écart : {delta:.4f} ≤ {tolerance}"
             except (ValueError, TypeError):
                 pass
         return f'Condition {sym} vérifiée : "{v_ref}" {sym} "{v_tgt}"'
     else:
         if op in ("equals", "differs") and tolerance is not None:
+            if is_ts:
+                delta = _ts_delta_seconds(rv, tv)
+                if delta is not None:
+                    return f"Écart : {delta:.3f}s (tolérance : {tolerance}s)"
             try:
-                delta = abs(float(resolved["v_ref"]) - float(resolved["v_tgt"]))
+                delta = abs(float(rv) - float(tv))
                 return f"Écart : {delta:.4f} (tolérance : {tolerance})"
             except (ValueError, TypeError):
                 pass

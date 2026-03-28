@@ -10,6 +10,7 @@ Endpoints :
 """
 import io
 import json
+import math
 import os
 from datetime import datetime
 import socket
@@ -23,6 +24,7 @@ from flask import Flask, request, jsonify, send_file, send_from_directory, Respo
 from config_loader import load_config, ConfigError
 from parser        import parse_file
 from normalizer    import normalize_dataframe
+from calculator    import evaluate_calculated_fields
 from unpivot       import unpivot_dataframe
 from comparator    import compare_with_progress, _build_key_series
 from filters       import apply_filters as _apply_filters_base
@@ -31,7 +33,7 @@ from report        import save_history, list_history, load_history, to_csv, to_h
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
 
-APP_VERSION = "3.29.2"
+APP_VERSION = "3.30.0"
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
 # _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
@@ -145,6 +147,7 @@ def validate_config():
             src    = config["sources"][role]
             df     = parse_file(fbytes, src)
             df     = normalize_dataframe(df, src)
+            df     = evaluate_calculated_fields(df, src)
             if src.get("unpivot"):
                 df = unpivot_dataframe(df, src["unpivot"])
 
@@ -170,6 +173,70 @@ def validate_config():
     if errors:
         return jsonify({"valid": False, "errors": errors}), 200
     return jsonify({"valid": True, "errors": []}), 200
+
+
+# ─────────────────────────────────────────────────────────────
+#  POST /api/preview_calculated  — prévisualise les champs calculés
+# ─────────────────────────────────────────────────────────────
+@app.route("/api/preview_calculated", methods=["POST"])
+def preview_calculated():
+    """Parse + normalise + champs calculés d'une source, retourne un aperçu tabulaire.
+
+    Body (multipart) :
+        file        : fichier source (obligatoire)
+        config_yaml : texte YAML complet (obligatoire)
+        role        : 'reference' ou 'target' (défaut: 'reference')
+        max_rows    : nombre max de lignes à retourner (défaut: 200)
+
+    Returns :
+        {"columns": [...], "calc_columns": [...], "rows": [[...], ...]}
+        {"error": "..."}
+    """
+    if "file" not in request.files:
+        return jsonify({"error": "Fichier manquant."}), 400
+    config_yaml = request.form.get("config_yaml", "")
+    if not config_yaml.strip():
+        return jsonify({"error": "config_yaml manquant."}), 400
+    role     = request.form.get("role", "reference")
+    max_rows = int(request.form.get("max_rows", 200))
+
+    try:
+        config = load_config(config_yaml)
+    except ConfigError as e:
+        return jsonify({"error": str(e)}), 422
+
+    src = config.get("sources", {}).get(role)
+    if not src:
+        return jsonify({"error": f"Source '{role}' introuvable dans la config."}), 422
+
+    try:
+        fbytes = request.files["file"].read()
+        df     = parse_file(fbytes, src)
+        df     = normalize_dataframe(df, src)
+        if src.get("unpivot"):
+            df = unpivot_dataframe(df, src["unpivot"])
+        df = evaluate_calculated_fields(df, src)
+    except ConfigError as e:
+        return jsonify({"error": str(e)}), 200
+    except Exception as e:
+        return jsonify({"error": f"Erreur lors du calcul : {e}"}), 200
+
+    calc_col_names = [cf["name"] for cf in src.get("calculated_fields", []) if cf.get("name")]
+
+    preview_df = df.head(max_rows)
+
+    def _fmt(v):
+        if v is None:
+            return ""
+        if isinstance(v, float):
+            if math.isnan(v):
+                return ""
+            return str(round(v, 2))
+        return str(v)
+
+    columns = list(preview_df.columns)
+    rows    = [[_fmt(v) for v in row] for row in preview_df.itertuples(index=False)]
+    return jsonify({"columns": columns, "calc_columns": calc_col_names, "rows": rows}), 200
 
 
 # ─────────────────────────────────────────────────────────────
@@ -236,6 +303,12 @@ def _run_audit(token: str, ref_bytes: bytes, tgt_bytes: bytes, config: dict):
                       "step": "Normalisation…"})
         df_ref = normalize_dataframe(df_ref, src_ref, debug=app.debug)
         df_tgt = normalize_dataframe(df_tgt, src_tgt, debug=app.debug)
+
+        if src_ref.get("calculated_fields") or src_tgt.get("calculated_fields"):
+            _push(token, {"event": "progress", "done": 0, "total": 0, "pct": 0,
+                          "step": "Champs calculés…"})
+            df_ref = evaluate_calculated_fields(df_ref, src_ref)
+            df_tgt = evaluate_calculated_fields(df_tgt, src_tgt)
 
         if src_ref.get("unpivot"):
             _push(token, {"event": "progress", "done": 0, "total": 0, "pct": 0,
@@ -1029,7 +1102,7 @@ def list_configs():
 def get_config_file(filename: str):
     """Retourne le contenu d'un fichier YAML de la bibliothèque."""
     import re
-    if not re.match(r'^[\w\-\.]+\.(yaml|yml)$', filename, re.IGNORECASE):
+    if not re.match(r'^[\w\-\. ]+\.(yaml|yml)$', filename, re.IGNORECASE):
         return jsonify({"error": "Nom de fichier invalide"}), 400
     settings = load_settings()
     folder_rel = settings.get("folder_default_configs") or settings.get("folder_default_datasets") or ""
