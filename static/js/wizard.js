@@ -8,7 +8,8 @@ function wizSrcDefault() {
     fixed_width:false, json_path:'',
     fields:[], column_positions:[],
     unpivot_enabled:false,
-    unpivot:{ location_field:'location_key', value_field:'pivot_value', pivot_fields:[] }
+    unpivot:{ location_field:'location_key', value_field:'pivot_value', pivot_fields:[] },
+    calculated_fields:[]
   };
 }
 const WS = {
@@ -26,17 +27,22 @@ function wGetFieldNames(src) {
   const s    = WS.sources[src];
   const list = s.fixed_width ? s.column_positions : s.fields;
 
+  let base;
   if (s.unpivot_enabled) {
     // Après dépivotage : anchor_fields (non ignorés, non pivot) + location_field + value_field
     const pivotSources = new Set((s.unpivot.pivot_fields||[]).map(p=>p.source).filter(Boolean));
     const locField = s.unpivot.location_field || 'location_key';
     const valField = s.unpivot.value_field    || 'pivot_value';
     const anchors  = list.filter(f => f.name && !f.ignored && !pivotSources.has(f.name)).map(f => f.name);
-    return [...anchors, locField, valField];
+    base = [...anchors, locField, valField];
+  } else {
+    // Sans dépivotage : tous les champs non ignorés
+    base = list.filter(f => !f.ignored).map(f => f.name).filter(Boolean);
   }
 
-  // Sans dépivotage : tous les champs non ignorés
-  return list.filter(f => !f.ignored).map(f => f.name).filter(Boolean);
+  // Ajouter les champs calculés (nom non vide)
+  const calcNames = (s.calculated_fields || []).map(cf => cf.name).filter(Boolean);
+  return [...base, ...calcNames];
 }
 
 // ── Lecture YAML → WizardState ─────────────────────────────
@@ -111,6 +117,10 @@ function wizLoadFromYaml(parsed) {
     } else {
       s.unpivot_enabled = false;
     }
+    // Champs calculés
+    s.calculated_fields = (src.calculated_fields || []).map(cf => ({
+      name: cf.name || '', formula: cf.formula || ''
+    }));
   });
   // join
   WS.join.keys = ((parsed.join||{}).keys||[]).map(k => ({
@@ -246,6 +256,11 @@ function wizBuildYaml() {
         pivot_fields:   s.unpivot.pivot_fields.filter(p => p.source)
                            .map(p => ({ source: p.source, location: p.location || p.source }))
       };
+    }
+    // champs calculés
+    const validCalcs = (s.calculated_fields || []).filter(cf => cf.name && cf.formula);
+    if (validCalcs.length) {
+      sr.calculated_fields = validCalcs.map(cf => ({ name: cf.name, formula: cf.formula }));
     }
     obj.sources[k] = sr;
   });
@@ -569,6 +584,18 @@ function wizRenderSource(stepEl, srcKey, label) {
       <div class="wiz-section-title">Dépivotage (unpivot)</div>
       ${wizToggleRow('w-ue-'+srcKey, 'Activer le dépivotage', s.unpivot_enabled)}
       <div id="unpivot-fields-${srcKey}">${unpivotFieldsHtml}</div>
+    </div>
+    <div class="wiz-section">
+      <div class="wiz-section-title">Champs calculés <i class="wiz-info" title="Colonnes virtuelles calculées depuis les colonnes existantes, via des expressions Python/pandas. Accessibles comme tout autre champ dans les règles.&#10;&#10;Exemples :&#10;  Qty * Prix * 1.2&#10;  np.where(Qty &gt; 0, 1, 0)&#10;  (Qty * Prix).sum() / Qty.sum()">i</i></div>
+      <table class="col-table" id="cftable-${srcKey}" ${(s.calculated_fields||[]).length === 0 ? 'style="display:none"' : ''}>
+        <thead><tr>
+          <th>Nom</th>
+          <th>Formule (pandas/numpy) <i class="wiz-info" title="Expression Python utilisant les noms de colonnes comme variables.&#10;np est disponible pour numpy.&#10;Ex: np.where(cond, a, b) pour un IF vectorisé.">i</i></th>
+          <th></th>
+        </tr></thead>
+        <tbody id="cfbody-${srcKey}">${wizCalcFieldRows(srcKey, s)}</tbody>
+      </table>
+      <button class="btn-wiz-add" onclick="wizAddCalcField('${srcKey}')">+ Champ calculé</button>
     </div>`;
 
   // Binding toggle unpivot
@@ -818,6 +845,33 @@ function wizRemovePivot(srcKey, idx) {
   if (tbody) tbody.innerHTML = wizPivotRows(srcKey, WS.sources[srcKey]);
 }
 
+// ── Champs calculés ─────────────────────────────────────────
+function wizCalcFieldRows(srcKey, s) {
+  return (s.calculated_fields || []).map((cf, i) => `<tr>
+    <td><input class="wiz-input" id="w-cfn-${srcKey}-${i}" value="${esc(cf.name)}" placeholder="ex: total_ttc"></td>
+    <td><input class="wiz-input" id="w-cfe-${srcKey}-${i}" value="${esc(cf.formula)}" placeholder="ex: Qty * Prix * 1.2" style="font-family:var(--mono);font-size:.8rem"></td>
+    <td><button class="btn-icon" onclick="wizRemoveCalcField('${srcKey}',${i})" title="Supprimer">✕</button></td>
+  </tr>`).join('');
+}
+
+function wizAddCalcField(srcKey) {
+  wizReadSourceForm(srcKey);
+  WS.sources[srcKey].calculated_fields.push({ name:'', formula:'' });
+  const tbody = document.getElementById('cfbody-'+srcKey);
+  if (tbody) tbody.innerHTML = wizCalcFieldRows(srcKey, WS.sources[srcKey]);
+  const table = document.getElementById('cftable-'+srcKey);
+  if (table) table.style.display = '';
+}
+
+function wizRemoveCalcField(srcKey, idx) {
+  wizReadSourceForm(srcKey);
+  WS.sources[srcKey].calculated_fields.splice(idx, 1);
+  const tbody = document.getElementById('cfbody-'+srcKey);
+  if (tbody) tbody.innerHTML = wizCalcFieldRows(srcKey, WS.sources[srcKey]);
+  const table = document.getElementById('cftable-'+srcKey);
+  if (table) table.style.display = WS.sources[srcKey].calculated_fields.length ? '' : 'none';
+}
+
 function wizToggleFW(srcKey) {
   wizReadSourceForm(srcKey);
   const s = WS.sources[srcKey];
@@ -875,6 +929,11 @@ function wizReadSourceForm(srcKey) {
   (s.unpivot.pivot_fields||[]).forEach((p, i) => {
     if (g(`w-ps-${srcKey}-${i}`) !== null) p.source   = g(`w-ps-${srcKey}-${i}`);
     if (g(`w-pl-${srcKey}-${i}`) !== null) p.location = g(`w-pl-${srcKey}-${i}`);
+  });
+  // Champs calculés
+  (s.calculated_fields||[]).forEach((cf, i) => {
+    if (g(`w-cfn-${srcKey}-${i}`) !== null) cf.name    = g(`w-cfn-${srcKey}-${i}`);
+    if (g(`w-cfe-${srcKey}-${i}`) !== null) cf.formula = g(`w-cfe-${srcKey}-${i}`);
   });
 }
 

@@ -64,6 +64,20 @@ def _validate_source(config: dict, role: str):
         for pf in unpivot["pivot_fields"]:
             if "source" not in pf or "location" not in pf:
                 raise ConfigError(f"sources.{role}.unpivot.pivot_fields : chaque entrée doit avoir 'source' et 'location'.")
+    # Validation champs calculés
+    _validate_calculated_fields(src, role)
+
+
+def _validate_calculated_fields(src_cfg: dict, role: str):
+    for i, cf in enumerate(src_cfg.get("calculated_fields", [])):
+        if not cf.get("name"):
+            raise ConfigError(
+                f"sources.{role}.calculated_fields[{i}] : 'name' requis."
+            )
+        if not cf.get("formula"):
+            raise ConfigError(
+                f"sources.{role}.calculated_fields[{i}] ('{cf.get('name')}') : 'formula' requise."
+            )
 
 
 def _validate_join(config: dict):

@@ -449,8 +449,14 @@ async function previewFile(which, evt, openTab, mode) {
   tabCols.style.display    = !isPreview ? '' : 'none';
 
   if (isPreview) {
+    const calcFields = (src.calculated_fields || []).filter(cf => cf.name && cf.formula);
+    const hasCalc    = calcFields.length > 0;
+
     if (['json','jsonl'].includes(src.format)) {
       renderPreviewJson(which, text);
+    } else if (hasCalc) {
+      // Champs calculés présents : appel serveur pour obtenir les valeurs calculées
+      await _renderPreviewTableWithCalc(which, file, srcKey);
     } else {
       renderPreviewTable(lines, delim);
     }
@@ -625,6 +631,21 @@ function renderValidationCols(which, lines) {
     </tr>`;
   });
   html += '</tbody></table>';
+
+  // Section champs calculés
+  const calcFields = (src.calculated_fields || []).filter(cf => cf.name && cf.formula);
+  if (calcFields.length) {
+    html += `<div class="wiz-section-title" style="margin-top:1rem;font-size:.75rem">Champs calculés (${calcFields.length})</div>`;
+    html += '<table class="val-table"><thead><tr><th>Nom</th><th>Formule</th></tr></thead><tbody>';
+    calcFields.forEach(cf => {
+      html += `<tr class="ok">
+        <td style="font-weight:500">${esc(cf.name)}</td>
+        <td style="font-family:var(--mono);font-size:.78rem;color:var(--muted)">${esc(cf.formula)}</td>
+      </tr>`;
+    });
+    html += '</tbody></table><p style="font-size:.7rem;color:var(--muted);margin:.3rem 0 0">La syntaxe des formules est validée lors du clic sur « Vérifier » (appel serveur).</p>';
+  }
+
   wrap.innerHTML = html;
   _updateValBadge(which, { ok: nOk, warn: nWarn, missing: nMissing });
 }
@@ -707,13 +728,65 @@ function renderPreviewJson(which, text) {
   }
 }
 
-function renderPreviewTable(lines, delim) {
+async function _renderPreviewTableWithCalc(which, file, srcKey) {
+  const wrap = document.getElementById('preview-table-wrap');
+  wrap.innerHTML = '<div class="preview-na">Calcul en cours…</div>';
+
+  _saveCurrentWFStep();
+  const yaml = wizBuildYaml();
+
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('config_yaml', yaml);
+  fd.append('role', srcKey);
+
+  try {
+    const resp = await fetch('/api/preview_calculated', { method:'POST', body: fd });
+    const data = await resp.json();
+    if (data.error) {
+      wrap.innerHTML = `<div class="preview-na" style="color:var(--oa)">Erreur champs calculés : ${esc(data.error)}</div>`;
+      return;
+    }
+    renderPreviewTable(null, null, { columns: data.columns, calcCols: new Set(data.calc_columns), rows: data.rows });
+  } catch(e) {
+    wrap.innerHTML = `<div class="preview-na" style="color:var(--oa)">Erreur serveur : ${esc(String(e))}</div>`;
+  }
+}
+
+function renderPreviewTable(lines, delim, serverData) {
   const wrap = document.getElementById('preview-table-wrap');
   const MAX_ROWS = 200, MAX_COLS = 30;
 
+  // Mode serveur : données déjà calculées
+  if (serverData) {
+    const { columns, calcCols, rows } = serverData;
+    const truncR = rows.length >= MAX_ROWS;
+    let html = '<table class="preview-table"><thead><tr>';
+    html += '<th style="color:var(--muted);font-weight:400">#</th>';
+    columns.forEach(h => {
+      const isCalc = calcCols.has(h);
+      const style  = isCalc ? ' style="color:#92400e;font-style:italic"' : '';
+      html += `<th title="${esc(h)}"${style}>${esc(h)}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+    rows.forEach((cells, ri) => {
+      html += `<tr><td style="color:var(--muted);font-size:.6rem">${ri + 1}</td>`;
+      cells.forEach((val, ci) => {
+        const isCalc = calcCols.has(columns[ci]);
+        const style  = isCalc ? ' style="color:#92400e"' : '';
+        html += `<td title="${esc(val)}"${style}>${esc(val)}</td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    if (truncR) html += `<div class="preview-na" style="padding:.5rem 1rem">Aperçu limité à ${MAX_ROWS} lignes</div>`;
+    wrap.innerHTML = html;
+    return;
+  }
+
+  // Mode client : fichier brut
   if (!lines.length) { wrap.innerHTML = '<div class="preview-na">Fichier vide.</div>'; return; }
 
-  // Splitter simplement (sans gestion des quotes pour la préview)
   const split = line => line.split(delim).slice(0, MAX_COLS);
 
   const headers = split(lines[0]);
@@ -723,7 +796,7 @@ function renderPreviewTable(lines, delim) {
 
   let html = '<table class="preview-table"><thead><tr>';
   html += '<th style="color:var(--muted);font-weight:400">#</th>';
-  headers.forEach((h, i) => {
+  headers.forEach(h => {
     html += `<th title="${esc(h)}">${esc(h.trim())}</th>`;
   });
   if (truncC) html += '<th style="color:var(--muted)">…</th>';
