@@ -1,6 +1,6 @@
 # DataAuditor — Manuel utilisateur
 
-**Version 3.26.0 · data/auditor server**
+**Version 3.31.0 · data/auditor server**
 
 ---
 
@@ -14,8 +14,9 @@
 6. [Règles de contrôle](#6-règles-de-contrôle)
 7. [Filtres](#7-filtres)
 8. [Dépivotage (unpivot)](#8-dépivotage-unpivot)
-9. [Résultats et exports](#9-résultats-et-exports)
-10. [Fichiers exemples](#10-fichiers-exemples)
+9. [Champs calculés](#9-champs-calculés)
+10. [Résultats et exports](#10-résultats-et-exports)
+11. [Fichiers exemples](#11-fichiers-exemples)
 
 ---
 
@@ -399,6 +400,10 @@ sources:
       pivot_fields:
         - { source: qty_A, location: depot_A }
         - { source: qty_B, location: depot_B }
+    # Champs calculés (expressions pandas/numpy) :
+    calculated_fields:
+      - { name: total_qty, expression: "qty_A + qty_B", type: integer }
+      - { name: price_ttc, expression: "price * 1.20", type: decimal }
 
   target:
     # même structure que reference
@@ -628,7 +633,232 @@ join:
 
 ---
 
-## 9. Résultats et exports
+## 9. Champs calculés
+
+Les champs calculés permettent de créer des colonnes synthétiques basées sur **expressions pandas/numpy**, évaluées indépendamment pour chaque source (référence et cible). Ils sont utiles pour :
+
+- Synthétiser des informations (somme, moyenne, concaténation)
+- Normaliser avant comparaison (arrondi, extraction)
+- Créer des clés dérivées pour audit
+- Évaluer des formules métier
+
+### Syntaxe YAML
+
+```yaml
+sources:
+  reference:
+    fields:
+      - { name: qty_a, type: integer }
+      - { name: qty_b, type: integer }
+      - { name: price, type: decimal }
+    calculated_fields:
+      - name: total_qty
+        expression: "qty_a + qty_b"
+        type: integer
+      - name: total_price
+        expression: "price * 1.20"    # exemple : prix TTC
+        type: decimal
+```
+
+Chaque champ calculé :
+- Reçoit un **nom** unique
+- Contient une **expression** (syntaxe pandas)
+- Spécifie un **type** final (string, integer, decimal, date, boolean)
+- Peut être ensuite utilisé dans les **règles**, **filtres** et **colonnes supplémentaires**
+
+### Exemples classiques
+
+#### 1. Somme de colonnes
+
+```yaml
+calculated_fields:
+  - name: total_qty
+    expression: "qty_stock + qty_reception"
+    type: integer
+```
+
+**Cas d'usage :** réconciler les stocks (quantité totale = stock actuel + réception en cours).
+
+---
+
+#### 2. Concaténation (texte)
+
+```yaml
+calculated_fields:
+  - name: full_code
+    expression: "site + '-' + str(sku)"
+    type: string
+```
+
+**Cas d'usage :** créer une clé composite pour recherche ou audit de doublets.
+
+---
+
+#### 3. Arrondi décimal
+
+```yaml
+calculated_fields:
+  - name: price_rounded
+    expression: "round(price, 2)"
+    type: decimal
+```
+
+**Cas d'usage :** normaliser les décimales avant comparaison (éviter les écarts de précision).
+
+---
+
+#### 4. Extraction d'une partie de texte
+
+```yaml
+calculated_fields:
+  - name: year
+    expression: "date.astype(str).str[:4]"
+    type: string
+```
+
+**Cas d'usage :** extraire l'année d'une date pour un audit par période.
+
+---
+
+#### 5. Condition/booléen
+
+```yaml
+calculated_fields:
+  - name: is_expensive
+    expression: "(price > 100).astype(int)"
+    type: integer
+    # résultat : 1 si price > 100, sinon 0
+```
+
+**Cas d'usage :** segmenter les enregistrements par catégorie de prix pour des règles spécifiques.
+
+---
+
+#### 6. Valeur absolue (éliminer les signes)
+
+```yaml
+calculated_fields:
+  - name: amount_abs
+    expression: "abs(amount)"
+    type: decimal
+```
+
+**Cas d'usage :** comparer des montants indépendamment du sens (crédit/débit).
+
+---
+
+#### 7. Conversion de devise (exemple)
+
+```yaml
+calculated_fields:
+  - name: amount_usd
+    expression: "amount * 1.10"   # fictif : EUR → USD
+    type: decimal
+```
+
+**Cas d'usage :** harmoniser les montants entre deux systèmes avant comparaison.
+
+---
+
+#### 8. Suppression d'espaces (trim)
+
+```yaml
+calculated_fields:
+  - name: code_clean
+    expression: "code.str.strip()"
+    type: string
+```
+
+**Cas d'usage :** nettoyer les codes avant comparaison (évite les faux orphelins dus à des espaces).
+
+---
+
+#### 9. Longueur de texte
+
+```yaml
+calculated_fields:
+  - name: name_length
+    expression: "len(name)"
+    type: integer
+```
+
+**Cas d'usage :** détecter des troncages ou dégradations de texte dans la cible.
+
+---
+
+#### 10. Maximum/Minimum entre colonnes
+
+```yaml
+calculated_fields:
+  - name: max_qty
+    expression: "max([qty_ref, qty_cible], axis=1)"
+    type: integer
+    # Note: utiliser plutôt numpy.maximum pour éviter ambiguïté
+
+  - name: max_qty_correct
+    expression: "np.maximum(qty_ref, qty_cible)"
+    type: integer
+```
+
+**Cas d'usage :** prendre le pivot supérieur entre deux sources pour audit.
+
+---
+
+### Interaction avec les autres features
+
+#### Utilisation dans les règles
+
+```yaml
+rules:
+  - name: "Total discordant"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: total_qty        # champ calculé dans référence
+        target_field: total_qty        # même champ calculé dans cible
+        operator: differs
+```
+
+#### Utilisation dans les filtres
+
+```yaml
+filters:
+  - field: is_expensive              # champ calculé
+    source: reference
+    operator: equals
+    value: 1                          # filtre sur les articles chers
+```
+
+#### Utilisation dans les colonnes supplémentaires
+
+Après le lancement de l'audit, ouvrez le **sélecteur de colonnes** et ajoutez le champ calculé comme colonne supplémentaire — il apparaîtra aux côtés des champs bruts.
+
+---
+
+### Notes et limitations
+
+1. **Syntaxe pandas** : les expressions utilisent la syntaxe pandas/numpy. Consulter la [documentation pandas](https://pandas.pydata.org/docs/) pour les opérations disponibles.
+
+2. **Différence source/cible** : les expressions sont évaluées **indépendamment** pour chaque source. Aucun croisement n'est possible (pas d'accès aux données de la cible depuis une expression référence).
+
+3. **Typage** : le `type` final doit correspondre au résultat attendu de l'expression. Les conversions implicites (ex. `int(...)`, `str(...)`) peuvent être nécessaires.
+
+4. **Performance** : les expressions complexes ralentissent l'audit. Privilégier les opérations simples.
+
+5. **Null handling** : les valeurs vides (`NaN`, `None`) peuvent propager dans l'expression. Utiliser `.fillna()` ou `.isna()` pour les gérer.
+
+   ```yaml
+   calculated_fields:
+     - name: qty_safe
+       expression: "qty.fillna(0)"
+       type: integer
+   ```
+
+6. **Évaluation** : les champs calculés sont évalués **après** la normalisation de type, donc les champs de base sont déjà typés (string, decimal, etc.).
+
+---
+
+## 10. Résultats et exports
 
 ### Tableau — une ligne par clé
 
@@ -683,7 +913,7 @@ L'onglet **Historique** liste les audits précédents enregistrés dans `reports
 
 ---
 
-## 10. Fichiers exemples
+## 11. Fichiers exemples
 
 Téléchargez les fichiers ci-dessous pour tester DataAuditor immédiatement :
 
@@ -719,4 +949,4 @@ Téléchargez les fichiers ci-dessous pour tester DataAuditor immédiatement :
 
 ---
 
-*DataAuditor v3.26.0 — [Signaler un problème](https://github.com/nikomiko/data-auditor/issues)*
+*DataAuditor v3.31.0 — [Signaler un problème](https://github.com/nikomiko/data-auditor/issues)*
