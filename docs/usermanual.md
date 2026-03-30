@@ -1,6 +1,6 @@
 # DataAuditor — Manuel utilisateur
 
-**Version 3.31.0 · data/auditor server**
+**Version 3.31.1 · data/auditor server**
 
 ---
 
@@ -949,4 +949,4 @@ Téléchargez les fichiers ci-dessous pour tester DataAuditor immédiatement :
 
 ---
 
-*DataAuditor v3.31.0 — [Signaler un problème](https://github.com/nikomiko/data-auditor/issues)*
+*DataAuditor v3.31.1 — [Signaler un problème](https://github.com/nikomiko/data-auditor/issues)*
