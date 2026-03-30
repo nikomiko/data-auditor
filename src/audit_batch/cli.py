@@ -3,9 +3,9 @@
 cli.py — Interface en ligne de commande pour DataAuditor.
 
 Usage :
-  python src/cli.py audit --ref data.dat --tgt result.csv --config audit.yaml
-  python src/cli.py audit --ref data.dat --tgt result.csv --config audit.yaml --out reports/ --format csv
-  python src/cli.py audit --ref data.dat --tgt result.csv --config audit.yaml --format json --stdout
+  python src/audit_batch/cli.py audit --ref data.dat --tgt result.csv --config audit.yaml
+  python src/audit_batch/cli.py audit --ref data.dat --tgt result.csv --config audit.yaml --out reports/ --format csv
+  python src/audit_batch/cli.py audit --ref data.dat --tgt result.csv --config audit.yaml --format json --stdout
 
 Codes de retour :
   0  — Aucun KO (audit propre)
@@ -21,11 +21,12 @@ import sys
 from datetime import datetime
 
 # Ajouter src/ au path pour les imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config_loader import load_config, ConfigError
 from parser        import parse_file
 from normalizer    import normalize_dataframe
+from calculator    import evaluate_calculated_fields
 from unpivot       import unpivot_dataframe
 from comparator    import compare_with_progress
 from filters       import apply_filters
@@ -165,7 +166,7 @@ def run_audit(ref_path: str, tgt_path: str, config_path: str,
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="python src/cli.py",
+        prog="python src/audit_batch/cli.py",
         description="DataAuditor CLI — compare deux fichiers selon une config YAML",
     )
     sub = parser.add_subparsers(dest="command")

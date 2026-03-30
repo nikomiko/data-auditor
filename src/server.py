@@ -19,6 +19,8 @@ import time
 import threading
 import uuid
 import webbrowser
+import urllib.request
+import urllib.error
 from flask import Flask, request, jsonify, send_file, send_from_directory, Response, stream_with_context
 
 from config_loader import load_config, ConfigError
@@ -33,7 +35,8 @@ from report        import save_history, list_history, load_history, to_csv, to_h
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
 
-APP_VERSION = "3.30.0"
+APP_VERSION = "3.31.0"
+LATEST_GITHUB_VERSION = None  # Fetché au démarrage du serveur
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
 # _BASE_DIR : ressources statiques (index.html, static/, docs/, sample/)
@@ -67,6 +70,45 @@ MAX_PREVIEW = 500   # lignes max en mémoire pour l'UI
 @app.route("/api/version")
 def api_version():
     return jsonify({"version": APP_VERSION})
+
+
+@app.route("/api/latest-version")
+def api_latest_version():
+    return jsonify({
+        "version": APP_VERSION,
+        "latest": LATEST_GITHUB_VERSION,
+        "update_available": LATEST_GITHUB_VERSION and LATEST_GITHUB_VERSION != APP_VERSION
+    })
+
+
+@app.route("/api/cli-command")
+def api_cli_command():
+    """Génère la commande CLI instanciée basée sur la configuration de session."""
+    token = request.args.get("token", "")
+    with _sessions_lock:
+        sess = _sessions.get(token, {})
+
+    if not sess:
+        return jsonify({"error": "Session introuvable"}), 404
+
+    config = sess.get("config", {})
+    ref_name = sess.get("file_ref_name", "reference.dat")
+    tgt_name = sess.get("file_tgt_name", "target.csv")
+    config_name = (config.get("meta") or {}).get("name", "audit").replace(" ", "_")
+
+    # Générer la commande CLI
+    cmd = f"python src/audit_batch/cli.py audit --ref {ref_name} --tgt {tgt_name} --config {config_name}.yaml"
+
+    # Ajouter les options si elles existent
+    # Pour simplifier, on offre les options les plus communes
+    cmd += " --format csv --out ./reports"
+
+    return jsonify({
+        "command": cmd,
+        "ref_filename": ref_name,
+        "tgt_filename": tgt_name,
+        "config_name": config_name,
+    })
 
 
 @app.route("/")
@@ -253,8 +295,10 @@ def start_audit():
         return jsonify({"error": "config_yaml manquant."}), 400
     run_label = request.form.get("run_label", "").strip()
 
-    file_ref_bytes = request.files["file_ref"].read()
-    file_tgt_bytes = request.files["file_tgt"].read()
+    file_ref = request.files["file_ref"]
+    file_tgt = request.files["file_tgt"]
+    file_ref_bytes = file_ref.read()
+    file_tgt_bytes = file_tgt.read()
 
     # Valider la config avant de démarrer
     try:
@@ -273,6 +317,8 @@ def start_audit():
             "events":    [],
             "done":      False,
             "error":     None,
+            "file_ref_name": file_ref.filename or "reference",
+            "file_tgt_name": file_tgt.filename or "target",
         }
 
     thread = threading.Thread(
@@ -1158,6 +1204,22 @@ def _open_browser_when_ready(url: str, host: str, port: int) -> None:
     threading.Thread(target=_wait_and_open, daemon=True).start()
 
 
+def _fetch_latest_github_version() -> None:
+    """Fetch la dernière version GitHub au démarrage du serveur."""
+    global LATEST_GITHUB_VERSION
+    try:
+        url = "https://api.github.com/repos/nikomiko/data-auditor/releases/latest"
+        req = urllib.request.Request(url, headers={"Accept": "application/vnd.github.v3+json"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode())
+            tag = data.get("tag_name", "").lstrip("v")
+            if tag:
+                LATEST_GITHUB_VERSION = tag
+    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, Exception):
+        # Silencieusement failé si GitHub inaccessible
+        pass
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description=f"DataAuditor v{APP_VERSION}")
@@ -1188,5 +1250,7 @@ if __name__ == "__main__":
 
     if not args.no_browser:
         _open_browser_when_ready(url, args.host, port)
+
+    _fetch_latest_github_version()
 
     app.run(debug=args.debug, host=args.host, port=port, threaded=True)

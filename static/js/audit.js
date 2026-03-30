@@ -71,6 +71,7 @@ async function runAudit() {
     document.getElementById('btn-csv').disabled  = true;
     document.getElementById('btn-html').disabled = true;
     document.getElementById('btn-xlsx').disabled = true;
+    document.getElementById('btn-cli').disabled  = true;
 
     listenSSE(currentToken);
 
@@ -143,6 +144,7 @@ function listenSSE(token) {
       document.getElementById('btn-csv').disabled  = false;
       document.getElementById('btn-html').disabled = false;
       document.getElementById('btn-xlsx').disabled = false;
+      document.getElementById('btn-cli').disabled  = false;
       _updateExportBadge(ev.total_results, config?.report?.max_diff_preview || 500);
 
       // Débloquer l'étape résultats
@@ -384,6 +386,7 @@ async function loadHistoryEntry(filename) {
     document.getElementById('btn-csv').disabled  = true;
     document.getElementById('btn-html').disabled = false;
     document.getElementById('btn-xlsx').disabled = true;
+    document.getElementById('btn-cli').disabled  = true;
 
     if (data.truncated) {
       const t = document.getElementById('trunc');
