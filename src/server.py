@@ -21,6 +21,7 @@ import uuid
 import webbrowser
 import urllib.request
 import urllib.error
+import pandas as pd
 from flask import Flask, request, jsonify, send_file, send_from_directory, Response, stream_with_context
 
 from config_loader import load_config, ConfigError
@@ -35,7 +36,7 @@ from report        import save_history, list_history, load_history, to_csv, to_h
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
 
-APP_VERSION = "3.31.4"
+APP_VERSION = "3.31.5"
 LATEST_GITHUB_VERSION = None  # Fetché au démarrage du serveur
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
@@ -265,19 +266,36 @@ def preview_calculated():
 
     calc_col_names = [cf["name"] for cf in src.get("calculated_fields", []) if cf.get("name")]
 
+    # Métadonnées des colonnes calculées (type, rounding)
+    calc_meta = {}
+    for cf in src.get("calculated_fields", []):
+        name = cf.get("name")
+        if name:
+            calc_meta[name] = {
+                "type": cf.get("type", "string"),
+                "rounding": cf.get("rounding", 2 if cf.get("type") == "decimal" else None)
+            }
+
     preview_df = df.head(max_rows)
 
-    def _fmt(v):
+    def _fmt(v, col_name=None):
         if v is None:
             return ""
         if isinstance(v, float):
             if math.isnan(v):
                 return ""
-            return str(round(v, 2))
+            # Utiliser le rounding configuré pour les colonnes calculées
+            rounding = None
+            if col_name and col_name in calc_meta:
+                rounding = calc_meta[col_name].get("rounding")
+            if rounding is not None:
+                return str(round(v, rounding))
+            else:
+                return str(round(v, 2))  # Défaut 2 pour tous les floats
         return str(v)
 
     columns = list(preview_df.columns)
-    rows    = [[_fmt(v) for v in row] for row in preview_df.itertuples(index=False)]
+    rows    = [[_fmt(v, columns[i]) for i, v in enumerate(row)] for row in preview_df.itertuples(index=False)]
     return jsonify({"columns": columns, "calc_columns": calc_col_names, "rows": rows}), 200
 
 
@@ -395,19 +413,59 @@ def _run_audit(token: str, ref_bytes: bytes, tgt_bytes: bytes, config: dict):
 
         _NULL_SET = {"nan", "NaT", "None", "<NA>"}
 
-        def _build_rows_map(df, cols):
-            """Construit {clé: {col: str_val, ...}} de façon vectorisée."""
+        # Métadonnées pour le rounding des colonnes calculées
+        ref_calc_meta = {}
+        tgt_calc_meta = {}
+        for cf in src_ref.get("calculated_fields", []):
+            col_name = cf.get("name")
+            if col_name:
+                rounding = cf.get("rounding")
+                if cf.get("type") == "decimal" and rounding is None:
+                    rounding = 2
+                ref_calc_meta[col_name] = rounding
+        for cf in src_tgt.get("calculated_fields", []):
+            col_name = cf.get("name")
+            if col_name:
+                rounding = cf.get("rounding")
+                if cf.get("type") == "decimal" and rounding is None:
+                    rounding = 2
+                tgt_calc_meta[col_name] = rounding
+
+        def _format_value_for_display(v, col_name, calc_meta, null_set):
+            """Formate une valeur pour l'affichage avec rounding optionnel pour les champs calculés."""
+            if v is None or (isinstance(v, float) and (math.isnan(v) or math.isinf(v))):
+                return ""
+            # Vérifier si c'est une valeur NULL en string
+            str_val = str(v)
+            if str_val in null_set:
+                return ""
+            # Si c'est un float, appliquer le rounding configuré ou défaut
+            if isinstance(v, float):
+                rounding = calc_meta.get(col_name)
+                if rounding is not None:
+                    return str(round(v, rounding))
+                else:
+                    return str(round(v, 2))  # Arrondir à 2 par défaut
+            return str_val
+
+        def _build_rows_map(df, cols, calc_meta):
+            """Construit {clé: {col: str_val, ...}} de façon vectorisée avec rounding pour affichage."""
             tmp = (
                 df.assign(__key=_build_key_series(df, cols))
                   .drop_duplicates("__key")
                   .set_index("__key")
-                  .astype(str)
-                  .replace(_NULL_SET, "")
             )
-            return tmp.to_dict("index")
+            # Convertir en string avec formatage du rounding
+            result = {}
+            for key, row in tmp.iterrows():
+                result[key] = {}
+                for col_name in tmp.columns:
+                    val = row[col_name]
+                    result[key][col_name] = _format_value_for_display(val, col_name, calc_meta, _NULL_SET)
+            return result
 
-        ref_rows_map = _build_rows_map(df_ref, ref_key_cols)
-        tgt_rows_map = _build_rows_map(df_tgt, tgt_key_cols)
+        ref_rows_map = _build_rows_map(df_ref, ref_key_cols, ref_calc_meta)
+        tgt_rows_map = _build_rows_map(df_tgt, tgt_key_cols, tgt_calc_meta)
 
         sess["ref_rows_map"]    = ref_rows_map
         sess["tgt_rows_map"]    = tgt_rows_map

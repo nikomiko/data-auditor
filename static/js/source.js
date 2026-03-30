@@ -452,11 +452,12 @@ async function previewFile(which, evt, openTab, mode) {
     const calcFields = (src.calculated_fields || []).filter(cf => cf.name && cf.formula);
     const hasCalc    = calcFields.length > 0;
 
-    if (['json','jsonl'].includes(src.format)) {
-      renderPreviewJson(which, text);
-    } else if (hasCalc) {
+    // Champs calculés : prioritaire (tous formats supportés)
+    if (hasCalc) {
       // Champs calculés présents : appel serveur pour obtenir les valeurs calculées
       await _renderPreviewTableWithCalc(which, file, srcKey);
+    } else if (['json','jsonl'].includes(src.format)) {
+      renderPreviewJson(which, text);
     } else {
       renderPreviewTable(lines, delim);
     }

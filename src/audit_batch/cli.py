@@ -20,6 +20,8 @@ import os
 import sys
 from datetime import datetime
 
+import pandas as pd
+
 # Ajouter src/ au path pour les imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -64,6 +66,12 @@ def run_audit(ref_path: str, tgt_path: str, config_path: str,
             print("[2/5] Normalisation…", flush=True)
         df_ref = normalize_dataframe(df_ref, src_ref)
         df_tgt = normalize_dataframe(df_tgt, src_tgt)
+
+        if src_ref.get("calculated_fields") or src_tgt.get("calculated_fields"):
+            if not quiet:
+                print("[2b/5] Champs calculés…", flush=True)
+            df_ref = evaluate_calculated_fields(df_ref, src_ref)
+            df_tgt = evaluate_calculated_fields(df_tgt, src_tgt)
 
         if src_ref.get("unpivot"):
             df_ref = unpivot_dataframe(df_ref, src_ref["unpivot"])

@@ -78,6 +78,24 @@ def _validate_calculated_fields(src_cfg: dict, role: str):
             raise ConfigError(
                 f"sources.{role}.calculated_fields[{i}] ('{cf.get('name')}') : 'formula' requise."
             )
+        # Validation type optionnel
+        cf_type = cf.get("type", "string")
+        if cf_type not in VALID_TYPES:
+            raise ConfigError(
+                f"sources.{role}.calculated_fields[{i}] ('{cf.get('name')}') : "
+                f"type '{cf_type}' invalide. Valeurs : {', '.join(VALID_TYPES)}"
+            )
+        # Validation rounding optionnel (doit être un entier >= 0)
+        if "rounding" in cf:
+            try:
+                rounding = int(cf["rounding"])
+                if rounding < 0:
+                    raise ValueError("doit être >= 0")
+            except (ValueError, TypeError) as e:
+                raise ConfigError(
+                    f"sources.{role}.calculated_fields[{i}] ('{cf.get('name')}') : "
+                    f"'rounding' invalide : {e}"
+                )
 
 
 def _validate_join(config: dict):

@@ -118,9 +118,12 @@ function wizLoadFromYaml(parsed) {
       s.unpivot_enabled = false;
     }
     // Champs calculés
-    s.calculated_fields = (src.calculated_fields || []).map(cf => ({
-      name: cf.name || '', formula: cf.formula || ''
-    }));
+    s.calculated_fields = (src.calculated_fields || []).map(cf => {
+      const o = { name: cf.name || '', formula: cf.formula || '' };
+      if (cf.type) o.type = cf.type;
+      if (cf.rounding !== undefined) o.rounding = cf.rounding;
+      return o;
+    });
   });
   // join
   WS.join.keys = ((parsed.join||{}).keys||[]).map(k => ({
@@ -260,7 +263,12 @@ function wizBuildYaml() {
     // champs calculés
     const validCalcs = (s.calculated_fields || []).filter(cf => cf.name && cf.formula);
     if (validCalcs.length) {
-      sr.calculated_fields = validCalcs.map(cf => ({ name: cf.name, formula: cf.formula }));
+      sr.calculated_fields = validCalcs.map(cf => {
+        const o = { name: cf.name, formula: cf.formula };
+        if (cf.type && cf.type !== '') o.type = cf.type;
+        if (cf.rounding !== undefined && cf.rounding !== null && cf.rounding !== '') o.rounding = cf.rounding;
+        return o;
+      });
     }
     obj.sources[k] = sr;
   });
@@ -591,6 +599,8 @@ function wizRenderSource(stepEl, srcKey, label) {
         <thead><tr>
           <th>Nom</th>
           <th>Formule (pandas/numpy) <i class="wiz-info" title="Expression Python utilisant les noms de colonnes comme variables.&#10;np est disponible pour numpy.&#10;Ex: np.where(cond, a, b) pour un IF vectorisé.">i</i></th>
+          <th>Type</th>
+          <th>Arrondi (décimales) <i class="wiz-info" title="Nombre de décimales pour l'affichage (optionnel).&#10;Par défaut : 2 pour les champs décimaux, aucun sinon.">i</i></th>
           <th></th>
         </tr></thead>
         <tbody id="cfbody-${srcKey}">${wizCalcFieldRows(srcKey, s)}</tbody>
@@ -850,13 +860,22 @@ function wizCalcFieldRows(srcKey, s) {
   return (s.calculated_fields || []).map((cf, i) => `<tr>
     <td><input class="wiz-input" id="w-cfn-${srcKey}-${i}" value="${esc(cf.name)}" placeholder="ex: total_ttc"></td>
     <td><input class="wiz-input" id="w-cfe-${srcKey}-${i}" value="${esc(cf.formula)}" placeholder="ex: Qty * Prix * 1.2" style="font-family:var(--mono);font-size:.8rem"></td>
+    <td><select class="wiz-input" id="w-cft-${srcKey}-${i}">
+      <option value="" ${(cf.type === undefined || cf.type === '') ? 'selected' : ''}>— string</option>
+      <option value="integer" ${cf.type === 'integer' ? 'selected' : ''}>integer</option>
+      <option value="decimal" ${cf.type === 'decimal' ? 'selected' : ''}>decimal</option>
+      <option value="date" ${cf.type === 'date' ? 'selected' : ''}>date</option>
+      <option value="boolean" ${cf.type === 'boolean' ? 'selected' : ''}>boolean</option>
+      <option value="skip" ${cf.type === 'skip' ? 'selected' : ''}>skip</option>
+    </select></td>
+    <td><input class="wiz-input" id="w-cfr-${srcKey}-${i}" type="number" min="0" value="${cf.rounding !== undefined ? cf.rounding : ''}" placeholder="ex: 2" style="width:60px"></td>
     <td><button class="btn-icon" onclick="wizRemoveCalcField('${srcKey}',${i})" title="Supprimer">✕</button></td>
   </tr>`).join('');
 }
 
 function wizAddCalcField(srcKey) {
   wizReadSourceForm(srcKey);
-  WS.sources[srcKey].calculated_fields.push({ name:'', formula:'' });
+  WS.sources[srcKey].calculated_fields.push({ name:'', formula:'', type:'' });
   const tbody = document.getElementById('cfbody-'+srcKey);
   if (tbody) tbody.innerHTML = wizCalcFieldRows(srcKey, WS.sources[srcKey]);
   const table = document.getElementById('cftable-'+srcKey);
@@ -934,6 +953,10 @@ function wizReadSourceForm(srcKey) {
   (s.calculated_fields||[]).forEach((cf, i) => {
     if (g(`w-cfn-${srcKey}-${i}`) !== null) cf.name    = g(`w-cfn-${srcKey}-${i}`);
     if (g(`w-cfe-${srcKey}-${i}`) !== null) cf.formula = g(`w-cfe-${srcKey}-${i}`);
+    if (g(`w-cft-${srcKey}-${i}`) !== null) cf.type    = g(`w-cft-${srcKey}-${i}`);
+    const roundingVal = g(`w-cfr-${srcKey}-${i}`);
+    if (roundingVal !== null && roundingVal !== '') cf.rounding = Number(roundingVal);
+    else if (roundingVal !== null) delete cf.rounding;
   });
 }
 
