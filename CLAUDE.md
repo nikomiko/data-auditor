@@ -215,3 +215,56 @@ Conventions :
 - Fonctionnalités non implémentées signalées avec `> [!warning]`
 - La spec décrit le comportement attendu, pas l'implémentation interne
 - Le pseudo-code est suffisamment précis pour être directement testable
+
+## Conventions de release
+
+### Procédure de release
+
+À chaque release majeure/mineure (pas PATCH) :
+
+1. **Bump version** dans :
+   - `src/server.py` : `APP_VERSION = "X.Y.Z"`
+   - `index.html` : `<span class="logo-ver">vX.Y.Z</span>`
+
+2. **Commit** avec message `feat: vX.Y.Z — description courte`
+
+3. **Tag Git** : `git tag vX.Y.Z && git push origin main vX.Y.Z`
+
+4. **Créer la release GitHub** avec :
+   - Titre : `DataAuditor vX.Y.Z`
+   - Description : **changelog des 3 dernières releases** (voir format ci-dessous)
+
+### Format du changelog GitHub
+
+```markdown
+## Résumé
+[1-2 phrases sur les apports principaux]
+
+## v3.31.0 (actuelle)
+### Features
+- Check version GitHub au démarrage serveur
+- Génération de commande CLI depuis l'UI avec modal
+
+### Bugfixes
+- (none)
+
+## v3.30.0
+### Features
+- Champs calculés — expressions pandas/numpy par source
+
+### Bugfixes
+- (none)
+
+## v3.29.2
+### Bugfixes
+- Fix: version bump
+
+## Détails techniques
+[Infos sur les endpoints, dépendances, compatibilité si pertinent]
+```
+
+### Points à inclure
+- **Features** : nouvelles fonctionnalités visibles
+- **Bugfixes** : corrections de bugs (issues GitHub si applicable)
+- **Breaking changes** : si applicable (incompatibilité avec anciennes configs YAML)
+- **Détails techniques** : endpoints APIs ajoutés, dépendances, migrations nécessaires
