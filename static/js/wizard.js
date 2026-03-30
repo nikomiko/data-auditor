@@ -635,7 +635,7 @@ function wizRenderSource(stepEl, srcKey, label) {
       s2.fields = [];
     } else if (prevFW && !newFW) {
       // positionnel → csv : migrer column_positions → fields
-      s2.fields = s2.column_positions.map(f => ({name:f.name, type:f.type, date_format:f.date_format||'', ignored:!!f.ignored}));
+      s2.fields = s2.column_positions.map(f => ({name:f.name, type:f.type, date_format:f.date_format||'', ignored:!!f.ignored, path: f.path || ''}));
       s2.column_positions = [];
     }
     wizRenderSource(stepEl, srcKey, label);
@@ -812,7 +812,7 @@ function wizAddCol(srcKey) {
     const nextPos = prev ? (Number(prev.position) + Number(prev.width)) : 1; // 1-based
     s.column_positions.push({name:'', position:nextPos, width:1, type:'string', date_format:'', ignored:false});
   }
-  else s.fields.push({name:'', type:'string', date_format:'', ignored:false});
+  else s.fields.push({name:'', type:'string', date_format:'', ignored:false, path:''});
   const tbody = document.getElementById('ctbody-'+srcKey);
   if (tbody) tbody.innerHTML = wizColRows(srcKey, s);
 }
