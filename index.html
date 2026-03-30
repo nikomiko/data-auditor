@@ -23,7 +23,7 @@
 <header>
   <div class="logo"><a href="https://github.com/nikomiko/data-auditor" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:.4rem"><img src="/static/icons/icon-192.png" alt="" style="width:20px;height:20px;border-radius:4px;vertical-align:middle">data<em>/</em>auditor</a>
     <span class="logo-tag">server</span>
-    <span class="logo-ver" id="logo-ver">v3.31.2</span>
+    <span class="logo-ver" id="logo-ver">v3.31.3</span>
     <span id="version-mismatch" style="display:none" title="" class="version-mismatch-badge">⚠ version</span>
   </div>
   <div class="wf-steps" id="wf-steps">
@@ -491,9 +491,18 @@ async function saveAppSettings() {
 async function checkLatestVersion() {
   try {
     const resp = await fetch('/api/latest-version').then(r => r.json());
-    if (resp.update_available) {
-      const badge = document.getElementById('version-mismatch');
-      badge.title = `Nouvelle version disponible: v${resp.latest}`;
+    const badge = document.getElementById('version-mismatch');
+    const uiVersion = document.getElementById('logo-ver')?.textContent?.replace('v','').trim();
+
+    if (uiVersion && resp.version && uiVersion !== resp.version) {
+      // Cache stale : l'UI en mémoire diffère du serveur
+      badge.title = `UI en cache (v${uiVersion}) — rechargez la page (serveur v${resp.version})`;
+      badge.style.cursor = 'pointer';
+      badge.onclick = () => location.reload(true);
+      badge.style.display = 'inline';
+    } else if (resp.update_available) {
+      // Nouvelle version disponible sur GitHub
+      badge.title = `Nouvelle version disponible : v${resp.latest}`;
       badge.style.display = 'inline';
     }
   } catch(_) {}
