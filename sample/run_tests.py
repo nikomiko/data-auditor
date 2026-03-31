@@ -73,11 +73,11 @@ EXPECTED_LONG = {
         "P002§PAR": {"types": {"ORPHELIN_B"}, "rules": set()},
         "P002§LYO": {"types": {"ORPHELIN_B"}, "rules": set()},
         "P002§MAR": {"types": {"ORPHELIN_B"}, "rules": set()},
-        # KO règles + Présence OK (v3.32.6)
-        # Toutes les clés dans les deux sources ont maintenant "Présence OK"
+        # KO règles + Clé OK (v3.32.6)
+        # Toutes les clés dans les deux sources ont maintenant "Clé OK"
         "P003§PAR": {"types": {"KO", "OK"},   "rules": {"Quantite"}},
         "P004§LYO": {"types": {"KO", "OK"},   "rules": {"Prix HT"}},
-        "P005§MAR": {"types": {"OK"},         "rules": set()},          # Présence OK seul (no rules triggered)
+        "P005§MAR": {"types": {"OK"},         "rules": set()},          # Clé OK seul (no rules triggered)
         "P006§PAR": {"types": {"KO", "OK"},   "rules": {"Designation"}},
         "P007§LYO": {"types": {"KO", "OK"},   "rules": {"Statut"}},
         "P008§MAR": {"types": {"KO", "OK"},   "rules": {"Code-barres"}},

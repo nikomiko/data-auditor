@@ -129,6 +129,7 @@ function listenSSE(token) {
         `${tL} : ${tc} enr. dont ${ob} absents de la source`;
       updateChipCounts();
       buildRuleFilterBar(ev, config);
+      updateOrphelinLabels(config);
 
     } else if (ev.event === 'done') {
       updateProgress({ pct: 100, done: ev.total_results, total: ev.total_results,

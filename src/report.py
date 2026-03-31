@@ -197,7 +197,7 @@ def to_xlsx(results: list, summary: dict, config: dict,
         "_ko": PatternFill("solid", fgColor="FEE5E5"),  # Orphelins
         "ko":  PatternFill("solid", fgColor="FFFBEA"),  # Règle incoherence
         "ok":  PatternFill("solid", fgColor="ECFDF5"),  # Règle coherence
-        "_ok": PatternFill("solid", fgColor="EFF6FF"),  # Présence OK
+        "_ok": PatternFill("solid", fgColor="EFF6FF"),  # Clé OK
     }
 
     for r in results:

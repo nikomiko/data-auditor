@@ -13,7 +13,7 @@ function ruleColor(ruleName) {
 function ruleType(ruleName) {
   // Règles prédéfinies
   if (ruleName === "Source uniq." || ruleName === "Cible uniq.") return "_ko";
-  if (ruleName === "Présence OK") return "_ok";
+  if (ruleName === "Clé OK") return "_ok";
   // Règles utilisateur
   const rule = (lastConfig?.rules || []).find(r => r.name === ruleName);
   return rule?.rule_type === 'coherence' ? 'ok' : 'ko';
@@ -394,6 +394,27 @@ function updateChipCounts() {
   if (bothEl) bothEl.textContent = both.toLocaleString('fr-FR');
 }
 
+function updateOrphelinLabels(config) {
+  // Mettre à jour les labels des chips orphelins avec les noms des sources
+  const refLabel = config?.sources?.reference?.label || 'Source';
+  const tgtLabel = config?.sources?.target?.label || 'Cible';
+
+  const lblOA = document.getElementById('chip-lbl-oa');
+  const lblOB = document.getElementById('chip-lbl-ob');
+  if (lblOA) lblOA.textContent = refLabel;
+  if (lblOB) lblOB.textContent = tgtLabel;
+
+  // Mettre à jour les classes 'on' des chips orphelins pour refléter activeRuleFilters
+  const btnOA = document.querySelector('button.chip.ca[data-rule-id="-1"]');
+  const btnOB = document.querySelector('button.chip.cb[data-rule-id="-2"]');
+  if (btnOA && activeRuleFilters) {
+    btnOA.classList.toggle('on', activeRuleFilters.has(-1));
+  }
+  if (btnOB && activeRuleFilters) {
+    btnOB.classList.toggle('on', activeRuleFilters.has(-2));
+  }
+}
+
 function _updateRuleChipCounts(ruleCounts) {
   // Mettre à jour les chips statiques pour les orphelins
   const staticChips = [
@@ -406,8 +427,8 @@ function _updateRuleChipCounts(ruleCounts) {
     if (stat) stat.textContent = cnt;
   });
 
-  // Mettre à jour le chip Présence OK (dynamique, rule_id -3)
-  const presenceCnt = ruleCounts['Présence OK'] || 0;
+  // Mettre à jour le chip Clé OK (dynamique, rule_id -3)
+  const presenceCnt = ruleCounts['Clé OK'] || 0;
   const presenceBtn = document.querySelector(`#filter-dynamic .chip[data-rule-id="-3"]`);
   if (presenceBtn) {
     const sp = presenceBtn.querySelector('.chip-c');
@@ -462,7 +483,7 @@ function buildRuleFilterBar(summary, config) {
   activeRuleFilters = new Set([
     -1,  // Source uniq. (static button)
     -2,  // Cible uniq. (static button)
-    -3,  // Présence OK (dynamic chip)
+    -3,  // Clé OK (dynamic chip)
     ...rules.map((r, idx) => idx + 1)  // 1, 2, 3... pour les règles user
   ]);
 
@@ -487,12 +508,12 @@ function buildRuleFilterBar(summary, config) {
   });
   grp.appendChild(logicBtn);
 
-  // Chip pour Présence OK (rule_id: -3)
+  // Chip pour Clé OK (rule_id: -3)
   const presenceBtn = document.createElement('button');
   presenceBtn.className = 'chip co on';
   presenceBtn.dataset.ruleId = -3;
   presenceBtn.addEventListener('click', function() { toggleChip(this); });
-  presenceBtn.innerHTML = `Présence OK <span class="chip-c">…</span>`;
+  presenceBtn.innerHTML = `Clé OK <span class="chip-c">…</span>`;
   grp.appendChild(presenceBtn);
 
   // Chips des règles utilisateur (rule_id: 1, 2, 3...)
