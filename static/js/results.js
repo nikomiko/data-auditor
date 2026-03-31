@@ -405,8 +405,8 @@ function updateOrphelinLabels(config) {
   if (lblOB) lblOB.textContent = tgtLabel;
 
   // Mettre à jour les classes 'on' des chips orphelins pour refléter activeRuleFilters
-  const btnOA = document.querySelector('button.chip.ca[data-rule-id="-1"]');
-  const btnOB = document.querySelector('button.chip.cb[data-rule-id="-2"]');
+  const btnOA = document.querySelector('.chip.ca');
+  const btnOB = document.querySelector('.chip.cb');
   if (btnOA && activeRuleFilters) {
     btnOA.classList.toggle('on', activeRuleFilters.has(-1));
   }
