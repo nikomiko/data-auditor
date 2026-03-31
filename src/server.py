@@ -591,7 +591,15 @@ def get_results_page(token):
     # 'rules' présent dans la requête = filtre explicite ; absent = pas de filtre
     # Les rule_ids sont des entiers (séparés par virgule, peuvent être négatifs)
     if 'rules' in request.args:
-        active_rules = set(int(rid) for rid in rules_str.split(",") if rid.strip()) if rules_str else set()
+        active_rules = set()
+        if rules_str:
+            for rid in rules_str.split(","):
+                rid = rid.strip()
+                if rid and rid != 'NaN':  # Ignorer NaN et les chaînes vides
+                    try:
+                        active_rules.add(int(rid))
+                    except ValueError:
+                        pass  # Ignorer les valeurs invalides
     else:
         active_rules = None
 

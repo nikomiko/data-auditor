@@ -83,7 +83,9 @@ function _appendPageRow(r) {
 
   // Badges pour chaque écart (utilise rule_id pour filtrer, rule_name pour afficher)
   const badges = (r.ecarts || []).map(e => {
-    const rid = e.rule_id;
+    // Assurer que rule_id est présent et valide (sinon ignorer le badge)
+    const rid = typeof e.rule_id !== 'undefined' ? parseInt(e.rule_id) : null;
+    if (rid === null || isNaN(rid)) return '';  // Ignorer les badges sans rule_id valide
     const rn = e.rule_name || '';
     const rt = e.rule_type || '';
     const dotColor = ruleColor(rn);
@@ -101,7 +103,7 @@ function _appendPageRow(r) {
     const style   = ` style="background:${bgColor};border-color:${bdColor};color:${txColor}"`;
     const dataRuleId = ` data-rule-id="${rid}"`;
     return `<button class="${cls}"${style}${dataRuleId} title="${title}">${dot}${lbl}</button>`;
-  }).join('');
+  }).filter(b => b).join('');
 
   let html = `<td class="td-eye"><button class="eye-btn" title="Voir le contexte">${_EYE_SVG}</button></td>`;
   const _kParts = (r.join_key || '').split('§');
@@ -118,7 +120,10 @@ function _appendPageRow(r) {
 
   // Clic sur un badge de règle → filtrer sur cette règle (par rule_id)
   tr.querySelectorAll('.rule-badge[data-rule-id]').forEach(btn => {
-    btn.addEventListener('click', e => { e.stopPropagation(); filterToRule(parseInt(btn.dataset.ruleId)); });
+    const rid = parseInt(btn.dataset.ruleId);
+    if (!isNaN(rid)) {
+      btn.addEventListener('click', e => { e.stopPropagation(); filterToRule(rid); });
+    }
   });
   tr.querySelector('.eye-btn').addEventListener('click', () => openCtxModal(r.join_key, r.ecarts || []));
   tbody.appendChild(tr);
@@ -495,6 +500,7 @@ function buildRuleFilterBar(summary, config) {
 // ═══════════════════════════════════════════════════════════
 function toggleChip(btn) {
   const ruleId = parseInt(btn.dataset.ruleId);
+  if (isNaN(ruleId)) return;  // Ignorer les rule_id invalides
   const isOn = btn.classList.contains('on');
   btn.classList.toggle('on', !isOn);
 
@@ -509,6 +515,7 @@ function toggleChip(btn) {
 }
 
 function filterToRule(ruleId) {
+  if (isNaN(ruleId)) return;  // Ignorer les rule_id invalides
   const isSolo = activeRuleFilters && activeRuleFilters.size === 1 && activeRuleFilters.has(ruleId);
   if (isSolo) {
     // Réactiver tous les filtres
@@ -523,7 +530,9 @@ function filterToRule(ruleId) {
   }
   document.querySelectorAll('#filter-dynamic .chip').forEach(btn => {
     const rid = parseInt(btn.dataset.ruleId);
-    btn.classList.toggle('on', !activeRuleFilters || activeRuleFilters.has(rid));
+    if (!isNaN(rid)) {
+      btn.classList.toggle('on', !activeRuleFilters || activeRuleFilters.has(rid));
+    }
   });
   _refresh();
 }
