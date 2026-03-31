@@ -395,13 +395,31 @@ function updateChipCounts() {
 }
 
 function _updateRuleChipCounts(ruleCounts) {
-  const rules = lastConfig?.rules || [];
-  rules.forEach(rule => {
-    const cnt = ruleCounts[rule.name] || 0;
-    document.querySelectorAll(`#filter-dynamic .chip[data-t="${CSS.escape(rule.name)}"]`).forEach(btn => {
+  // Mettre à jour les chips prédéfinis
+  const predefined = [
+    { ruleId: -1, name: 'Source uniq.' },
+    { ruleId: -2, name: 'Cible uniq.' },
+    { ruleId: -3, name: 'Présence OK' }
+  ];
+  predefined.forEach(p => {
+    const cnt = ruleCounts[p.name] || 0;
+    const btn = document.querySelector(`#filter-dynamic .chip[data-rule-id="${p.ruleId}"]`);
+    if (btn) {
       const sp = btn.querySelector('.chip-c');
       if (sp) sp.textContent = cnt;
-    });
+    }
+  });
+
+  // Mettre à jour les chips des règles utilisateur
+  const rules = lastConfig?.rules || [];
+  rules.forEach((rule, idx) => {
+    const ruleId = idx + 1;
+    const cnt = ruleCounts[rule.name] || 0;
+    const btn = document.querySelector(`#filter-dynamic .chip[data-rule-id="${ruleId}"]`);
+    if (btn) {
+      const sp = btn.querySelector('.chip-c');
+      if (sp) sp.textContent = cnt;
+    }
   });
 }
 
