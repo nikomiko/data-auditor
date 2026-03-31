@@ -426,6 +426,14 @@ def compare_with_progress(
             # Règle non passante (coherence ou incoherence) → on n'émet rien
 
         # ── Emit ───────────────────────────────────────────────
+        # Toujours émettre "Présence OK" quand la clé est dans les deux sources
+        r_presence = {"join_key": key, "rule_id": -3, "rule_name": "Présence OK", "rule_type": "_ok",
+                      "source_field": "", "target_field": "", "source_value": "", "target_value": "",
+                      "detail": "Clé présente dans les deux sources"}
+        results.append(r_presence)
+        yield {"event": "result", **r_presence}
+
+        # Émettre les résultats des règles évaluées
         if row_results:
             for r in row_results:
                 results.append(r)
@@ -435,10 +443,7 @@ def compare_with_progress(
             else:
                 ok += 1
         else:
-            r = {"join_key": key, "rule_id": -3, "rule_name": "Présence OK", "rule_type": "_ok",
-                 "source_field": "", "target_field": "", "source_value": "", "target_value": "",
-                 "detail": "Clé présente dans les deux sources"}
-            results.append(r); yield {"event": "result", **r}; ok += 1
+            ok += 1
 
     rule_stats = {name: len(keys) for name, keys in rule_ko_keys.items()}
 

@@ -73,15 +73,15 @@ EXPECTED_LONG = {
         "P002§PAR": {"types": {"ORPHELIN_B"}, "rules": set()},
         "P002§LYO": {"types": {"ORPHELIN_B"}, "rules": set()},
         "P002§MAR": {"types": {"ORPHELIN_B"}, "rules": set()},
-        # KO règles
-        "P003§PAR": {"types": {"KO"},         "rules": {"Quantite"}},
-        "P004§LYO": {"types": {"KO"},         "rules": {"Prix HT"}},
-        # P005§MAR: anciennement OK visible (show_matching), supprimé en v3.32
-        # Les clés sans écarts ne sont plus émises
-        "P006§PAR": {"types": {"KO"},         "rules": {"Designation"}},
-        "P007§LYO": {"types": {"KO"},         "rules": {"Statut"}},
-        "P008§MAR": {"types": {"KO"},         "rules": {"Code-barres"}},
-        "P009§PAR": {"types": {"KO"},         "rules": {"Quantite", "Prix HT"}},
+        # KO règles + Présence OK (v3.32.6)
+        # Toutes les clés dans les deux sources ont maintenant "Présence OK"
+        "P003§PAR": {"types": {"KO", "OK"},   "rules": {"Quantite"}},
+        "P004§LYO": {"types": {"KO", "OK"},   "rules": {"Prix HT"}},
+        "P005§MAR": {"types": {"OK"},         "rules": set()},          # Présence OK seul (no rules triggered)
+        "P006§PAR": {"types": {"KO", "OK"},   "rules": {"Designation"}},
+        "P007§LYO": {"types": {"KO", "OK"},   "rules": {"Statut"}},
+        "P008§MAR": {"types": {"KO", "OK"},   "rules": {"Code-barres"}},
+        "P009§PAR": {"types": {"KO", "OK"},   "rules": {"Quantite", "Prix HT"}},
     },
 }
 
