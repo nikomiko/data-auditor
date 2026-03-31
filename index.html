@@ -286,6 +286,11 @@
 
       <div class="filter-bar" id="filter-bar">
         <div id="filter-dynamic"></div>
+        <div class="filter-group">
+          <span class="filter-group-label">Afficher aussi</span>
+          <button class="chip ca" data-rule-id="-1" onclick="toggleChip(this)">Uniquement dans <strong id="chip-lbl-oa">Source</strong> <span class="chip-c" id="c-oa">0</span></button>
+          <button class="chip cb" data-rule-id="-2" onclick="toggleChip(this)">Uniquement dans <strong id="chip-lbl-ob">Cible</strong> <span class="chip-c" id="c-ob">0</span></button>
+        </div>
         <div class="filter-search">
           <span class="filter-group-label">Recherche</span>
           <input type="search" id="filter-text" placeholder="Recherche…" oninput="setFilterText(this.value)">

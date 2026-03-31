@@ -36,6 +36,14 @@ from report        import save_history, list_history, load_history, to_csv, to_h
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
 
+
+def _parse_version(version_str: str) -> tuple:
+    """Convertit une version "X.Y.Z" en tuple (X, Y, Z) pour comparaison."""
+    try:
+        return tuple(int(x) for x in version_str.split('.')[:3])
+    except (ValueError, AttributeError):
+        return (0, 0, 0)
+
 APP_VERSION = "3.32.0"
 LATEST_GITHUB_VERSION = None  # Fetché au démarrage du serveur
 
@@ -75,10 +83,14 @@ def api_version():
 
 @app.route("/api/latest-version")
 def api_latest_version():
+    update_available = False
+    if LATEST_GITHUB_VERSION and LATEST_GITHUB_VERSION != APP_VERSION:
+        # Comparer les versions numériquement (X.Y.Z)
+        update_available = _parse_version(LATEST_GITHUB_VERSION) > _parse_version(APP_VERSION)
     return jsonify({
         "version": APP_VERSION,
         "latest": LATEST_GITHUB_VERSION,
-        "update_available": LATEST_GITHUB_VERSION and LATEST_GITHUB_VERSION != APP_VERSION
+        "update_available": update_available
     })
 
 

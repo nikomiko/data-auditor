@@ -395,18 +395,26 @@ function updateChipCounts() {
 }
 
 function _updateRuleChipCounts(ruleCounts) {
-  // Mettre à jour les chips prédéfinis
+  // Mettre à jour les chips prédéfinis (dynamiques et statiques)
   const predefined = [
-    { ruleId: -1, name: 'Source uniq.' },
-    { ruleId: -2, name: 'Cible uniq.' },
-    { ruleId: -3, name: 'Présence OK' }
+    { ruleId: -1, name: 'Source uniq.', staticId: 'c-oa' },
+    { ruleId: -2, name: 'Cible uniq.', staticId: 'c-ob' },
+    { ruleId: -3, name: 'Présence OK', staticId: null }
   ];
   predefined.forEach(p => {
     const cnt = ruleCounts[p.name] || 0;
-    const btn = document.querySelector(`#filter-dynamic .chip[data-rule-id="${p.ruleId}"]`);
-    if (btn) {
-      const sp = btn.querySelector('.chip-c');
+
+    // Mettre à jour le chip dynamique
+    const dyn = document.querySelector(`#filter-dynamic .chip[data-rule-id="${p.ruleId}"]`);
+    if (dyn) {
+      const sp = dyn.querySelector('.chip-c');
       if (sp) sp.textContent = cnt;
+    }
+
+    // Mettre à jour le chip statique (s'il existe)
+    if (p.staticId) {
+      const stat = document.getElementById(p.staticId);
+      if (stat) stat.textContent = cnt;
     }
   });
 
