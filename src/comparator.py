@@ -1,7 +1,7 @@
 """
 comparator.py — Jointure + détection des écarts avec progression SSE.
-Supporte : legacy comparison.fields, rules nommées (AND/OR),
-           target_value, source_data/target_data.
+Modèle unifié : rule_name + rule_type (ko/ok/_ko/_ok).
+Supporte : rules nommées (AND/OR), target_value, source_data/target_data.
 """
 import math
 from typing import Generator
@@ -20,7 +20,7 @@ _OP_LABEL = {"equals": "=", "differs": "≠", "greater": ">", "less": "<",
 # ── Résolution d'une field-rule ───────────────────────────────
 def resolve_field_rule(field_rule: dict, ref_row, tgt_row) -> dict | None:
     """
-    Résout une règle de champ en (label, v_ref, v_tgt, tolerance, normalize, operator).
+    Résout une règle de champ en (label, sf, tf, v_ref, v_tgt, tolerance, normalize, operator).
     Supporte syntaxe courte (source_field/target_field/target_value)
     et longue (source_data/target_data).
     """
@@ -30,16 +30,22 @@ def resolve_field_rule(field_rule: dict, ref_row, tgt_row) -> dict | None:
 
     if "source_field" in field_rule:
         sf    = field_rule["source_field"]
-        v_ref = ref_row.get(sf) if ref_row is not None else None
+        side_a = field_rule.get("side_a", "reference")
+        row_a = ref_row if side_a == "reference" else tgt_row
+        v_ref = row_a.get(sf) if row_a is not None else None
         if "target_value" in field_rule:
             v_tgt = field_rule["target_value"]
+            tf    = ""
             label = f'{sf} {op_lbl} "{v_tgt}"'
         else:
             tf    = field_rule.get("target_field", sf)
-            v_tgt = tgt_row.get(tf) if tgt_row is not None else None
+            side_b = field_rule.get("side_b", "target")
+            row_b = ref_row if side_b == "reference" else tgt_row
+            v_tgt = row_b.get(tf) if row_b is not None else None
             label = sf if op == "equals" else f"{sf} {op_lbl} {tf}"
-        return dict(label=label, v_ref=v_ref, v_tgt=v_tgt,
+        return dict(label=label, sf=sf, tf=tf, v_ref=v_ref, v_tgt=v_tgt,
                     tolerance=field_rule.get("tolerance"),
+                    tolerance_pct=field_rule.get("tolerance_pct", False),
                     normalize=field_rule.get("normalize", "none"),
                     operator=op)
 
@@ -47,16 +53,24 @@ def resolve_field_rule(field_rule: dict, ref_row, tgt_row) -> dict | None:
         sd    = field_rule["source_data"]
         td    = field_rule.get("target_data", {})
         sf    = sd.get("field", "") or sd.get("value", "")
-        v_ref = sd["value"] if "value" in sd else (ref_row.get(sf) if ref_row is not None else None)
+        # side_a pour source_data
+        side_a = sd.get("source", "reference")
+        row_a = ref_row if side_a == "reference" else tgt_row
+        v_ref = sd["value"] if "value" in sd else (row_a.get(sf) if row_a is not None else None)
         if "value" in td:
             v_tgt = td["value"]
+            tf    = ""
             label = f'{sf} {op_lbl} "{v_tgt}"'
         else:
             tf    = td.get("field", sf)
-            v_tgt = tgt_row.get(tf) if tgt_row is not None else None
+            # side_b pour target_data
+            side_b = td.get("source", "target")
+            row_b = ref_row if side_b == "reference" else tgt_row
+            v_tgt = row_b.get(tf) if row_b is not None else None
             label = sf if op == "equals" else f"{sf} {op_lbl} {tf}"
-        return dict(label=label, v_ref=v_ref, v_tgt=v_tgt,
+        return dict(label=label, sf=sf, tf=tf, v_ref=v_ref, v_tgt=v_tgt,
                     tolerance=td.get("tolerance", sd.get("tolerance")),
+                    tolerance_pct=td.get("tolerance_pct", sd.get("tolerance_pct", False)),
                     normalize=sd.get("normalize", "none"),
                     operator=op)
     return None
@@ -115,7 +129,12 @@ def check_field_condition(resolved: dict) -> bool:
                 if delta is not None:
                     return delta <= float(tolerance)
             try:
-                return abs(float(v_ref) - float(v_tgt)) <= float(tolerance)
+                if resolved.get("tolerance_pct", False):
+                    # Écart relatif (%)
+                    return abs(float(v_ref) - float(v_tgt)) / max(abs(float(v_ref)), 1e-9) * 100 <= float(tolerance)
+                else:
+                    # Écart absolu
+                    return abs(float(v_ref) - float(v_tgt)) <= float(tolerance)
             except (ValueError, TypeError):
                 pass
         if is_ts:
@@ -136,7 +155,12 @@ def check_field_condition(resolved: dict) -> bool:
                 if delta is not None:
                     return delta > float(tolerance)
             try:
-                return abs(float(v_ref) - float(v_tgt)) > float(tolerance)
+                if resolved.get("tolerance_pct", False):
+                    # Écart relatif (%)
+                    return abs(float(v_ref) - float(v_tgt)) / max(abs(float(v_ref)), 1e-9) * 100 > float(tolerance)
+                else:
+                    # Écart absolu
+                    return abs(float(v_ref) - float(v_tgt)) > float(tolerance)
             except (ValueError, TypeError):
                 pass
         if is_ts:
@@ -188,6 +212,7 @@ def _check_detail(resolved: dict, condition_met: bool) -> str:
     v_ref     = _fmt(resolved["v_ref"])
     v_tgt     = _fmt(resolved["v_tgt"])
     tolerance = resolved["tolerance"]
+    tolerance_pct = resolved.get("tolerance_pct", False)
     op        = resolved["operator"]
     sym       = _OP_LABEL.get(op, op)
 
@@ -202,7 +227,11 @@ def _check_detail(resolved: dict, condition_met: bool) -> str:
                     return f"Condition {sym} vérifiée — écart : {delta:.3f}s ≤ {tolerance}s"
             try:
                 delta = abs(float(rv) - float(tv))
-                return f"Condition {sym} vérifiée — écart : {delta:.4f} ≤ {tolerance}"
+                if tolerance_pct:
+                    pct = delta / max(abs(float(rv)), 1e-9) * 100
+                    return f"Condition {sym} vérifiée — écart : {pct:.2f}% ≤ {tolerance}%"
+                else:
+                    return f"Condition {sym} vérifiée — écart : {delta:.4f} ≤ {tolerance}"
             except (ValueError, TypeError):
                 pass
         return f'Condition {sym} vérifiée : "{v_ref}" {sym} "{v_tgt}"'
@@ -214,7 +243,11 @@ def _check_detail(resolved: dict, condition_met: bool) -> str:
                     return f"Écart : {delta:.3f}s (tolérance : {tolerance}s)"
             try:
                 delta = abs(float(rv) - float(tv))
-                return f"Écart : {delta:.4f} (tolérance : {tolerance})"
+                if tolerance_pct:
+                    pct = delta / max(abs(float(rv)), 1e-9) * 100
+                    return f"Écart : {pct:.2f}% (tolérance : {tolerance}%)"
+                else:
+                    return f"Écart : {delta:.4f} (tolérance : {tolerance})"
             except (ValueError, TypeError):
                 pass
         return f'"{v_ref}" {sym} "{v_tgt}" — condition non vérifiée'
@@ -263,11 +296,8 @@ def compare_with_progress(
       - 'summary'  : récapitulatif final
       - 'error'    : message d'erreur
     """
-    join_cfg      = config.get("join", {})
-    legacy_fields = config.get("comparison", {}).get("fields", [])
-    ignore_set    = set(config.get("comparison", {}).get("ignore_fields", []))
-    show_ok       = config.get("report", {}).get("show_matching", False)
-    rules         = config.get("rules", [])
+    join_cfg = config.get("join", {})
+    rules    = config.get("rules", [])
 
     join_keys    = join_cfg.get("keys", [])
     ref_key_cols = [k["source_field"] for k in join_keys]
@@ -326,41 +356,24 @@ def compare_with_progress(
 
         # ── Orphelins ──────────────────────────────────────────
         if not in_tgt:
-            r = {"join_key": key, "type_ecart": "ORPHELIN_A", "rule_name": "",
-                 "champ": "", "valeur_reference": "", "valeur_cible": "",
+            r = {"join_key": key, "rule_id": -1, "rule_name": "Source uniq.", "rule_type": "_ko",
+                 "source_field": "", "target_field": "", "source_value": "", "target_value": "",
                  "detail": "Clé présente dans la référence, absente dans la cible"}
             results.append(r); yield {"event": "result", **r}; oa += 1
             continue
 
         if not in_ref:
-            r = {"join_key": key, "type_ecart": "ORPHELIN_B", "rule_name": "",
-                 "champ": "", "valeur_reference": "", "valeur_cible": "",
+            r = {"join_key": key, "rule_id": -2, "rule_name": "Cible uniq.", "rule_type": "_ko",
+                 "source_field": "", "target_field": "", "source_value": "", "target_value": "",
                  "detail": "Clé présente dans la cible, absente dans la référence"}
             results.append(r); yield {"event": "result", **r}; ob += 1
             continue
 
         row_results = []
 
-        # ── Legacy comparison.fields (implicitement : incoherence si A ≠ B) ──
-        for rf in legacy_fields:
-            sf = rf.get("source_field", "")
-            tf = rf.get("target_field", sf)
-            if sf in ignore_set or tf in ignore_set:
-                continue
-            resolved = resolve_field_rule(rf, ref_row, tgt_row)
-            if not resolved:
-                continue
-            # Legacy : KO quand la condition d'égalité n'est PAS satisfaite (A ≠ B)
-            if not check_field_condition(resolved):
-                r = {"join_key": key, "type_ecart": "KO", "rule_name": "",
-                     "champ": resolved["label"],
-                     "valeur_reference": _fmt(resolved["v_ref"]),
-                     "valeur_cible":     _fmt(resolved["v_tgt"]),
-                     "detail": _check_detail(resolved, False)}
-                row_results.append(r)
-
         # ── Named rules ────────────────────────────────────────
-        for rule in rules:
+        for rule_idx, rule in enumerate(rules):
+            rule_id     = rule_idx + 1  # 1-based ID
             rule_name   = rule["name"]
             logic       = rule.get("logic", "AND").upper()
             rule_type   = rule.get("rule_type", "coherence")
@@ -387,23 +400,27 @@ def compare_with_progress(
                 rule_passes = (n_pass > 0)           # au moins une condition satisfaite
 
             if rule_passes:
-                # type_ecart selon rule_type
-                type_ecart = "KO" if rule_type == "incoherence" else "OK"
+                # Nouveau modèle : rule_type au lieu de type_ecart
+                type_rt = "ok" if rule_type == "coherence" else "ko"
 
                 # On n'émet que les champs qui ont satisfait la condition
                 passing_fields = [(res, met) for res, met in field_evals if met]
                 for resolved, _ in passing_fields:
+                    sf_out = resolved.get("sf", "")
+                    tf_out = resolved.get("tf", "")
                     row_results.append({
                         "join_key": key,
-                        "type_ecart": type_ecart,
+                        "rule_id": rule_id,
                         "rule_name": rule_name,
-                        "champ": resolved["label"],
-                        "valeur_reference": _fmt(resolved["v_ref"]),
-                        "valeur_cible":     _fmt(resolved["v_tgt"]),
+                        "rule_type": type_rt,
+                        "source_field": f"source.{sf_out}" if sf_out else "",
+                        "target_field": f"target.{tf_out}" if tf_out else "",
+                        "source_value": _fmt(resolved["v_ref"]),
+                        "target_value": _fmt(resolved["v_tgt"]),
                         "detail": _check_detail(resolved, True),
                     })
 
-                if type_ecart == "KO":
+                if type_rt == "ko":
                     rule_ko_keys[rule_name].add(key)
 
             # Règle non passante (coherence ou incoherence) → on n'émet rien
@@ -413,20 +430,15 @@ def compare_with_progress(
             for r in row_results:
                 results.append(r)
                 yield {"event": "result", **r}
-            if any(r["type_ecart"] == "KO" for r in row_results):
+            if any(r["rule_type"] == "ko" for r in row_results):
                 divergent_keys.add(key)
             else:
                 ok += 1
-        elif show_ok:
-            r = {"join_key": key, "type_ecart": "OK", "rule_name": "",
-                 "champ": "", "valeur_reference": "", "valeur_cible": "",
-                 "detail": "Toutes les valeurs sont conformes"}
-            results.append(r); yield {"event": "result", **r}; ok += 1
         else:
-            r = {"join_key": key, "type_ecart": "PRESENT", "rule_name": "",
-                 "champ": "", "valeur_reference": "", "valeur_cible": "",
+            r = {"join_key": key, "rule_id": -3, "rule_name": "Présence OK", "rule_type": "_ok",
+                 "source_field": "", "target_field": "", "source_value": "", "target_value": "",
                  "detail": "Clé présente dans les deux sources"}
-            results.append(r); yield {"event": "result", **r}
+            results.append(r); yield {"event": "result", **r}; ok += 1
 
     rule_stats = {name: len(keys) for name, keys in rule_ko_keys.items()}
 

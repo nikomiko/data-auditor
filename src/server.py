@@ -36,7 +36,7 @@ from report        import save_history, list_history, load_history, to_csv, to_h
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
 
-APP_VERSION = "3.31.5"
+APP_VERSION = "3.32.0"
 LATEST_GITHUB_VERSION = None  # Fetché au démarrage du serveur
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
@@ -567,7 +567,7 @@ def get_results_meta(token):
 # ─────────────────────────────────────────────────────────────
 #  GET /api/results/<token>  — résultats paginés + filtrés + triés
 # ─────────────────────────────────────────────────────────────
-_GRAVITY = {"ORPHELIN_A": 0, "ORPHELIN_B": 1, "KO": 2, "DIVERGENT": 2, "OK": 3, "PRESENT": 4}
+_GRAVITY = {"_ko": 3, "ko": 2, "ok": 1, "_ok": 0}
 
 
 @app.route("/api/results/<token>")
@@ -581,23 +581,17 @@ def get_results_page(token):
     size      = min(5000, max(1, int(request.args.get("size", 100))))
     sort_col  = request.args.get("sort",  "")
     sort_dir  = request.args.get("dir",   "asc")
-    types_str = request.args.get("types", "")
     rules_str   = request.args.get("rules", "")
     rule_logic  = request.args.get("rule_logic", "OR").upper()
     q           = request.args.get("q",     "").lower().strip()
     extra_ref = [c for c in request.args.get("extra_ref", "").split(",") if c]
     extra_tgt = [c for c in request.args.get("extra_tgt", "").split(",") if c]
 
-    raw          = sess.get("results", [])
-    # 'types' présent mais vide → aucun type sélectionné → 0 lignes (set vide)
-    # 'types' absent → pas de filtre (None = tout afficher)
-    if 'types' in request.args:
-        active_types = set(t for t in types_str.split(",") if t) if types_str else set()
-    else:
-        active_types = None
+    raw = sess.get("results", [])
     # 'rules' présent dans la requête = filtre explicite ; absent = pas de filtre
+    # Les rule_ids sont des entiers (séparés par virgule, peuvent être négatifs)
     if 'rules' in request.args:
-        active_rules = set(rules_str.split(",")) if rules_str else set()
+        active_rules = set(int(rid) for rid in rules_str.split(",") if rid.strip()) if rules_str else set()
     else:
         active_rules = None
 
@@ -609,47 +603,37 @@ def get_results_page(token):
         if k not in grouped:
             grouped[k] = {"join_key": k, "ecarts": []}
         grouped[k]["ecarts"].append({
-            "type_ecart":       r["type_ecart"],
-            "rule_name":        r.get("rule_name"),
-            "champ":            r.get("champ", ""),
-            "valeur_reference": r.get("valeur_reference", ""),
-            "valeur_cible":     r.get("valeur_cible", ""),
+            "rule_id":      r.get("rule_id"),
+            "rule_name":    r.get("rule_name"),
+            "rule_type":    r.get("rule_type"),
+            "source_field": r.get("source_field", ""),
+            "target_field": r.get("target_field", ""),
+            "source_value": r.get("source_value", ""),
+            "target_value": r.get("target_value", ""),
+            "detail":       r.get("detail", ""),
         })
 
-    # ── Filtrer ──────────────────────────────────────────────
-    def key_matches(row):
+    # ── Filtrer par règles ──────────────────────────────────
+    def key_matches_rules(row):
         ecarts = row["ecarts"]
-        # Filtrage par type
-        if active_types is not None:
-            ecarts = [e for e in ecarts if e["type_ecart"] in active_types]
-        if not ecarts:
+        if active_rules is None:
+            return True
+        # Filtre règles : appliquer à tous les écarts par rule_id
+        if not active_rules:
+            # Aucune règle sélectionnée → afficher aucun écart
             return False
-        # Filtrage par règle
-        if active_rules is not None:
-            # Lignes sans rule_name (orphelins, PRESENT, OK/DIVERGENT de présence)
-            # ne dépendent d'aucune règle → bypass du filtre règle
-            orphan_ecarts = [e for e in ecarts
-                             if e["type_ecart"] in ("ORPHELIN_A", "ORPHELIN_B", "PRESENT")
-                             or not e.get("rule_name")]
-            # Aucune règle sélectionnée → n'afficher que les orphelins/présents
-            if not active_rules:
-                return bool(orphan_ecarts)
-            rule_ecarts = [e for e in ecarts
-                           if e.get("rule_name") in active_rules]
-            if rule_logic == "AND":
-                # Toutes les règles actives doivent être présentes
-                matched = {e.get("rule_name") for e in rule_ecarts}
-                if not active_rules.issubset(matched):
-                    return bool(orphan_ecarts)  # orphelins passent toujours
-            else:
-                # OR : au moins une règle présente
-                if not rule_ecarts and not orphan_ecarts:
-                    return False
-        return True
+        rule_ecarts = [e for e in ecarts if e.get("rule_id") in active_rules]
+        if rule_logic == "AND":
+            # Toutes les règles actives doivent être présentes
+            matched = {e.get("rule_id") for e in rule_ecarts}
+            return active_rules.issubset(matched)
+        else:
+            # OR : au moins une règle présente
+            return bool(rule_ecarts)
 
     rows = list(grouped.values())
-    if active_types is not None:
-        rows = [r for r in rows if key_matches(r)]
+    if active_rules is not None:
+        rows = [r for r in rows if key_matches_rules(r)]
 
     if q:
         ref_rows_map = sess.get("ref_rows_map", {})
@@ -661,11 +645,15 @@ def get_results_page(token):
             for e in row["ecarts"]:
                 if q in str(e.get("rule_name") or "").lower():
                     return True
-                if q in str(e.get("valeur_reference") or "").lower():
+                if q in str(e.get("source_value") or "").lower():
                     return True
-                if q in str(e.get("valeur_cible") or "").lower():
+                if q in str(e.get("target_value") or "").lower():
                     return True
-                if q in str(e.get("champ") or "").lower():
+                if q in str(e.get("source_field") or "").lower():
+                    return True
+                if q in str(e.get("target_field") or "").lower():
+                    return True
+                if q in str(e.get("detail") or "").lower():
                     return True
             key = row["join_key"]
             for c in extra_ref:
@@ -693,7 +681,7 @@ def get_results_page(token):
         rows.sort(key=_key_part, reverse=reverse)
     elif sort_col == "type":
         rows.sort(
-            key=lambda r: min((_GRAVITY.get(e["type_ecart"], 99) for e in r["ecarts"]), default=99),
+            key=lambda r: min((_GRAVITY.get(e["rule_type"], 99) for e in r["ecarts"]), default=99),
             reverse=reverse,
         )
     elif sort_col.startswith("xc_ref:") or sort_col.startswith("xc_tgt:"):
@@ -739,10 +727,10 @@ def get_results_page(token):
 #  GET /api/export  — CSV / XLSX / HTML
 # ─────────────────────────────────────────────────────────────
 
-def _filter_results_flat(results, active_types, active_rules, rule_logic,
+def _filter_results_flat(results, active_rules, rule_logic,
                          q, extra_ref, extra_tgt, ref_rows_map, tgt_rows_map):
     """Filtre une liste plate d'écarts (même logique que api_results)."""
-    if active_types is None and active_rules is None and not q:
+    if active_rules is None and not q:
         return results
 
     from collections import defaultdict
@@ -752,38 +740,28 @@ def _filter_results_flat(results, active_types, active_rules, rule_logic,
 
     out = []
     for key, ecarts in grouped.items():
-        if active_types is not None:
-            ecarts = [e for e in ecarts if e.get("type_ecart") in active_types]
-        if not ecarts:
-            continue
-
         if active_rules is not None:
-            orph_e = [e for e in ecarts
-                      if e.get("type_ecart") in ("ORPHELIN_A", "ORPHELIN_B", "PRESENT")
-                      or not e.get("rule_name")]
             if not active_rules:
-                out.extend(orph_e)
+                # Aucune règle sélectionnée → afficher aucun écart
                 continue
-            rule_e = [e for e in ecarts
-                      if e.get("rule_name") in active_rules]
+            rule_e = [e for e in ecarts if e.get("rule_id") in active_rules]
             if rule_logic == "AND":
-                matched = {e.get("rule_name") for e in rule_e}
+                matched = {e.get("rule_id") for e in rule_e}
                 if not active_rules.issubset(matched):
-                    out.extend(orph_e)
                     continue
-                ecarts = rule_e + orph_e
+                ecarts = rule_e
             else:
-                if not rule_e and not orph_e:
+                if not rule_e:
                     continue
-                ecarts = rule_e + orph_e
+                ecarts = rule_e
 
         if q:
             match = q in str(key).lower()
             if not match:
                 for e in ecarts:
                     if any(q in str(e.get(f) or "").lower()
-                           for f in ("rule_name", "valeur_reference",
-                                     "valeur_cible", "champ")):
+                           for f in ("rule_name", "source_value",
+                                     "target_value", "source_field", "target_field")):
                         match = True
                         break
             if not match:
@@ -869,19 +847,17 @@ def export():
 
     elif fmt == "html":
         # Vue courante filtrée — filtres dynamiques conservés dans le HTML
-        types_str  = request.args.get("types", "")
         rules_str  = request.args.get("rules", "")
         rule_logic = request.args.get("rule_logic", "OR").upper()
         q          = request.args.get("q", "").lower().strip()
 
-        active_types = set(types_str.split(",")) if types_str else None
         if 'rules' in request.args:
             active_rules = set(rules_str.split(",")) if rules_str else set()
         else:
             active_rules = None
 
         filtered = _filter_results_flat(
-            results, active_types, active_rules, rule_logic, q,
+            results, active_rules, rule_logic, q,
             extra_ref, extra_tgt, ref_rows_map, tgt_rows_map
         )
         content  = to_html(filtered, summary, config,
@@ -1049,14 +1025,15 @@ def get_context():
     # Champs différents pour la clé centrale (pour le surlignage)
     diff_fields = set()
     for r in results:
-        if r.get("join_key") == key and r.get("type_ecart") == "DIVERGENT":
-            champ = r.get("champ", "")
-            if champ:
-                # champ peut être "field", "field op field2" — on extrait les deux noms
-                parts = champ.split()
-                diff_fields.add(parts[0])
-                if len(parts) >= 3 and not parts[2].startswith('"'):
-                    diff_fields.add(parts[2])
+        if r.get("join_key") == key:
+            for ecart in r.get("ecarts", []):
+                if ecart.get("rule_type") == "ko":
+                    sf = ecart.get("source_field", "").replace("source.", "")
+                    tf = ecart.get("target_field", "").replace("target.", "")
+                    if sf:
+                        diff_fields.add(sf)
+                    if tf:
+                        diff_fields.add(tf)
 
     try:
         center_idx = all_keys_sorted.index(key)

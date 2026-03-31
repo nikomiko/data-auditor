@@ -22,8 +22,8 @@ def _get_reports_dir() -> str:
 
 REPORTS_DIR = _get_reports_dir()
 
-_BASE_FIELDS = ["join_key", "type_ecart", "rule_name", "champ",
-                "valeur_reference", "valeur_cible", "detail"]
+_BASE_FIELDS = ["join_key", "rule_name", "rule_type",
+                "source_field", "target_field", "source_value", "target_value", "detail"]
 
 
 # ─────────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ def to_csv(results: list,
 
     cfg_keys   = config.get("join", {}).get("keys", [])
     key_fields = [k.get("source_field", "Clé") for k in cfg_keys] if cfg_keys else ["Clé"]
-    other_fields = ["type_ecart", "rule_name", "champ", "valeur_reference", "valeur_cible", "detail"]
+    other_fields = ["rule_name", "rule_type", "source_field", "target_field", "source_value", "target_value", "detail"]
 
     headers = key_fields + other_fields + [
         f"{ref_label} \u00b7 {c}" for c in extra_ref
@@ -155,8 +155,8 @@ def to_xlsx(results: list, summary: dict, config: dict,
     name         = config.get("meta", {}).get("name", "Audit")
     cfg_keys     = config.get("join", {}).get("keys", [])
     key_fields   = [k.get("source_field", "Clé") for k in cfg_keys] if cfg_keys else ["Clé"]
-    other_hdrs   = ["Type", "Règle", "Champ", "Valeur réf.", "Valeur cible", "Détail"]
-    other_fields = ["type_ecart", "rule_name", "champ", "valeur_reference", "valeur_cible", "detail"]
+    other_hdrs   = ["Règle", "Type", "Champ src.", "Champ cible", "Valeur src.", "Valeur cible", "Détail"]
+    other_fields = ["rule_name", "rule_type", "source_field", "target_field", "source_value", "target_value", "detail"]
     n_key        = len(key_fields)
     wb           = Workbook()
 
@@ -194,15 +194,15 @@ def to_xlsx(results: list, summary: dict, config: dict,
         cell.alignment = Alignment(horizontal="left")
 
     ROW_FILLS = {
-        "ORPHELIN_A": PatternFill("solid", fgColor="FFF5F5"),
-        "ORPHELIN_B": PatternFill("solid", fgColor="FFFAF0"),
-        "KO":         PatternFill("solid", fgColor="FFFFF0"),
-        "OK":         PatternFill("solid", fgColor="F0FFF4"),
+        "_ko": PatternFill("solid", fgColor="FEE5E5"),  # Orphelins
+        "ko":  PatternFill("solid", fgColor="FFFBEA"),  # Règle incoherence
+        "ok":  PatternFill("solid", fgColor="ECFDF5"),  # Règle coherence
+        "_ok": PatternFill("solid", fgColor="EFF6FF"),  # Présence OK
     }
 
     for r in results:
         key  = r.get("join_key", "")
-        te   = r.get("type_ecart", "")
+        rt   = r.get("rule_type", "")
         kp   = key.split("\u00a7")  # § separator
         row  = [kp[i] if i < len(kp) else "" for i in range(n_key)]
         row += [r.get(k, "") for k in other_fields]
@@ -210,7 +210,7 @@ def to_xlsx(results: list, summary: dict, config: dict,
         row += [tgt_rows_map.get(key, {}).get(c, "") for c in extra_tgt]
         ws.append(row)
         ri = ws.max_row
-        base_fill = ROW_FILLS.get(te)
+        base_fill = ROW_FILLS.get(rt)
         for i, cell in enumerate(ws[ri]):
             if n_base <= i < n_base + n_ref:
                 cell.fill = REF_ROW_F
@@ -294,16 +294,16 @@ def _build_pivot_sheet(ws, results, summary, config, audit_name):
     row += 1
 
     # Présence
-    oa_keys = {r["join_key"] for r in results if r.get("type_ecart") == "ORPHELIN_A"}
-    ob_keys = {r["join_key"] for r in results if r.get("type_ecart") == "ORPHELIN_B"}
+    oa_keys = {r["join_key"] for r in results if r.get("rule_name") == "Source uniq."}
+    ob_keys = {r["join_key"] for r in results if r.get("rule_name") == "Cible uniq."}
 
     title_row(row, "Contr\u00f4les de pr\u00e9sence", 3); row += 1
     hdr_row(row, ["Type", "Description", "Nb cl\u00e9s"], H2_PRES); row += 1
-    for te, desc, keys in [
-        ("ORPHELIN_A", "Pr\u00e9sent en r\u00e9f\u00e9rence, absent de la cible", oa_keys),
-        ("ORPHELIN_B", "Absent de la r\u00e9f\u00e9rence, pr\u00e9sent en cible",  ob_keys),
+    for rn, desc, keys in [
+        ("Source uniq.", "Pr\u00e9sent en r\u00e9f\u00e9rence, absent de la cible", oa_keys),
+        ("Cible uniq.", "Absent de la r\u00e9f\u00e9rence, pr\u00e9sent en cible",  ob_keys),
     ]:
-        cell(row, 1, te)
+        cell(row, 1, rn)
         cell(row, 2, desc, wrap=True)
         cell(row, 3, len(keys), align="right")
         row += 1
@@ -314,12 +314,12 @@ def _build_pivot_sheet(ws, results, summary, config, audit_name):
         lambda: {"keys": set(), "ecarts": 0, "champs": set()}
     ))
     for r in results:
-        te = r.get("type_ecart"); rn = r.get("rule_name")
-        if te in ("KO", "OK") and rn:
-            s = rule_stats[rn][te]
+        rt = r.get("rule_type"); rn = r.get("rule_name")
+        if rt in ("ko", "ok") and rn:
+            s = rule_stats[rn][rt]
             s["keys"].add(r.get("join_key", ""))
             s["ecarts"] += 1
-            ch = r.get("champ", "")
+            ch = r.get("source_field", "")
             if ch:
                 s["champs"].add(ch)
 
@@ -334,12 +334,12 @@ def _build_pivot_sheet(ws, results, summary, config, audit_name):
     for rname in rule_order:
         if rname not in rule_stats:
             continue
-        for te in ("KO", "OK"):
-            s = rule_stats[rname].get(te)
+        for rt in ("ko", "ok"):
+            s = rule_stats[rname].get(rt)
             if not s or not s["ecarts"]:
                 continue
             cell(row, 1, rname)
-            cell(row, 2, te)
+            cell(row, 2, rt.upper())
             cell(row, 3, len(s["keys"]),  align="right")
             cell(row, 4, s["ecarts"],      align="right")
             cell(row, 5, "; ".join(sorted(s["champs"])), wrap=True)
@@ -359,28 +359,24 @@ const ALL=__ALL__;
 const EXTRA_REF=__EXTRA_REF__;
 const EXTRA_TGT=__EXTRA_TGT__;
 const KEY_FIELDS=__KEY_FIELDS__;
-let aT=new Set(ALL.map(r=>r.type_ecart));
-let aR=new Set(ALL.filter(r=>r.rule_name).map(r=>r.rule_name));
+let aR=new Set(ALL.map(r=>r.rule_name));
 let sC=null,sD=1;
 function initCounts(){
-  const ct={},cr={};
-  for(const r of ALL){ct[r.type_ecart]=(ct[r.type_ecart]||0)+1;if(r.rule_name)cr[r.rule_name]=(cr[r.rule_name]||0)+1;}
-  const ids={ORPHELIN_A:'cc-a',ORPHELIN_B:'cc-b',KO:'cc-ko',OK:'cc-ok'};
-  for(const[t,id]of Object.entries(ids)){const el=document.getElementById(id);if(el)el.textContent=ct[t]||0;}
+  const cr={};
+  for(const r of ALL){cr[r.rule_name]=(cr[r.rule_name]||0)+1;}
   document.querySelectorAll('[data-k="rule"]').forEach(b=>{const sp=b.querySelector('span');if(sp)sp.textContent=cr[b.dataset.v]||0;});
 }
 function toggleChip(b){
   b.classList.toggle('on');
   const on=b.classList.contains('on');
-  if(b.dataset.k==='type'){if(on)aT.add(b.dataset.v);else aT.delete(b.dataset.v);}
-  else{if(on)aR.add(b.dataset.v);else aR.delete(b.dataset.v);}
+  if(on)aR.add(b.dataset.v);else aR.delete(b.dataset.v);
   render();
 }
 function sortBy(col){
   if(sC===col)sD=-sD;else{sC=col;sD=1;}
   document.querySelectorAll('thead th').forEach(th=>th.classList.remove('sort-asc','sort-desc'));
   document.querySelectorAll('.sort-ic').forEach(ic=>ic.textContent='\u2195');
-  const m={join_key:'si-key',type_ecart:'si-type',rule_name:'si-rule',champ:'si-champ',valeur_reference:'si-ref',valeur_cible:'si-tgt',detail:'si-det'};
+  const m={join_key:'si-key',rule_name:'si-rule',rule_type:'si-type',source_field:'si-sf',target_field:'si-tf',source_value:'si-sv',target_value:'si-tv',detail:'si-det'};
   const ic=document.getElementById(m[col]);
   if(ic){ic.textContent=sD>0?'\u2191':'\u2193';ic.closest('th').classList.add(sD>0?'sort-asc':'sort-desc');}
   render();
@@ -391,11 +387,11 @@ function renderRow(r){
   const kp=(r.join_key||'').split('\u00a7');
   KEY_FIELDS.forEach((f,i)=>{c+='<td class="tk">'+esc(kp[i]||'')+'</td>';});
   for(const k of EXTRA_REF)c+='<td class="tv r">'+esc((r._ref||{})[k])+'</td>';
-  c+='<td><span class="badge badge-'+esc(r.type_ecart)+'">'+esc(r.type_ecart)+'</span></td>';
-  c+='<td class="td-rule">'+esc(r.rule_name)+'</td>';
-  c+='<td class="tv">'+esc(r.champ)+'</td>';
-  c+='<td class="tv r">'+esc(r.valeur_reference)+'</td>';
-  c+='<td class="tv t">'+esc(r.valeur_cible)+'</td>';
+  c+='<td><span class="badge badge-'+esc(r.rule_type)+'">'+esc(r.rule_name)+'</span></td>';
+  c+='<td class="tv">'+esc(r.source_field)+'</td>';
+  c+='<td class="tv">'+esc(r.target_field)+'</td>';
+  c+='<td class="tv r">'+esc(r.source_value)+'</td>';
+  c+='<td class="tv t">'+esc(r.target_value)+'</td>';
   for(const k of EXTRA_TGT)c+='<td class="tv t">'+esc((r._tgt||{})[k])+'</td>';
   c+='<td class="td-det" title="'+esc(r.detail)+'">'+esc(r.detail)+'</td>';
   return '<tr>'+c+'</tr>';
@@ -403,10 +399,9 @@ function renderRow(r){
 function render(){
   const q=(document.querySelector('.srch')?.value||'').toLowerCase();
   let rows=ALL.filter(r=>{
-    if(!aT.has(r.type_ecart))return false;
-    if(r.rule_name&&!aR.has(r.rule_name))return false;
+    if(!aR.has(r.rule_name))return false;
     if(q){
-      const vals=[r.join_key,r.rule_name,r.valeur_reference,r.valeur_cible,r.champ];
+      const vals=[r.join_key,r.rule_name,r.source_value,r.target_value,r.source_field,r.target_field];
       const extra=[...EXTRA_REF.map(k=>(r._ref||{})[k]),...EXTRA_TGT.map(k=>(r._tgt||{})[k])];
       if(![...vals,...extra].some(v=>String(v||'').toLowerCase().includes(q)))return false;
     }
@@ -463,10 +458,10 @@ td{padding:.42rem .8rem;vertical-align:middle}
 .td-rule{font-size:.71rem;color:#7c3aed;font-family:monospace;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .td-det{font-size:.67rem;color:#718096;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .badge{display:inline-block;padding:.13rem .45rem;border-radius:4px;font-size:.62rem;font-weight:700;font-family:monospace}
-.badge-ORPHELIN_A{background:#fff5f5;color:#c53030;border:1px solid #fed7d7}
-.badge-ORPHELIN_B{background:#fffaf0;color:#c05621;border:1px solid #feebc8}
-.badge-KO,.badge-DIVERGENT{background:#fffff0;color:#b7791f;border:1px solid #fefcbf}
-.badge-OK{background:#f0fff4;color:#276749;border:1px solid #c6f6d5}
+.badge-_ko{background:#fee5e5;color:#c53030;border:1px solid #fed7d7}
+.badge-ko{background:#fffbea;color:#b7791f;border:1px solid #fefcbf}
+.badge-ok{background:#ecfdf5;color:#276749;border:1px solid #c6f6d5}
+.badge-_ok{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
 .sort-ic{opacity:.22;margin-left:.2rem;font-size:.58rem}
 th.sort-asc .sort-ic,th.sort-desc .sort-ic{opacity:1;color:#3b82f6}
 .empty{text-align:center;padding:3rem;color:#a0aec0;font-style:italic;display:none}
@@ -579,11 +574,10 @@ def to_html(results: list, summary: dict, config: dict,
         '</div>\n',
         # Filter bar
         '<div class="filter-bar">',
-        '<span class="fl">Types</span>',
-        f'<button class="chip ca on" data-k="type" data-v="ORPHELIN_A" onclick="toggleChip(this)">Absent de {_h(tgt_label)} <span class="chip-c" id="cc-a">0</span></button>',
-        f'<button class="chip cb on" data-k="type" data-v="ORPHELIN_B" onclick="toggleChip(this)">Absent de {_h(ref_label)} <span class="chip-c" id="cc-b">0</span></button>',
-        '<button class="chip cd on" data-k="type" data-v="KO" onclick="toggleChip(this)">KO <span class="chip-c" id="cc-ko">0</span></button>',
-        '<button class="chip co on" data-k="type" data-v="OK" onclick="toggleChip(this)">OK <span class="chip-c" id="cc-ok">0</span></button>',
+        '<span class="fl">R\u00e8gles pr\u00e9d\u00e9finies</span>',
+        f'<button class="chip ca on" data-k="rule" data-v="Source uniq." onclick="toggleChip(this)">Source uniq. <span class="chip-c">0</span></button>',
+        f'<button class="chip cb on" data-k="rule" data-v="Cible uniq." onclick="toggleChip(this)">Cible uniq. <span class="chip-c">0</span></button>',
+        '<button class="chip co on" data-k="rule" data-v="Pr\u00e9sence OK" onclick="toggleChip(this)">Pr\u00e9sence OK <span class="chip-c">0</span></button>',
         rule_chips,
         '<input class="srch" type="search" placeholder="Recherche\u2026" oninput="render()">',
         '</div>\n',
@@ -595,11 +589,12 @@ def to_html(results: list, summary: dict, config: dict,
             for i, kf in enumerate(key_fields)
         ),
         extra_ref_ths,
-        '<th onclick="sortBy(\'type_ecart\')">Type<span class="sort-ic" id="si-type">\u2195</span></th>',
         '<th onclick="sortBy(\'rule_name\')">R\u00e8gle<span class="sort-ic" id="si-rule">\u2195</span></th>',
-        '<th onclick="sortBy(\'champ\')">Champ<span class="sort-ic" id="si-champ">\u2195</span></th>',
-        '<th onclick="sortBy(\'valeur_reference\')">Valeur r\u00e9f.<span class="sort-ic" id="si-ref">\u2195</span></th>',
-        '<th onclick="sortBy(\'valeur_cible\')">Valeur cible<span class="sort-ic" id="si-tgt">\u2195</span></th>',
+        '<th onclick="sortBy(\'rule_type\')">Type<span class="sort-ic" id="si-type">\u2195</span></th>',
+        '<th onclick="sortBy(\'source_field\')">Champ src.<span class="sort-ic" id="si-sf">\u2195</span></th>',
+        '<th onclick="sortBy(\'target_field\')">Champ cible<span class="sort-ic" id="si-tf">\u2195</span></th>',
+        '<th onclick="sortBy(\'source_value\')">Valeur src.<span class="sort-ic" id="si-sv">\u2195</span></th>',
+        '<th onclick="sortBy(\'target_value\')">Valeur cible<span class="sort-ic" id="si-tv">\u2195</span></th>',
         extra_tgt_ths,
         '<th onclick="sortBy(\'detail\')">D\u00e9tail<span class="sort-ic" id="si-det">\u2195</span></th>',
         '</tr></thead>\n',

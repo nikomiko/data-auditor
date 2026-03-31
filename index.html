@@ -23,7 +23,7 @@
 <header>
   <div class="logo"><a href="https://github.com/nikomiko/data-auditor" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:.4rem"><img src="/static/icons/icon-192.png" alt="" style="width:20px;height:20px;border-radius:4px;vertical-align:middle">data<em>/</em>auditor</a>
     <span class="logo-tag">server</span>
-    <span class="logo-ver" id="logo-ver">v3.31.5</span>
+    <span class="logo-ver" id="logo-ver">v3.32.0</span>
     <span id="version-mismatch" style="display:none" title="" class="version-mismatch-badge">⚠ version</span>
   </div>
   <div class="wf-steps" id="wf-steps">
@@ -285,13 +285,12 @@
       </div>
 
       <div class="filter-bar" id="filter-bar">
+        <div id="filter-dynamic"></div>
         <div class="filter-group">
-          <span class="filter-group-label">Afficher</span>
+          <span class="filter-group-label">Afficher aussi</span>
           <button class="chip ca" data-kind="type" data-t="ORPHELIN_A" onclick="toggleChip(this)">Uniquement dans <strong id="chip-lbl-oa">Source</strong> <span class="chip-c" id="c-oa">0</span></button>
-          <button class="chip co on" data-kind="type" data-t="BOTH" onclick="toggleChip(this)">Présence dans les deux <span class="chip-c" id="c-both">—</span></button>
           <button class="chip cb" data-kind="type" data-t="ORPHELIN_B" onclick="toggleChip(this)">Uniquement dans <strong id="chip-lbl-ob">Cible</strong> <span class="chip-c" id="c-ob">0</span></button>
         </div>
-        <div id="filter-dynamic"></div>
         <div class="filter-search">
           <span class="filter-group-label">Recherche</span>
           <input type="search" id="filter-text" placeholder="Recherche…" oninput="setFilterText(this.value)">
@@ -509,7 +508,7 @@ async function checkLatestVersion() {
 }
 
 async function showCliCommand() {
-  const token = getSessionToken();
+  const token = currentToken;
   if (!token) {
     alert('Aucun audit en cours.');
     return;
@@ -521,7 +520,7 @@ async function showCliCommand() {
       return;
     }
     const modal = document.createElement('div');
-    modal.className = 'modal-backdrop';
+    modal.className = 'modal-backdrop show';
     modal.innerHTML = `
       <div class="modal" onclick="event.stopPropagation()">
         <div class="modal-header">

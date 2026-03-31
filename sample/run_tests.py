@@ -76,7 +76,8 @@ EXPECTED_LONG = {
         # KO règles
         "P003§PAR": {"types": {"KO"},         "rules": {"Quantite"}},
         "P004§LYO": {"types": {"KO"},         "rules": {"Prix HT"}},
-        "P005§MAR": {"types": {"OK"},         "rules": set()},          # OK visible car show_matching (rule_name vide pour OK)
+        # P005§MAR: anciennement OK visible (show_matching), supprimé en v3.32
+        # Les clés sans écarts ne sont plus émises
         "P006§PAR": {"types": {"KO"},         "rules": {"Designation"}},
         "P007§LYO": {"types": {"KO"},         "rules": {"Statut"}},
         "P008§MAR": {"types": {"KO"},         "rules": {"Code-barres"}},
@@ -222,7 +223,7 @@ def fetch_all_results(base_url, token, page_size=500):
     while True:
         r = requests.get(
             f"{base_url}/api/results/{token}",
-            params={"page": page, "size": page_size, "types": "ORPHELIN_A,ORPHELIN_B,KO,OK"},
+            params={"page": page, "size": page_size},
             timeout=30,
         )
         r.raise_for_status()
@@ -257,7 +258,8 @@ def check_scenario(summary, rows, expected, verbose):
     rule_ko_got = {}
     for row in rows:
         for e in row.get("ecarts", []):
-            if e["type_ecart"] == "KO" and e.get("rule_name"):
+            # rule_type "ko" = utilisateur KO, "_ko" = prédéfini (orphelins)
+            if e["rule_type"] == "ko" and e.get("rule_name"):
                 rule_ko_got[e["rule_name"]] = rule_ko_got.get(e["rule_name"], 0) + 1
 
     for rule, exp_count in exp_s["rule_ko"].items():
@@ -268,13 +270,36 @@ def check_scenario(summary, rows, expected, verbose):
     # ── Vérifications clé par clé ───────────────────────────────
     rows_by_key = {r["join_key"]: r for r in rows}
 
+    # Mapping : old type_ecart → rule_id et rule_name
+    def map_ecarts_to_type_ecart(ecarts):
+        """Convertit les ecarts nouveaux format en type_ecart old format pour compatibilité test."""
+        types = set()
+        for e in ecarts:
+            rule_type = e.get("rule_type", "")
+            rule_id = e.get("rule_id", 0)
+            # rule_id: -1=SOURCE_ONLY, -2=TARGET_ONLY, 1+=user rules
+            if rule_id == -1:
+                types.add("ORPHELIN_A")
+            elif rule_id == -2:
+                types.add("ORPHELIN_B")
+            elif rule_type == "ko":
+                types.add("KO")
+            elif rule_type == "ok":
+                types.add("OK")
+        return types
+
     for join_key, exp_row in expected["keys"].items():
         got_row = rows_by_key.get(join_key)
+        # Les clés sans écarts ne sont plus émises (show_matching supprimé)
         if got_row is None:
-            failures.append(f"clé {join_key!r} absente des résultats")
-            continue
-        got_types = {e["type_ecart"] for e in got_row["ecarts"]}
-        got_rules = {e["rule_name"] for e in got_row["ecarts"] if e.get("rule_name")}
+            if exp_row["types"] == set():
+                # Clé sans écarts attendus : OK, pas d'erreur
+                continue
+            else:
+                failures.append(f"clé {join_key!r} absente des résultats")
+                continue
+        got_types = map_ecarts_to_type_ecart(got_row["ecarts"])
+        got_rules = {e["rule_name"] for e in got_row["ecarts"] if e.get("rule_name") and e.get("rule_type") == "ko"}
 
         missing_types = exp_row["types"] - got_types
         extra_types   = got_types - exp_row["types"]
@@ -294,8 +319,8 @@ def check_scenario(summary, rows, expected, verbose):
         # Afficher les clés vérifiées
         for join_key in sorted(expected["keys"]):
             row = rows_by_key.get(join_key)
-            types = {e["type_ecart"] for e in row["ecarts"]} if row else set()
-            rules = {e["rule_name"] for e in row["ecarts"] if e.get("rule_name")} if row else set()
+            types = map_ecarts_to_type_ecart(row["ecarts"]) if row else set()
+            rules = {e["rule_name"] for e in row["ecarts"] if e.get("rule_name") and e.get("rule_type") == "ko"} if row else set()
             print(f"      ✓ {join_key:<14} types={sorted(types)}  rules={sorted(r for r in rules if r)}")
 
     return len(failures) == 0, failures

@@ -18,7 +18,7 @@ const WS = {
   join:{ keys:[] },
   rules:[],
   filters:[],
-  report:{ show_matching:false, max_diff_preview:500 },
+  report:{ max_diff_preview:500 },
   _step:0,
   _visited: new Set([0]),
 };
@@ -139,28 +139,37 @@ function wizLoadFromYaml(parsed) {
         const sd = f.source_data || {};
         const td = f.target_data || {};
         return {
+          side_a:    sd.source||'reference',
           field_a:   sd.value !== undefined ? '__fixed__' : (sd.field||''),
           value_a:   sd.value !== undefined ? String(sd.value) : '',
           operator:  _normOp(f.operator),
+          side_b:    td.source||'target',
           field_b:   td.value !== undefined ? '__fixed__' : (td.field||''),
           value_b:   td.value !== undefined ? String(td.value) : '',
           tolerance: td.tolerance !== undefined ? String(td.tolerance) : '',
+          tolerance_pct: td.tolerance_pct||false,
           normalize: sd.normalize||'none'
         };
       } else if (f.target_value !== undefined) {
         return {
+          side_a:    f.side_a||'reference',
           field_a:  f.source_field||'', value_a:'',
           operator: _normOp(f.operator),
+          side_b:    '__fixed__',
           field_b:  '__fixed__', value_b: String(f.target_value),
           tolerance: f.tolerance !== undefined ? String(f.tolerance) : '',
+          tolerance_pct: f.tolerance_pct||false,
           normalize: f.normalize||'none'
         };
       } else {
         return {
+          side_a:    f.side_a||'reference',
           field_a:  f.source_field||'', value_a:'',
           operator: _normOp(f.operator),
+          side_b:    f.side_b||'target',
           field_b:  f.target_field||f.source_field||'', value_b:'',
           tolerance: f.tolerance !== undefined ? String(f.tolerance) : '',
+          tolerance_pct: f.tolerance_pct||false,
           normalize: f.normalize||'none'
         };
       }
@@ -185,7 +194,6 @@ function wizLoadFromYaml(parsed) {
   });
   // report
   const rp = parsed.report || {};
-  WS.report.show_matching   = !!rp.show_matching;
   WS.report.max_diff_preview = rp.max_diff_preview || 500;
   // Restaurer la sélection de colonnes perso
   extraRefCols    = Array.isArray(rp.extra_cols_ref) ? rp.extra_cols_ref.map(String) : [];
@@ -299,31 +307,41 @@ function wizBuildYaml() {
         const aFixed = f.field_a === '__fixed__';
         const bFixed = f.field_b === '__fixed__';
         const op = f.operator || 'equals';
+        const sideA = f.side_a || 'reference';
+        const sideB = f.side_b || 'target';
         if (!aFixed && bFixed) {
           // source_field + target_value (syntax courte)
           const o = { source_field: f.field_a };
+          if (sideA !== 'reference') o.side_a = sideA;
           if (f.value_b !== '' && f.value_b !== undefined) o.target_value = f.value_b;
           o.operator = op;
           if (f.tolerance !== '' && f.tolerance !== undefined) o.tolerance = Number(f.tolerance);
+          if (f.tolerance_pct) o.tolerance_pct = true;
           if (f.normalize && f.normalize !== 'none') o.normalize = f.normalize;
           return o;
         } else if (aFixed) {
           // source_data / target_data
           const sd = {};
           if (aFixed) sd.value = f.value_a; else sd.field = f.field_a;
+          if (sideA !== 'reference') sd.source = sideA;
           if (f.normalize && f.normalize !== 'none') sd.normalize = f.normalize;
           const td = {};
           if (bFixed) td.value = f.value_b; else td.field = f.field_b;
+          if (sideB !== 'target') td.source = sideB;
           if (f.tolerance !== '' && f.tolerance !== undefined) td.tolerance = Number(f.tolerance);
+          if (f.tolerance_pct) td.tolerance_pct = true;
           const o = { source_data: sd, target_data: td };
           o.operator = op;
           return o;
         } else {
           // Normal : source_field + target_field
           const o = { source_field: f.field_a };
+          if (sideA !== 'reference') o.side_a = sideA;
           if (f.field_b && f.field_b !== f.field_a) o.target_field = f.field_b;
+          if (sideB !== 'target') o.side_b = sideB;
           o.operator = op;
           if (f.tolerance !== '' && f.tolerance !== undefined) o.tolerance = Number(f.tolerance);
+          if (f.tolerance_pct) o.tolerance_pct = true;
           if (f.normalize && f.normalize !== 'none') o.normalize = f.normalize;
           return o;
         }
@@ -332,7 +350,6 @@ function wizBuildYaml() {
   }
   // report
   obj.report = {
-    show_matching:    WS.report.show_matching,
     max_diff_preview: Number(WS.report.max_diff_preview) || 500,
   };
   if (extraRefCols.length) obj.report.extra_cols_ref = extraRefCols;
@@ -1224,6 +1241,8 @@ function wizRenderRules() {
 function wizRuleFieldRows(ri, r, refNames, tgtNames) {
   const opOpts = [['equals','= (equals)'],['differs','≠ (differs)'],['greater','> (greater)'],['less','< (less)'],['contains','contient'],['not_contains','ne contient pas'],['matches','∼ regex match'],['not_matches','≁ regex non match']];
   const normOpts = [['none','none'],['trim','trim'],['lowercase','lowercase'],['both','both']];
+  const refLabel = WS?.sources?.reference?.label || 'Source';
+  const tgtLabel = WS?.sources?.target?.label    || 'Cible';
 
   return r.fields.map((f, fi) => {
     const fa  = f.field_a  !== undefined ? f.field_a  : '';
@@ -1232,25 +1251,63 @@ function wizRuleFieldRows(ri, r, refNames, tgtNames) {
     const vb  = f.value_b  !== undefined ? String(f.value_b)  : '';
     const op  = f.operator || 'equals';
     const tol = f.tolerance !== undefined ? String(f.tolerance) : '';
+    const tolPct = f.tolerance_pct || false;
     const norm = f.normalize || 'none';
+    const sideA = f.side_a || 'reference';
+    const sideB = f.side_b || 'target';
     const aFixed = fa === '__fixed__';
     const bFixed = fb === '__fixed__';
 
-    const selA = wizFieldSelect2(`w-rf-fa-${ri}-${fi}`, refNames, fa, `w-rf-va-${ri}-${fi}`);
-    const inpA = `<input class="wiz-input" id="w-rf-va-${ri}-${fi}" value="${esc(va)}" placeholder="valeur" style="${aFixed?'':'display:none'};width:80px;margin-top:2px">`;
+    // Sélecteurs de source + champ côté A
+    const sourceAOpts = [['reference', refLabel], ['target', tgtLabel], ['__fixed__', 'Valeur fixe']];
+    const fieldsA = sideA === 'reference' ? refNames : (sideA === '__fixed__' ? [] : tgtNames);
+    // Créer un select de source avec onchange
+    const selSourceAId = `w-rf-sa-${ri}-${fi}`;
+    const selSourceA = `<select class="wiz-select" id="${selSourceAId}" onchange="wizOnSourceChange(${ri},${fi},'a')">
+      ${sourceAOpts.map(([v, lbl]) => `<option value="${v}" ${v === sideA ? 'selected' : ''}>${lbl}</option>`).join('')}
+    </select>`;
+    const selFieldA = sideA === '__fixed__'
+      ? `<input class="wiz-input" id="w-rf-fa-${ri}-${fi}" value="${esc(fa)}" placeholder="valeur" style="width:80px;margin-top:2px">`
+      : wizFieldSelect2(`w-rf-fa-${ri}-${fi}`, fieldsA, fa, `w-rf-va-${ri}-${fi}`);
 
-    const selB = wizFieldSelect2(`w-rf-fb-${ri}-${fi}`, tgtNames, fb, `w-rf-vb-${ri}-${fi}`);
-    const inpB = `<input class="wiz-input" id="w-rf-vb-${ri}-${fi}" value="${esc(vb)}" placeholder="valeur" style="${bFixed?'':'display:none'};width:80px;margin-top:2px">`;
+    // Sélecteurs de source + champ côté B
+    const sourceBOpts = [['reference', refLabel], ['target', tgtLabel], ['__fixed__', 'Valeur fixe']];
+    const fieldsB = sideB === 'reference' ? refNames : (sideB === '__fixed__' ? [] : tgtNames);
+    // Créer un select de source avec onchange
+    const selSourceBId = `w-rf-sb-${ri}-${fi}`;
+    const selSourceB = `<select class="wiz-select" id="${selSourceBId}" onchange="wizOnSourceChange(${ri},${fi},'b')">
+      ${sourceBOpts.map(([v, lbl]) => `<option value="${v}" ${v === sideB ? 'selected' : ''}>${lbl}</option>`).join('')}
+    </select>`;
+    const selFieldB = sideB === '__fixed__'
+      ? `<input class="wiz-input" id="w-rf-fb-${ri}-${fi}" value="${esc(fb)}" placeholder="valeur" style="width:80px;margin-top:2px">`
+      : wizFieldSelect2(`w-rf-fb-${ri}-${fi}`, fieldsB, fb, `w-rf-vb-${ri}-${fi}`);
+
+    const tolPctBtn = `<button class="tol-pct-btn" id="w-rf-tolpct-${ri}-${fi}" onclick="wizToggleTolPct(${ri},${fi})" style="width:35px;padding:2px 4px;font-size:0.85rem;margin-left:2px">${tolPct ? '%' : 'abs'}</button>`;
 
     return `<tr>
-      <td><div style="display:flex;flex-direction:column;gap:2px">${selA}${inpA}</div></td>
+      <td><div style="display:flex;flex-direction:column;gap:2px">${selSourceA}<div style="display:flex;gap:2px">${selFieldA}</div></div></td>
       <td>${wizSelect(`w-rf-op-${ri}-${fi}`, opOpts, op)}</td>
-      <td><div style="display:flex;flex-direction:column;gap:2px">${selB}${inpB}</div></td>
+      <td><div style="display:flex;flex-direction:column;gap:2px">${selSourceB}<div style="display:flex;gap:2px">${selFieldB}</div></div></td>
       <td>${wizSelect(`w-rf-norm-${ri}-${fi}`, normOpts, norm)}</td>
-      <td><input class="wiz-input" id="w-rf-tol-${ri}-${fi}" value="${esc(tol)}" placeholder="0.01" style="width:60px"></td>
+      <td style="display:flex;align-items:center;gap:2px"><input class="wiz-input" id="w-rf-tol-${ri}-${fi}" value="${esc(tol)}" placeholder="0.01" style="width:60px">${tolPctBtn}</td>
       <td><button class="btn-icon" onclick="wizRemoveRuleField(${ri},${fi})">✕</button></td>
     </tr>`;
   }).join('');
+}
+
+function wizToggleTolPct(ri, fi) {
+  WS.rules[ri].fields[fi].tolerance_pct = !WS.rules[ri].fields[fi].tolerance_pct;
+  wizRenderRules();
+}
+
+function wizOnSourceChange(ri, fi, side) {
+  wizReadRulesForm();
+  if (side === 'a') {
+    WS.rules[ri].fields[fi].side_a = document.getElementById(`w-rf-sa-${ri}-${fi}`)?.value || 'reference';
+  } else {
+    WS.rules[ri].fields[fi].side_b = document.getElementById(`w-rf-sb-${ri}-${fi}`)?.value || 'target';
+  }
+  wizRenderRules();
 }
 
 function wizReadRulesForm() {
@@ -1262,16 +1319,20 @@ function wizReadRulesForm() {
     if (l) r.logic     = l.value;
     if (t) r.rule_type = t.value;
     r.fields.forEach((f, fi) => {
+      const sa  = document.getElementById(`w-rf-sa-${ri}-${fi}`);
       const fa  = document.getElementById(`w-rf-fa-${ri}-${fi}`);
       const va  = document.getElementById(`w-rf-va-${ri}-${fi}`);
       const op  = document.getElementById(`w-rf-op-${ri}-${fi}`);
+      const sb  = document.getElementById(`w-rf-sb-${ri}-${fi}`);
       const fb  = document.getElementById(`w-rf-fb-${ri}-${fi}`);
       const vb  = document.getElementById(`w-rf-vb-${ri}-${fi}`);
       const tol = document.getElementById(`w-rf-tol-${ri}-${fi}`);
       const nm  = document.getElementById(`w-rf-norm-${ri}-${fi}`);
+      if (sa)  f.side_a    = sa.value;
       if (fa)  f.field_a   = fa.value;
       if (va)  f.value_a   = va.value;
       if (op)  f.operator  = op.value;
+      if (sb)  f.side_b    = sb.value;
       if (fb)  f.field_b   = fb.value;
       if (vb)  f.value_b   = vb.value;
       if (tol) f.tolerance = tol.value;
@@ -1302,7 +1363,7 @@ function wizMoveRule(ri, dir) {
 
 function wizAddRuleField(ri) {
   wizReadRulesForm();
-  WS.rules[ri].fields.push({ field_a:'', value_a:'', operator:'equals', field_b:'', value_b:'', tolerance:'', normalize:'none' });
+  WS.rules[ri].fields.push({ side_a:'reference', field_a:'', value_a:'', operator:'equals', side_b:'target', field_b:'', value_b:'', tolerance:'', tolerance_pct:false, normalize:'none' });
   wizRenderRules();
 }
 
@@ -1322,7 +1383,6 @@ function wizRenderFilters() {
       <div class="wiz-grid">
         ${wizField('Max lignes prévisualisées', wizInput('w-rp-mdp', WS.report.max_diff_preview, '500'))}
       </div>
-      ${wizToggleRow('w-rp-sm', 'Afficher les lignes conformes (show_matching)', WS.report.show_matching)}
     </div>
     <div class="wiz-section wiz-section-narrow">
       <div class="wiz-section-title">Méta</div>
@@ -1403,7 +1463,6 @@ function wizReadFiltersForm() {
   const mv  = document.getElementById('w-meta-ver');
   const mrl = document.getElementById('w-meta-run-label');
   if (mdp) WS.report.max_diff_preview = Number(mdp.value)||500;
-  if (sm)  WS.report.show_matching    = sm.checked;
   const mdc = document.getElementById('w-meta-desc');
   if (mn)  WS.meta.name        = mn.value;
   if (mv)  WS.meta.version     = mv.value;

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8">
+<title>Rapport — CSV → JSONL (cross-format)</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#f4f6f9;color:#2d3748}
+.layout{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+header{padding:.75rem 1.5rem;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;flex-shrink:0}
+h1{font-size:1.15rem;font-weight:700}.meta{font-size:.72rem;color:#718096}
+.cards{display:flex;gap:.6rem;flex-wrap:wrap;padding:.6rem 1.5rem;background:#fff;border-bottom:1px solid #e2e8f0;flex-shrink:0}
+.card{background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;padding:.4rem .85rem;text-align:center;min-width:80px}
+.card .v{font-size:1.25rem;font-weight:700}.card .l{font-size:.62rem;color:#718096;margin-top:.1rem}
+.ca .v{color:#e53e3e}.cb .v{color:#dd6b20}.cd .v{color:#d69e2e}.co .v{color:#276749}
+.filter-bar{padding:.45rem 1rem;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;flex-wrap:wrap;gap:.3rem .45rem;align-items:center;flex-shrink:0}
+.chip{background:none;border:1px solid #cbd5e0;color:#718096;font-size:.67rem;padding:.18rem .55rem;border-radius:99px;cursor:pointer;font-family:inherit;transition:all .15s}
+.chip:hover{color:#2d3748;border-color:#4a5568}
+.chip.on.ca{background:#fff5f5;border-color:#fc8181;color:#c53030}
+.chip.on.cb{background:#fffaf0;border-color:#fbd38d;color:#c05621}
+.chip.on.cd{background:#fffff0;border-color:#f6e05e;color:#b7791f}
+.chip.on.co{background:#f0fff4;border-color:#9ae6b4;color:#276749}
+.chip.on.cr-coh{background:#f0fff4;border-color:#9ae6b4;color:#276749}
+.chip.on.cr-inc{background:#fff5f5;border-color:#fc8181;color:#c53030}
+.chip-c{background:rgba(0,0,0,.08);border-radius:99px;padding:0 .35rem;font-size:.58rem}
+.fl{font-size:.63rem;color:#718096;margin-right:.1rem}
+.filter-sep{width:1px;height:16px;background:#e2e8f0;margin:0 .2rem;flex-shrink:0;align-self:center}
+.srch{border:1px solid #e2e8f0;border-radius:4px;padding:.22rem .55rem;font-size:.73rem;color:#2d3748;background:#f7fafc;outline:none;width:200px;margin-left:auto}
+.srch:focus{border-color:#3b82f6}
+.tbl-wrap{flex:1;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:.77rem;background:#fff}
+thead th{background:#fff;padding:.48rem .8rem;text-align:left;font-size:.61rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:#718096;border-bottom:1px solid #e2e8f0;position:sticky;top:0;cursor:pointer;user-select:none;white-space:nowrap}
+thead th:hover{background:#f7fafc}
+.th-extra{white-space:normal;min-width:100px}
+.th-meta{font-weight:300;font-size:.57rem;opacity:.65;text-transform:none;letter-spacing:0}
+.th-field{font-weight:700;font-size:.65rem}
+.th-ref .th-field{color:#1d4ed8}.th-tgt .th-field{color:#6d28d9}
+tbody tr{border-bottom:1px solid #f0f4f8}tbody tr:hover{background:#f7fafc}
+td{padding:.42rem .8rem;vertical-align:middle}
+.tk{font-family:monospace;font-size:.71rem;color:#4a5568;white-space:nowrap}
+.tv{font-family:monospace;font-size:.71rem;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tv.r{color:#1d4ed8}.tv.t{color:#c05621}
+.td-rule{font-size:.71rem;color:#7c3aed;font-family:monospace;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.td-det{font-size:.67rem;color:#718096;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.badge{display:inline-block;padding:.13rem .45rem;border-radius:4px;font-size:.62rem;font-weight:700;font-family:monospace}
+.badge-_ko{background:#fee5e5;color:#c53030;border:1px solid #fed7d7}
+.badge-ko{background:#fffbea;color:#b7791f;border:1px solid #fefcbf}
+.badge-ok{background:#ecfdf5;color:#276749;border:1px solid #c6f6d5}
+.badge-_ok{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+.sort-ic{opacity:.22;margin-left:.2rem;font-size:.58rem}
+th.sort-asc .sort-ic,th.sort-desc .sort-ic{opacity:1;color:#3b82f6}
+.empty{text-align:center;padding:3rem;color:#a0aec0;font-style:italic;display:none}
+</style></head><body><div class="layout">
+<header><h1>📈 CSV → JSONL (cross-format)</h1><span class="meta">Généré le 01/04/2026 à 00:41:05</span></header>
+<div class="cards"><div class="card"><div class="v">57</div><div class="l">Reference WMS (CSV)</div></div><div class="card"><div class="v">57</div><div class="l">Cible ERP (JSONL)</div></div><div class="card ca"><div class="v">3</div><div class="l">Absent de Cible ERP (JSONL)</div></div><div class="card cb"><div class="v">3</div><div class="l">Absent de Reference WMS (CSV)</div></div><div class="card cd"><div class="v">6</div><div class="l">KO</div></div><div class="card co"><div class="v">48</div><div class="l">OK</div></div></div>
+<div class="filter-bar"><span class="fl">Règles prédéfinies</span><button class="chip ca on" data-k="rule" data-v="Source uniq." onclick="toggleChip(this)">Source uniq. <span class="chip-c">0</span></button><button class="chip cb on" data-k="rule" data-v="Cible uniq." onclick="toggleChip(this)">Cible uniq. <span class="chip-c">0</span></button><button class="chip co on" data-k="rule" data-v="Présence OK" onclick="toggleChip(this)">Présence OK <span class="chip-c">0</span></button><div class="filter-sep"></div><span class="fl">Règles</span><button class="chip cr-inc on" data-k="rule" data-v="Quantite" onclick="toggleChip(this)">Quantite <span class="chip-c">0</span></button><button class="chip cr-inc on" data-k="rule" data-v="Prix HT" onclick="toggleChip(this)">Prix HT <span class="chip-c">0</span></button><button class="chip cr-inc on" data-k="rule" data-v="Designation" onclick="toggleChip(this)">Designation <span class="chip-c">0</span></button><button class="chip cr-inc on" data-k="rule" data-v="Statut" onclick="toggleChip(this)">Statut <span class="chip-c">0</span></button><button class="chip cr-inc on" data-k="rule" data-v="Code-barres" onclick="toggleChip(this)">Code-barres <span class="chip-c">0</span></button><input class="srch" type="search" placeholder="Recherche…" oninput="render()"></div>
+<div class="tbl-wrap"><table>
+<thead><tr><th onclick="sortBy('join_key')">ref<span class="sort-ic" id="si-key">↕</span></th><th onclick="sortBy('join_key')">site<span class="sort-ic">↕</span></th><th onclick="sortBy('rule_name')">Règle<span class="sort-ic" id="si-rule">↕</span></th><th onclick="sortBy('rule_type')">Type<span class="sort-ic" id="si-type">↕</span></th><th onclick="sortBy('source_field')">Champ src.<span class="sort-ic" id="si-sf">↕</span></th><th onclick="sortBy('target_field')">Champ cible<span class="sort-ic" id="si-tf">↕</span></th><th onclick="sortBy('source_value')">Valeur src.<span class="sort-ic" id="si-sv">↕</span></th><th onclick="sortBy('target_value')">Valeur cible<span class="sort-ic" id="si-tv">↕</span></th><th onclick="sortBy('detail')">Détail<span class="sort-ic" id="si-det">↕</span></th></tr></thead>
+<tbody id="tbody"></tbody>
+</table><div class="empty" id="empty">Aucun résultat.</div></div></div>
+<script>
+const ALL=[];
+const EXTRA_REF=[];
+const EXTRA_TGT=[];
+const KEY_FIELDS=["ref", "site"];
+let aR=new Set(ALL.map(r=>r.rule_name));
+let sC=null,sD=1;
+function initCounts(){
+  const cr={};
+  for(const r of ALL){cr[r.rule_name]=(cr[r.rule_name]||0)+1;}
+  document.querySelectorAll('[data-k="rule"]').forEach(b=>{const sp=b.querySelector('span');if(sp)sp.textContent=cr[b.dataset.v]||0;});
+}
+function toggleChip(b){
+  b.classList.toggle('on');
+  const on=b.classList.contains('on');
+  if(on)aR.add(b.dataset.v);else aR.delete(b.dataset.v);
+  render();
+}
+function sortBy(col){
+  if(sC===col)sD=-sD;else{sC=col;sD=1;}
+  document.querySelectorAll('thead th').forEach(th=>th.classList.remove('sort-asc','sort-desc'));
+  document.querySelectorAll('.sort-ic').forEach(ic=>ic.textContent='\u2195');
+  const m={join_key:'si-key',rule_name:'si-rule',rule_type:'si-type',source_field:'si-sf',target_field:'si-tf',source_value:'si-sv',target_value:'si-tv',detail:'si-det'};
+  const ic=document.getElementById(m[col]);
+  if(ic){ic.textContent=sD>0?'\u2191':'\u2193';ic.closest('th').classList.add(sD>0?'sort-asc':'sort-desc');}
+  render();
+}
+const esc=v=>String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function renderRow(r){
+  let c='';
+  const kp=(r.join_key||'').split('\u00a7');
+  KEY_FIELDS.forEach((f,i)=>{c+='<td class="tk">'+esc(kp[i]||'')+'</td>';});
+  for(const k of EXTRA_REF)c+='<td class="tv r">'+esc((r._ref||{})[k])+'</td>';
+  c+='<td><span class="badge badge-'+esc(r.rule_type)+'">'+esc(r.rule_name)+'</span></td>';
+  c+='<td class="tv">'+esc(r.source_field)+'</td>';
+  c+='<td class="tv">'+esc(r.target_field)+'</td>';
+  c+='<td class="tv r">'+esc(r.source_value)+'</td>';
+  c+='<td class="tv t">'+esc(r.target_value)+'</td>';
+  for(const k of EXTRA_TGT)c+='<td class="tv t">'+esc((r._tgt||{})[k])+'</td>';
+  c+='<td class="td-det" title="'+esc(r.detail)+'">'+esc(r.detail)+'</td>';
+  return '<tr>'+c+'</tr>';
+}
+function render(){
+  const q=(document.querySelector('.srch')?.value||'').toLowerCase();
+  let rows=ALL.filter(r=>{
+    if(!aR.has(r.rule_name))return false;
+    if(q){
+      const vals=[r.join_key,r.rule_name,r.source_value,r.target_value,r.source_field,r.target_field];
+      const extra=[...EXTRA_REF.map(k=>(r._ref||{})[k]),...EXTRA_TGT.map(k=>(r._tgt||{})[k])];
+      if(![...vals,...extra].some(v=>String(v||'').toLowerCase().includes(q)))return false;
+    }
+    return true;
+  });
+  if(sC)rows=[...rows].sort((a,b)=>String(a[sC]||'').localeCompare(String(b[sC]||''),'fr',{numeric:true})*sD);
+  const tb=document.getElementById('tbody');
+  const em=document.getElementById('empty');
+  if(!rows.length){tb.innerHTML='';em.style.display='block';return;}
+  em.style.display='none';
+  tb.innerHTML=rows.map(renderRow).join('');
+}
+initCounts();render();
+</script></body></html>
