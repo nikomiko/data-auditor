@@ -406,6 +406,14 @@ function _updateRuleChipCounts(ruleCounts) {
     if (stat) stat.textContent = cnt;
   });
 
+  // Mettre à jour le chip Présence OK (dynamique, rule_id -3)
+  const presenceCnt = ruleCounts['Présence OK'] || 0;
+  const presenceBtn = document.querySelector(`#filter-dynamic .chip[data-rule-id="-3"]`);
+  if (presenceBtn) {
+    const sp = presenceBtn.querySelector('.chip-c');
+    if (sp) sp.textContent = presenceCnt;
+  }
+
   // Mettre à jour les chips des règles utilisateur
   const rules = lastConfig?.rules || [];
   rules.forEach((rule, idx) => {
@@ -450,10 +458,11 @@ function buildRuleFilterBar(summary, config) {
   const rules = config?.rules || [];
 
   // Initialiser activeRuleFilters : -1 et -2 gérés par les static buttons,
-  // et les règles utilisateur
+  // -3 par le chip dynamique, et les règles utilisateur
   activeRuleFilters = new Set([
     -1,  // Source uniq. (static button)
     -2,  // Cible uniq. (static button)
+    -3,  // Présence OK (dynamic chip)
     ...rules.map((r, idx) => idx + 1)  // 1, 2, 3... pour les règles user
   ]);
 
@@ -477,6 +486,14 @@ function buildRuleFilterBar(summary, config) {
     _refresh();
   });
   grp.appendChild(logicBtn);
+
+  // Chip pour Présence OK (rule_id: -3)
+  const presenceBtn = document.createElement('button');
+  presenceBtn.className = 'chip co on';
+  presenceBtn.dataset.ruleId = -3;
+  presenceBtn.addEventListener('click', function() { toggleChip(this); });
+  presenceBtn.innerHTML = `Présence OK <span class="chip-c">…</span>`;
+  grp.appendChild(presenceBtn);
 
   // Chips des règles utilisateur (rule_id: 1, 2, 3...)
   rules.forEach((rule, idx) => {
