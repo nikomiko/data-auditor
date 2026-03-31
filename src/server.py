@@ -44,7 +44,7 @@ def _parse_version(version_str: str) -> tuple:
     except (ValueError, AttributeError):
         return (0, 0, 0)
 
-APP_VERSION = "3.32.0"
+APP_VERSION = "4.0.0"
 LATEST_GITHUB_VERSION = None  # Fetché au démarrage du serveur
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
