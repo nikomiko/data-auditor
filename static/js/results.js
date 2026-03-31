@@ -395,27 +395,15 @@ function updateChipCounts() {
 }
 
 function _updateRuleChipCounts(ruleCounts) {
-  // Mettre à jour les chips prédéfinis (dynamiques et statiques)
-  const predefined = [
+  // Mettre à jour les chips statiques pour les orphelins
+  const staticChips = [
     { ruleId: -1, name: 'Source uniq.', staticId: 'c-oa' },
-    { ruleId: -2, name: 'Cible uniq.', staticId: 'c-ob' },
-    { ruleId: -3, name: 'Présence OK', staticId: null }
+    { ruleId: -2, name: 'Cible uniq.', staticId: 'c-ob' }
   ];
-  predefined.forEach(p => {
+  staticChips.forEach(p => {
     const cnt = ruleCounts[p.name] || 0;
-
-    // Mettre à jour le chip dynamique
-    const dyn = document.querySelector(`#filter-dynamic .chip[data-rule-id="${p.ruleId}"]`);
-    if (dyn) {
-      const sp = dyn.querySelector('.chip-c');
-      if (sp) sp.textContent = cnt;
-    }
-
-    // Mettre à jour le chip statique (s'il existe)
-    if (p.staticId) {
-      const stat = document.getElementById(p.staticId);
-      if (stat) stat.textContent = cnt;
-    }
+    const stat = document.getElementById(p.staticId);
+    if (stat) stat.textContent = cnt;
   });
 
   // Mettre à jour les chips des règles utilisateur
@@ -461,11 +449,11 @@ function buildRuleFilterBar(summary, config) {
   dyn.innerHTML = '';
   const rules = config?.rules || [];
 
-  // Initialiser activeRuleFilters avec tous les rule_ids (entiers, peuvent être négatifs)
+  // Initialiser activeRuleFilters : -1 et -2 gérés par les static buttons,
+  // et les règles utilisateur
   activeRuleFilters = new Set([
-    -1,  // Source uniq.
-    -2,  // Cible uniq.
-    -3,  // Présence OK
+    -1,  // Source uniq. (static button)
+    -2,  // Cible uniq. (static button)
     ...rules.map((r, idx) => idx + 1)  // 1, 2, 3... pour les règles user
   ]);
 
@@ -489,21 +477,6 @@ function buildRuleFilterBar(summary, config) {
     _refresh();
   });
   grp.appendChild(logicBtn);
-
-  // Chips prédéfinis (rule_id : -1, -2, -3)
-  const predefined = [
-    { id: -1, name: 'Source uniq.', cls: 'ca' },
-    { id: -2, name: 'Cible uniq.', cls: 'cb' },
-    { id: -3, name: 'Présence OK', cls: 'co' }
-  ];
-  predefined.forEach(p => {
-    const btn = document.createElement('button');
-    btn.className      = `chip ${p.cls} on`;
-    btn.dataset.ruleId = p.id;
-    btn.addEventListener('click', function() { toggleChip(this); });
-    btn.innerHTML = `${p.name} <span class="chip-c">…</span>`;
-    grp.appendChild(btn);
-  });
 
   // Chips des règles utilisateur (rule_id: 1, 2, 3...)
   rules.forEach((rule, idx) => {
