@@ -96,7 +96,7 @@ def api_latest_version():
 
 @app.route("/api/cli-command")
 def api_cli_command():
-    """Génère la commande CLI avec chemins complets basée sur la configuration de session."""
+    """Génère la commande CLI basée sur la configuration de session."""
     token = request.args.get("token", "")
     with _sessions_lock:
         sess = _sessions.get(token, {})
@@ -110,20 +110,33 @@ def api_cli_command():
     config_name = (config.get("meta") or {}).get("name", "audit").replace(" ", "_")
 
     # Générer la commande CLI avec le nouveau script wrapper
-    # Utiliser des chemins relatifs pour les fichiers uploadés (comme noms de fichier)
-    # L'utilisateur devra les remplacer par les vrais chemins
+    # Les fichiers n'existent pas sur le disque (uploadés en session),
+    # donc utiliser des placeholders avec les noms exacts des fichiers
+
+    # Helper pour ajouter des quotes si nécessaire
+    def quote_if_needed(s):
+        # Ajouter des quotes si le nom contient espaces ou caractères spéciaux
+        if any(c in s for c in [' ', '(', ')', '→', '&', '*', '$', '"', "'"]):
+            return f'"{s}"'
+        return s
+
+    ref_quoted = quote_if_needed(ref_name)
+    tgt_quoted = quote_if_needed(tgt_name)
+    config_quoted = quote_if_needed(f"{config_name}.yaml")
+
+    # Version multi-ligne (recommandée)
     cmd = (
         f"./audit compare \\\n"
-        f"  /path/to/{ref_name} \\\n"
-        f"  /path/to/{tgt_name} \\\n"
-        f"  /path/to/{config_name}.yaml \\\n"
+        f"  {ref_quoted} \\\n"
+        f"  {tgt_quoted} \\\n"
+        f"  {config_quoted} \\\n"
         f"  --format csv --output ./reports"
     )
 
     # Version d'une seule ligne (pour copie rapide)
     cmd_inline = (
-        f"./audit compare /path/to/{ref_name} /path/to/{tgt_name} "
-        f"/path/to/{config_name}.yaml --format csv --output ./reports"
+        f"./audit compare {ref_quoted} {tgt_quoted} {config_quoted} "
+        f"--format csv --output ./reports"
     )
 
     return jsonify({
@@ -133,10 +146,12 @@ def api_cli_command():
         "tgt_filename": tgt_name,
         "config_name": config_name,
         "instructions": (
-            f"Replace /path/to/ with actual file paths:\n"
-            f"  {ref_name} = your reference file\n"
-            f"  {tgt_name} = your target file\n"
-            f"  {config_name}.yaml = your config file"
+            "⚠️ IMPORTANT: Replace file paths with your actual local file paths\n"
+            f"  {ref_name} → path/to/your/reference/file\n"
+            f"  {tgt_name} → path/to/your/target/file\n"
+            f"  {config_name}.yaml → path/to/your/config/file\n\n"
+            "Example:\n"
+            f'  ./audit compare "/data/reference.csv" "/data/target.csv" "/config/audit.yaml" ...'
         ),
     })
 

@@ -528,12 +528,14 @@ async function showCliCommand() {
           <button class="modal-close" onclick="this.closest('.modal-backdrop').remove()">✕</button>
         </div>
         <div class="modal-body" style="max-height:70vh;overflow-y:auto;">
-          <p style="font-size:.9rem;color:var(--text-sec);margin-bottom:1rem;">⚠️ <strong>Replace</strong> /path/to/ with your actual file paths:</p>
-          <ul style="font-size:.9rem;color:var(--text-sec);margin:0 0 1.5rem 1.5rem;padding:0;">
-            <li><code>${escapeHtml(resp.ref_filename)}</code> = your reference file</li>
-            <li><code>${escapeHtml(resp.tgt_filename)}</code> = your target file</li>
-            <li><code>${escapeHtml(resp.config_name)}.yaml</code> = your config file</li>
-          </ul>
+          <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:1rem;margin-bottom:1.5rem;font-size:.9rem;color:#856404;">
+            <strong>⚠️ IMPORTANT:</strong> Replace the file paths with your actual local paths:
+            <div style="margin-top:.5rem;font-family:var(--mono);font-size:.85rem;">
+              <div>${escapeHtml(resp.ref_filename)} → <em>/actual/path/to/reference</em></div>
+              <div>${escapeHtml(resp.tgt_filename)} → <em>/actual/path/to/target</em></div>
+              <div>${escapeHtml(resp.config_name)}.yaml → <em>/actual/path/to/config.yaml</em></div>
+            </div>
+          </div>
 
           <p style="font-size:.9rem;color:var(--text-sec);margin-bottom:.5rem;font-weight:bold;">Multi-line (recommended):</p>
           <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;padding:1rem;font-family:var(--mono);font-size:.85rem;line-height:1.6;color:var(--text);margin-bottom:1rem;white-space:pre-wrap;word-wrap:break-word;">
