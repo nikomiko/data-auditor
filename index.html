@@ -527,18 +527,38 @@ async function showCliCommand() {
           <span class="modal-title">Commande CLI</span>
           <button class="modal-close" onclick="this.closest('.modal-backdrop').remove()">✕</button>
         </div>
-        <div class="modal-body">
-          <p style="font-size:.9rem;color:var(--text-sec);margin-bottom:1rem;">Copie cette commande pour relancer l'audit en ligne de commande :</p>
-          <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;padding:1rem;font-family:var(--mono);font-size:.85rem;word-break:break-all;line-height:1.4;color:var(--text);">
+        <div class="modal-body" style="max-height:70vh;overflow-y:auto;">
+          <p style="font-size:.9rem;color:var(--text-sec);margin-bottom:1rem;">⚠️ <strong>Replace</strong> /path/to/ with your actual file paths:</p>
+          <ul style="font-size:.9rem;color:var(--text-sec);margin:0 0 1.5rem 1.5rem;padding:0;">
+            <li><code>${escapeHtml(resp.ref_filename)}</code> = your reference file</li>
+            <li><code>${escapeHtml(resp.tgt_filename)}</code> = your target file</li>
+            <li><code>${escapeHtml(resp.config_name)}.yaml</code> = your config file</li>
+          </ul>
+
+          <p style="font-size:.9rem;color:var(--text-sec);margin-bottom:.5rem;font-weight:bold;">Multi-line (recommended):</p>
+          <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;padding:1rem;font-family:var(--mono);font-size:.85rem;line-height:1.6;color:var(--text);margin-bottom:1rem;white-space:pre-wrap;word-wrap:break-word;">
             <div id="cli-cmd-text">${escapeHtml(resp.command)}</div>
           </div>
-          <div style="margin-top:1rem;display:flex;gap:.5rem;">
-            <button class="btn-nav" style="flex:1" onclick="copyCliCommand()">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
-              Copier
+          <button class="btn-nav" style="width:100%;margin-bottom:1.5rem" onclick="copyCliCommand()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+            Copy Multi-line
+          </button>
+
+          <p style="font-size:.9rem;color:var(--text-sec);margin-bottom:.5rem;font-weight:bold;">One-liner:</p>
+          <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;padding:1rem;font-family:var(--mono);font-size:.85rem;line-height:1.4;color:var(--text);margin-bottom:1rem;word-break:break-all;overflow-x:auto;">
+            <div id="cli-cmd-inline">${escapeHtml(resp.command_inline)}</div>
+          </div>
+          <button class="btn-nav" style="width:100%;margin-bottom:1.5rem" onclick="copyCliCommandInline()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+            Copy One-liner
+          </button>
+
+          <div style="display:flex;gap:.5rem;">
+            <button class="btn-nav" style="flex:1">
+              <a href="https://github.com/nikomiko/data-auditor#cli" target="_blank" style="text-decoration:none;color:inherit">📖 Help</a>
             </button>
             <button class="btn-nav" style="flex:1" onclick="this.closest('.modal-backdrop').remove()">
-              Fermer
+              Close
             </button>
           </div>
         </div>
@@ -553,6 +573,16 @@ async function showCliCommand() {
 
 function copyCliCommand() {
   const text = document.getElementById('cli-cmd-text')?.innerText;
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    alert('Commande copiée dans le presse-papier!');
+  }).catch(() => {
+    alert('Erreur lors de la copie.');
+  });
+}
+
+function copyCliCommandInline() {
+  const text = document.getElementById('cli-cmd-inline')?.innerText;
   if (!text) return;
   navigator.clipboard.writeText(text).then(() => {
     alert('Commande copiée dans le presse-papier!');

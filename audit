@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+"""
+DataAuditor CLI — Wrapper user-friendly
+
+Usage:
+  ./audit compare <ref_file> <target_file> <config_file> [OPTIONS]
+  ./audit compare data.csv result.csv config.yaml
+  ./audit compare data.csv result.csv config.yaml --format csv --output ./reports
+  ./audit compare data.csv result.csv config.yaml --format json --stdout
+
+Options:
+  --format FORMAT     Export format: csv (default), html, json
+  --output DIR        Output directory for results (creates if needed)
+  --stdout            Write results to stdout instead of file
+  --quiet             Suppress progress messages
+  --help              Show this help
+  --version           Show version
+
+Exit codes:
+  0  No KO detected (audit clean)
+  1  KO detected
+  2  Error (invalid config, file not found, etc.)
+
+Examples:
+  ./audit compare data.csv result.csv audit.yaml
+  ./audit compare data.csv result.csv audit.yaml --output ./reports
+  ./audit compare data.csv result.csv audit.yaml --format json --stdout
+  ./audit compare /path/to/data.csv /path/to/result.csv /path/to/config.yaml
+"""
+import sys
+import os
+import argparse
+
+# Add src/ to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
+from audit_batch.cli import run_audit
+from config_loader import ConfigError
+
+__version__ = "4.0.0"
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="audit",
+        description="DataAuditor — Compare two data sources against a YAML configuration",
+        add_help=False,
+    )
+
+    # Top-level options
+    parser.add_argument("--help", "-h", action="store_true", help="Show help")
+    parser.add_argument("--version", "-v", action="store_true", help="Show version")
+
+    subparsers = parser.add_subparsers(dest="command", help="Command to run")
+
+    # 'compare' command
+    compare_cmd = subparsers.add_parser(
+        "compare",
+        help="Run a data comparison audit",
+        description="Compare two data files according to a YAML configuration",
+    )
+    compare_cmd.add_argument(
+        "ref",
+        metavar="REF_FILE",
+        help="Path to reference file (Source A)",
+    )
+    compare_cmd.add_argument(
+        "target",
+        metavar="TARGET_FILE",
+        help="Path to target file (Source B)",
+    )
+    compare_cmd.add_argument(
+        "config",
+        metavar="CONFIG_FILE",
+        help="Path to YAML configuration file",
+    )
+    compare_cmd.add_argument(
+        "--format",
+        choices=["csv", "html", "json"],
+        default="csv",
+        help="Output format (default: csv)",
+    )
+    compare_cmd.add_argument(
+        "--output",
+        metavar="DIR",
+        dest="out_dir",
+        default=None,
+        help="Output directory for results",
+    )
+    compare_cmd.add_argument(
+        "--stdout",
+        action="store_true",
+        help="Write results to stdout instead of file",
+    )
+    compare_cmd.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress progress messages",
+    )
+
+    args = parser.parse_args()
+
+    # Handle top-level options
+    if args.help or not args.command:
+        if not args.command:
+            parser.print_help()
+        else:
+            if args.command == "compare":
+                compare_cmd.print_help()
+        return 0
+
+    if args.version:
+        print(f"DataAuditor v{__version__}")
+        return 0
+
+    # Run the audit
+    if args.command == "compare":
+        try:
+            rc = run_audit(
+                ref_path=args.ref,
+                tgt_path=args.target,
+                config_path=args.config,
+                out_dir=args.out_dir,
+                fmt=args.format,
+                use_stdout=args.stdout,
+                quiet=args.quiet,
+            )
+            return rc
+        except ConfigError as e:
+            print(f"❌ Configuration error: {e}", file=sys.stderr)
+            return 2
+        except FileNotFoundError as e:
+            print(f"❌ File not found: {e}", file=sys.stderr)
+            return 2
+        except Exception as e:
+            print(f"❌ Error: {e}", file=sys.stderr)
+            return 2
+    else:
+        parser.print_help()
+        return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
