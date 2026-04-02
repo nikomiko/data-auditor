@@ -109,6 +109,7 @@ def api_cli_command():
     tgt_name = sess.get("file_tgt_name", "target.csv")
     ref_path = sess.get("file_ref_path", "")
     tgt_path = sess.get("file_tgt_path", "")
+    config_path = sess.get("config_path", "")
     config_name = (config.get("meta") or {}).get("name", "audit").replace(" ", "_")
 
     # Helper pour ajouter des quotes si nécessaire
@@ -121,7 +122,7 @@ def api_cli_command():
     # Utiliser les vrais chemins s'ils existent, sinon les noms de fichiers
     ref_arg = quote_if_needed(ref_path if ref_path else ref_name)
     tgt_arg = quote_if_needed(tgt_path if tgt_path else tgt_name)
-    config_arg = quote_if_needed(f"{config_name}.yaml")
+    config_arg = quote_if_needed(config_path if config_path else f"{config_name}.yaml")
 
     # Version multi-ligne (recommandée)
     cmd = (
@@ -139,7 +140,7 @@ def api_cli_command():
     )
 
     # Instructions (uniquement si utilisation de placeholders)
-    if not ref_path or not tgt_path:
+    if not ref_path or not tgt_path or not config_path:
         instructions = (
             "⚠️ IMPORTANT: Replace file paths with your actual local file paths\n"
             f"  {ref_name} → /path/to/your/reference/file\n"
@@ -148,7 +149,7 @@ def api_cli_command():
         )
     else:
         instructions = (
-            "✓ File paths are already set to the uploaded files\n"
+            "✓ All file paths are set to the uploaded files\n"
             "You can run this command directly, or modify the paths as needed"
         )
 
@@ -160,6 +161,7 @@ def api_cli_command():
         "config_name": config_name,
         "ref_path": ref_path,
         "tgt_path": tgt_path,
+        "config_path": config_path,
         "instructions": instructions,
     })
 
@@ -392,6 +394,12 @@ def start_audit():
             f.write(file_ref_bytes)
         with open(tgt_path, "wb") as f:
             f.write(file_tgt_bytes)
+
+        # Sauvegarder la config YAML aussi
+        config_filename = f"{(config.get('meta') or {}).get('name', 'audit').replace(' ', '_')}.yaml"
+        config_path = os.path.join(upload_dir, config_filename)
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write(config_yaml)
     except Exception as e:
         return jsonify({"error": f"Erreur lors de la sauvegarde des fichiers: {e}"}), 500
 
@@ -409,6 +417,7 @@ def start_audit():
             "file_tgt_name": tgt_filename,
             "file_ref_path": os.path.abspath(ref_path),
             "file_tgt_path": os.path.abspath(tgt_path),
+            "config_path": os.path.abspath(config_path),
             "upload_dir": upload_dir,
         }
 

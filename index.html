@@ -528,9 +528,9 @@ async function showCliCommand() {
           <button class="modal-close" onclick="this.closest('.modal-backdrop').remove()">✕</button>
         </div>
         <div class="modal-body" style="max-height:70vh;overflow-y:auto;">
-          ${resp.ref_path && resp.tgt_path ?
+          ${resp.ref_path && resp.tgt_path && resp.config_path ?
             `<div style="background:#d4edda;border:1px solid #28a745;border-radius:4px;padding:1rem;margin-bottom:1.5rem;font-size:.9rem;color:#155724;">
-              <strong>✓ File paths are set:</strong> The uploaded files are saved and ready to use.
+              <strong>✓ All file paths are set:</strong> All files are saved and the command is ready to use!
             </div>` :
             `<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:1rem;margin-bottom:1.5rem;font-size:.9rem;color:#856404;">
               <strong>⚠️ IMPORTANT:</strong> Replace the file paths with your actual local paths:
