@@ -94,77 +94,6 @@ def api_latest_version():
     })
 
 
-@app.route("/api/cli-command")
-def api_cli_command():
-    """Génère la commande CLI avec les chemins exacts des fichiers uploadés."""
-    token = request.args.get("token", "")
-    with _sessions_lock:
-        sess = _sessions.get(token, {})
-
-    if not sess:
-        return jsonify({"error": "Session introuvable"}), 404
-
-    config = sess.get("config", {})
-    ref_name = sess.get("file_ref_name", "reference.dat")
-    tgt_name = sess.get("file_tgt_name", "target.csv")
-    ref_path = sess.get("file_ref_path", "")
-    tgt_path = sess.get("file_tgt_path", "")
-    config_path = sess.get("config_path", "")
-    config_name = (config.get("meta") or {}).get("name", "audit").replace(" ", "_")
-
-    # Helper pour ajouter des quotes si nécessaire
-    def quote_if_needed(s):
-        # Ajouter des quotes si le chemin contient espaces ou caractères spéciaux
-        if any(c in s for c in [' ', '(', ')', '→', '&', '*', '$', '"', "'", '\\']):
-            return f'"{s}"'
-        return s
-
-    # Utiliser les vrais chemins s'ils existent, sinon les noms de fichiers
-    ref_arg = quote_if_needed(ref_path if ref_path else ref_name)
-    tgt_arg = quote_if_needed(tgt_path if tgt_path else tgt_name)
-    config_arg = quote_if_needed(config_path if config_path else f"{config_name}.yaml")
-
-    # Version multi-ligne (recommandée)
-    cmd = (
-        f"./audit compare \\\n"
-        f"  {ref_arg} \\\n"
-        f"  {tgt_arg} \\\n"
-        f"  {config_arg} \\\n"
-        f"  --format csv --output ./reports"
-    )
-
-    # Version d'une seule ligne (pour copie rapide)
-    cmd_inline = (
-        f"./audit compare {ref_arg} {tgt_arg} {config_arg} "
-        f"--format csv --output ./reports"
-    )
-
-    # Instructions (uniquement si utilisation de placeholders)
-    if not ref_path or not tgt_path or not config_path:
-        instructions = (
-            "⚠️ IMPORTANT: Replace file paths with your actual local file paths\n"
-            f"  {ref_name} → /path/to/your/reference/file\n"
-            f"  {tgt_name} → /path/to/your/target/file\n"
-            f"  {config_name}.yaml → /path/to/your/config/file"
-        )
-    else:
-        instructions = (
-            "✓ All file paths are set to the uploaded files\n"
-            "You can run this command directly, or modify the paths as needed"
-        )
-
-    return jsonify({
-        "command": cmd,
-        "command_inline": cmd_inline,
-        "ref_filename": ref_name,
-        "tgt_filename": tgt_name,
-        "config_name": config_name,
-        "ref_path": ref_path,
-        "tgt_path": tgt_path,
-        "config_path": config_path,
-        "instructions": instructions,
-    })
-
 
 @app.route("/")
 def index():
@@ -380,28 +309,8 @@ def start_audit():
 
     token = str(uuid.uuid4())
 
-    # Sauvegarder les fichiers uploadés dans un dossier temporaire
-    upload_dir = os.path.join(os.path.dirname(__file__), "..", ".uploads", token)
-    os.makedirs(upload_dir, exist_ok=True)
-
     ref_filename = file_ref.filename or "reference"
     tgt_filename = file_tgt.filename or "target"
-    ref_path = os.path.join(upload_dir, ref_filename)
-    tgt_path = os.path.join(upload_dir, tgt_filename)
-
-    try:
-        with open(ref_path, "wb") as f:
-            f.write(file_ref_bytes)
-        with open(tgt_path, "wb") as f:
-            f.write(file_tgt_bytes)
-
-        # Sauvegarder la config YAML aussi
-        config_filename = f"{(config.get('meta') or {}).get('name', 'audit').replace(' ', '_')}.yaml"
-        config_path = os.path.join(upload_dir, config_filename)
-        with open(config_path, "w", encoding="utf-8") as f:
-            f.write(config_yaml)
-    except Exception as e:
-        return jsonify({"error": f"Erreur lors de la sauvegarde des fichiers: {e}"}), 500
 
     with _sessions_lock:
         _sessions[token] = {
@@ -415,10 +324,6 @@ def start_audit():
             "error":     None,
             "file_ref_name": ref_filename,
             "file_tgt_name": tgt_filename,
-            "file_ref_path": os.path.abspath(ref_path),
-            "file_tgt_path": os.path.abspath(tgt_path),
-            "config_path": os.path.abspath(config_path),
-            "upload_dir": upload_dir,
         }
 
     thread = threading.Thread(
