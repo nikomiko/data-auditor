@@ -15,3 +15,4 @@ settings.json
 .claude/
 # Script de lancement local
 dataAuditor.sh
+.uploads/
