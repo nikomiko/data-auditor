@@ -75,6 +75,10 @@ app = Flask(__name__, static_folder=_BASE_DIR, static_url_path="")
 _sessions: dict = {}
 _sessions_lock  = threading.Lock()
 
+# Wizard sessions — server-side YAML state management (new in Step 4)
+_wizard_sessions: dict = {}
+_wizard_lock = threading.Lock()
+
 MAX_PREVIEW = 500   # lignes max en mémoire pour l'UI
 
 
@@ -728,6 +732,82 @@ def export():
                          as_attachment=True, download_name=filename)
 
     return jsonify({"error": "Format invalide."}), 400
+
+
+# ─────────────────────────────────────────────────────────────
+#  Wizard Session Routes (HTMX server-rendered forms — Step 4)
+# ─────────────────────────────────────────────────────────────
+
+@app.route("/api/wizard/new", methods=["POST"])
+def wizard_new():
+    """Create a new wizard session with blank config."""
+    import yaml as pyyaml
+    from config_loader import _Loader as _YamlLoader
+
+    tok = str(uuid.uuid4())
+    blank_config = {
+        "meta": {"name": "", "version": ""},
+        "sources": {
+            "reference": {
+                "label": "Référence",
+                "format": "csv",
+                "encoding": "utf-8",
+                "delimiter": ",",
+                "has_header": True,
+                "fields": [],
+            },
+            "target": {
+                "label": "Cible",
+                "format": "csv",
+                "encoding": "utf-8",
+                "delimiter": ",",
+                "has_header": True,
+                "fields": [],
+            },
+        },
+        "join": {"keys": []},
+        "rules": [],
+        "filters": [],
+        "report": {"show_matching": False, "max_diff_preview": 500},
+    }
+
+    with _wizard_lock:
+        _wizard_sessions[tok] = {
+            "config": blank_config,
+            "current_step": 0,
+        }
+
+    return jsonify({"token": tok})
+
+
+@app.route("/api/wizard/<token>/yaml", methods=["GET", "POST"])
+def wizard_yaml(token: str):
+    """Get or set wizard YAML config."""
+    import yaml as pyyaml
+    from config_loader import _Loader as _YamlLoader
+
+    with _wizard_lock:
+        sess = _wizard_sessions.get(token)
+    if not sess:
+        return jsonify({"error": "Wizard session not found"}), 404
+
+    if request.method == "GET":
+        # Return current YAML as text
+        yaml_str = pyyaml.dump(sess["config"], default_flow_style=False, sort_keys=False)
+        return yaml_str, 200, {"Content-Type": "text/plain"}
+
+    # POST: accept raw YAML, parse, store
+    yaml_text = request.data.decode("utf-8")
+    try:
+        config = pyyaml.load(yaml_text, Loader=_YamlLoader)
+    except Exception as e:
+        return jsonify({"error": f"YAML parse error: {e}"}), 422
+
+    with _wizard_lock:
+        if token in _wizard_sessions:
+            _wizard_sessions[token]["config"] = config
+
+    return jsonify({"ok": True})
 
 
 # ─────────────────────────────────────────────────────────────
