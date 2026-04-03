@@ -36,6 +36,7 @@ import report
 from report        import save_history, list_history, load_history, to_csv, to_html, to_xlsx
 import settings as _settings_mod
 from settings      import load_settings, save_settings, resolve_path
+from results_db    import create_results_db, insert_result, get_rule_counts, get_total_count, get_grouped_results, get_flat_results
 
 
 def _parse_version(version_str: str) -> tuple:
@@ -316,7 +317,7 @@ def start_audit():
     with _sessions_lock:
         _sessions[token] = {
             "status":    "running",
-            "results":   [],
+            "results_db": create_results_db(),
             "summary":   {},
             "config":    config,
             "run_label": run_label,
@@ -382,15 +383,15 @@ def _run_audit(token: str, ref_bytes: bytes, tgt_bytes: bytes, config: dict):
                           "ref_count": len(df_ref),
                           "tgt_count": len(df_tgt)})
 
-        results = []
+        results_db = sess["results_db"]
         summary = {}
 
         for event in compare_with_progress(df_ref, df_tgt, config):
             if event["event"] == "result":
-                results.append(event)
+                insert_result(results_db, event)
             elif event["event"] == "summary":
                 summary = {k: v for k, v in event.items() if k != "event"}
-                sess["results"] = results
+                results_db.commit()
                 sess["summary"] = summary
             _push(token, event)
 
@@ -461,16 +462,17 @@ def _run_audit(token: str, ref_bytes: bytes, tgt_bytes: bytes, config: dict):
         sess["ref_columns"]     = [c for c in df_ref.columns.tolist() if c not in ref_key_cols]
         sess["tgt_columns"]     = [c for c in df_tgt.columns.tolist() if c not in tgt_key_cols]
 
-        # Historisation
+        # Historisation — fetch results from DB for history export
         finished_at = datetime.now().isoformat()
+        flat_results = get_flat_results(results_db)
         history_file = save_history(
-            results, summary, config,
+            flat_results, summary, config,
             run_label   = sess.get("run_label", ""),
             started_at  = sess.get("started_at", ""),
             finished_at = finished_at,
         )
         _push(token, {"event": "done", "history_file": history_file,
-                      "total_results": len(results)})
+                      "total_results": len(flat_results)})
 
     except (ConfigError, Exception) as e:
         msg = str(e)
@@ -540,13 +542,12 @@ def get_results_meta(token):
         sess = _sessions.get(token)
     if not sess:
         return jsonify({"error": "Session introuvable"}), 404
-    rule_counts = {}
-    for r in sess.get("results", []):
-        name = r.get("rule_name")
-        if name:
-            rule_counts[name] = rule_counts.get(name, 0) + 1
+    results_db = sess.get("results_db")
+    if not results_db:
+        return jsonify({"error": "Base de données introuvable"}), 404
+    rule_counts = get_rule_counts(results_db)
     return jsonify({
-        "total":       len(sess.get("results", [])),
+        "total":       get_total_count(results_db),
         "ref_columns": sess.get("ref_columns", []),
         "tgt_columns": sess.get("tgt_columns", []),
         "rule_counts": rule_counts,
@@ -556,8 +557,6 @@ def get_results_meta(token):
 # ─────────────────────────────────────────────────────────────
 #  GET /api/results/<token>  — résultats paginés + filtrés + triés
 # ─────────────────────────────────────────────────────────────
-_GRAVITY = {"_ko": 3, "ko": 2, "ok": 1, "_ok": 0}
-
 
 @app.route("/api/results/<token>")
 def get_results_page(token):
@@ -565,6 +564,10 @@ def get_results_page(token):
         sess = _sessions.get(token)
     if not sess:
         return jsonify({"error": "Session introuvable"}), 404
+
+    results_db = sess.get("results_db")
+    if not results_db:
+        return jsonify({"error": "Base de données introuvable"}), 404
 
     page      = max(1, int(request.args.get("page",  1)))
     size      = min(5000, max(1, int(request.args.get("size", 100))))
@@ -576,7 +579,6 @@ def get_results_page(token):
     extra_ref = [c for c in request.args.get("extra_ref", "").split(",") if c]
     extra_tgt = [c for c in request.args.get("extra_tgt", "").split(",") if c]
 
-    raw = sess.get("results", [])
     # 'rules' présent dans la requête = filtre explicite ; absent = pas de filtre
     # Les rule_ids sont des entiers (séparés par virgule, peuvent être négatifs)
     if 'rules' in request.args:
@@ -592,191 +594,30 @@ def get_results_page(token):
     else:
         active_rules = None
 
-    # ── Grouper par join_key ──────────────────────────────────
-    from collections import OrderedDict
-    grouped: dict = OrderedDict()
-    for r in raw:
-        k = r.get("join_key", "")
-        if k not in grouped:
-            grouped[k] = {"join_key": k, "ecarts": []}
-        grouped[k]["ecarts"].append({
-            "rule_id":      r.get("rule_id"),
-            "rule_name":    r.get("rule_name"),
-            "rule_type":    r.get("rule_type"),
-            "source_field": r.get("source_field", ""),
-            "target_field": r.get("target_field", ""),
-            "source_value": r.get("source_value", ""),
-            "target_value": r.get("target_value", ""),
-            "detail":       r.get("detail", ""),
-        })
+    ref_rows_map = sess.get("ref_rows_map", {})
+    tgt_rows_map = sess.get("tgt_rows_map", {})
 
-    # ── Filtrer par règles ──────────────────────────────────
-    def key_matches_rules(row):
-        ecarts = row["ecarts"]
-        if active_rules is None:
-            return True
-        # Filtre règles : appliquer à tous les écarts par rule_id
-        if not active_rules:
-            # Aucune règle sélectionnée → afficher aucun écart
-            return False
-        rule_ecarts = [e for e in ecarts if e.get("rule_id") in active_rules]
-        if rule_logic == "AND":
-            # Toutes les règles actives doivent être présentes
-            matched = {e.get("rule_id") for e in rule_ecarts}
-            return active_rules.issubset(matched)
-        else:
-            # OR : au moins une règle présente
-            return bool(rule_ecarts)
+    result = get_grouped_results(
+        results_db,
+        page=page,
+        size=size,
+        sort_col=sort_col,
+        sort_dir=sort_dir,
+        active_rules=active_rules,
+        rule_logic=rule_logic,
+        q=q if q else "",
+        extra_ref=extra_ref,
+        extra_tgt=extra_tgt,
+        ref_rows_map=ref_rows_map,
+        tgt_rows_map=tgt_rows_map,
+    )
 
-    rows = list(grouped.values())
-    if active_rules is not None:
-        rows = [r for r in rows if key_matches_rules(r)]
-
-    if q:
-        ref_rows_map = sess.get("ref_rows_map", {})
-        tgt_rows_map = sess.get("tgt_rows_map", {})
-
-        def _row_matches_q(row):
-            if q in str(row["join_key"]).lower():
-                return True
-            for e in row["ecarts"]:
-                if q in str(e.get("rule_name") or "").lower():
-                    return True
-                if q in str(e.get("source_value") or "").lower():
-                    return True
-                if q in str(e.get("target_value") or "").lower():
-                    return True
-                if q in str(e.get("source_field") or "").lower():
-                    return True
-                if q in str(e.get("target_field") or "").lower():
-                    return True
-                if q in str(e.get("detail") or "").lower():
-                    return True
-            key = row["join_key"]
-            for c in extra_ref:
-                if q in str(ref_rows_map.get(key, {}).get(c, "")).lower():
-                    return True
-            for c in extra_tgt:
-                if q in str(tgt_rows_map.get(key, {}).get(c, "")).lower():
-                    return True
-            return False
-
-        rows = [r for r in rows if _row_matches_q(r)]
-
-    # ── Tri ──────────────────────────────────────────────────
-    reverse = (sort_dir == "desc")
-    if sort_col == "key":
-        rows.sort(key=lambda r: str(r["join_key"]).lower(), reverse=reverse)
-    elif sort_col.startswith("key_"):
-        try:
-            _ki = int(sort_col[4:])
-        except ValueError:
-            _ki = 0
-        def _key_part(r, ki=_ki):
-            parts = str(r["join_key"] or "").split("§")
-            return parts[ki].lower() if ki < len(parts) else ""
-        rows.sort(key=_key_part, reverse=reverse)
-    elif sort_col == "type":
-        rows.sort(
-            key=lambda r: min((_GRAVITY.get(e["rule_type"], 99) for e in r["ecarts"]), default=99),
-            reverse=reverse,
-        )
-    elif sort_col.startswith("xc_ref:") or sort_col.startswith("xc_tgt:"):
-        _xc_side, _xc_col = sort_col.split(":", 1)
-        _xc_map = sess.get("ref_rows_map" if _xc_side == "xc_ref" else "tgt_rows_map", {})
-
-        def _xc_sort_key(r, _m=_xc_map, _c=_xc_col):
-            s = str(_m.get(r["join_key"], {}).get(_c, "") or "").strip()
-            if not s:
-                return (2, 0.0, "")          # vide → toujours en dernier
-            try:
-                return (0, float(s.replace(",", ".")), "")   # numérique
-            except ValueError:
-                return (1, 0.0, s.lower())   # texte / date ISO (tri lexico correct)
-
-        rows.sort(key=_xc_sort_key, reverse=reverse)
-
-    # ── Pagination ───────────────────────────────────────────
-    total  = len(rows)
-    pages  = max(1, (total + size - 1) // size)
-    page   = min(page, pages)
-    page_r = rows[(page - 1) * size : page * size]
-
-    # ── Enrichissement colonnes extra ────────────────────────
-    if extra_ref or extra_tgt:
-        ref_rows_map = sess.get("ref_rows_map", {})
-        tgt_rows_map = sess.get("tgt_rows_map", {})
-        result_rows = []
-        for r in page_r:
-            key = r["join_key"]
-            row = {"join_key": key, "ecarts": r["ecarts"]}
-            if extra_ref:
-                row["_ref"] = {c: ref_rows_map.get(key, {}).get(c, "") for c in extra_ref}
-            if extra_tgt:
-                row["_tgt"] = {c: tgt_rows_map.get(key, {}).get(c, "") for c in extra_tgt}
-            result_rows.append(row)
-        page_r = result_rows
-
-    return jsonify({"total": total, "page": page, "size": size, "pages": pages, "results": page_r})
+    return jsonify(result)
 
 
 # ─────────────────────────────────────────────────────────────
 #  GET /api/export  — CSV / XLSX / HTML
 # ─────────────────────────────────────────────────────────────
-
-def _filter_results_flat(results, active_rules, rule_logic,
-                         q, extra_ref, extra_tgt, ref_rows_map, tgt_rows_map):
-    """Filtre une liste plate d'écarts (même logique que api_results)."""
-    if active_rules is None and not q:
-        return results
-
-    from collections import defaultdict
-    grouped = defaultdict(list)
-    for r in results:
-        grouped[r.get("join_key", "")].append(r)
-
-    out = []
-    for key, ecarts in grouped.items():
-        if active_rules is not None:
-            if not active_rules:
-                # Aucune règle sélectionnée → afficher aucun écart
-                continue
-            rule_e = [e for e in ecarts if e.get("rule_id") in active_rules]
-            if rule_logic == "AND":
-                matched = {e.get("rule_id") for e in rule_e}
-                if not active_rules.issubset(matched):
-                    continue
-                ecarts = rule_e
-            else:
-                if not rule_e:
-                    continue
-                ecarts = rule_e
-
-        if q:
-            match = q in str(key).lower()
-            if not match:
-                for e in ecarts:
-                    if any(q in str(e.get(f) or "").lower()
-                           for f in ("rule_name", "source_value",
-                                     "target_value", "source_field", "target_field")):
-                        match = True
-                        break
-            if not match:
-                for c in extra_ref:
-                    if q in str(ref_rows_map.get(key, {}).get(c, "")).lower():
-                        match = True
-                        break
-            if not match:
-                for c in extra_tgt:
-                    if q in str(tgt_rows_map.get(key, {}).get(c, "")).lower():
-                        match = True
-                        break
-            if not match:
-                continue
-
-        out.extend(ecarts)
-    return out
-
 
 @app.route("/api/export")
 def export():
@@ -785,7 +626,7 @@ def export():
     with _sessions_lock:
         sess = _sessions.get(token, {})
 
-    results      = sess.get("results", [])
+    results_db   = sess.get("results_db")
     summary      = sess.get("summary", {})
     config       = sess.get("config", {})
     ref_rows_map = sess.get("ref_rows_map", {})
@@ -816,8 +657,12 @@ def export():
         except OSError:
             pass
 
+    if not results_db:
+        return jsonify({"error": "Session introuvable"}), 404
+
     if fmt == "csv":
         # Tous les résultats — format pivot-friendly
+        results = get_flat_results(results_db)
         content  = "\ufeff" + to_csv(results, config, extra_ref, extra_tgt,
                                      ref_rows_map, tgt_rows_map,
                                      ref_label, tgt_label)
@@ -830,6 +675,7 @@ def export():
 
     elif fmt == "xlsx":
         # Tous les résultats — onglet DATA avec autofiltre
+        results = get_flat_results(results_db)
         content  = to_xlsx(results, summary, config,
                            extra_ref, extra_tgt, ref_rows_map, tgt_rows_map,
                            ref_label, tgt_label, ref_fmt, tgt_fmt)
@@ -849,15 +695,29 @@ def export():
         q          = request.args.get("q", "").lower().strip()
 
         if 'rules' in request.args:
-            active_rules = set(rules_str.split(",")) if rules_str else set()
+            active_rules = set()
+            if rules_str:
+                for rid in rules_str.split(","):
+                    rid = rid.strip()
+                    if rid and rid != 'NaN':
+                        try:
+                            active_rules.add(int(rid))
+                        except ValueError:
+                            pass
         else:
             active_rules = None
 
-        filtered = _filter_results_flat(
-            results, active_rules, rule_logic, q,
-            extra_ref, extra_tgt, ref_rows_map, tgt_rows_map
+        results = get_flat_results(
+            results_db,
+            active_rules=active_rules,
+            rule_logic=rule_logic,
+            q=q if q else "",
+            extra_ref=extra_ref,
+            extra_tgt=extra_tgt,
+            ref_rows_map=ref_rows_map,
+            tgt_rows_map=tgt_rows_map,
         )
-        content  = to_html(filtered, summary, config,
+        content  = to_html(results, summary, config,
                            extra_ref, extra_tgt, ref_rows_map, tgt_rows_map,
                            ref_label, tgt_label, ref_fmt, tgt_fmt)
         ts       = datetime.now().strftime("%Y%m%d%H%M")
