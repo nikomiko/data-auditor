@@ -13,6 +13,7 @@ import json
 import math
 import os
 from datetime import datetime
+import queue
 import socket
 import sys
 import time
@@ -319,7 +320,7 @@ def start_audit():
             "summary":   {},
             "config":    config,
             "run_label": run_label,
-            "events":    [],
+            "events":    queue.Queue(),
             "done":      False,
             "error":     None,
             "file_ref_name": ref_filename,
@@ -487,7 +488,7 @@ def apply_filters(df_ref, df_tgt, filters, config):
 def _push(token: str, event: dict):
     with _sessions_lock:
         if token in _sessions:
-            _sessions[token]["events"].append(event)
+            _sessions[token]["events"].put(event)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -496,24 +497,25 @@ def _push(token: str, event: dict):
 @app.route("/api/stream/<token>")
 def stream(token: str):
     def generate():
-        cursor = 0
+        with _sessions_lock:
+            sess = _sessions.get(token)
+        if not sess:
+            yield _sse({"event": "error", "message": "Session introuvable."})
+            return
+
+        event_queue = sess["events"]
         while True:
-            with _sessions_lock:
-                sess = _sessions.get(token)
-                if not sess:
-                    yield _sse({"event": "error", "message": "Session introuvable."})
-                    return
-                events = sess["events"][cursor:]
-                cursor += len(events)
-                done   = sess["done"]
+            try:
+                ev = event_queue.get(timeout=5)
+            except queue.Empty:
+                with _sessions_lock:
+                    if sess["done"]:
+                        return
+                continue
 
-            for ev in events:
-                yield _sse(ev)
-
-            if done and cursor >= len(_sessions.get(token, {}).get("events", [])):
+            yield _sse(ev)
+            if ev.get("event") == "done":
                 return
-
-            time.sleep(0.05)
 
     return Response(
         stream_with_context(generate()),
