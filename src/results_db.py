@@ -140,7 +140,10 @@ def get_grouped_results(
             params.extend(active_rules)
 
     # ── Build text search WHERE clause ─────────────────────────
-    if q:
+    # When extra columns are present, skip SQL text filter: apply in Python
+    # so that ecart-field matches and extra-column matches use OR logic.
+    sql_text_filter = q and not (extra_ref or extra_tgt)
+    if sql_text_filter:
         search_pattern = f"%{q}%"
         where_clauses.append("""
             (
@@ -196,19 +199,26 @@ def get_grouped_results(
                 filtered.append(row)
         grouped = OrderedDict((r["join_key"], r) for r in filtered)
 
-    # ── Apply text search to extra columns (after grouping) ────
+    # ── Apply text search in Python (OR across ecart fields + extra cols) ──
     if q and (extra_ref or extra_tgt):
         q_lower = q.lower()
+        _ECART_TEXT_FIELDS = ("rule_name", "source_value", "target_value",
+                              "source_field", "target_field", "detail")
         filtered = []
         for row in grouped.values():
             key = row["join_key"]
-            match = False
-            if extra_ref:
+            match = q_lower in key.lower()
+            if not match:
+                for e in row["ecarts"]:
+                    if any(q_lower in str(e.get(f) or "").lower() for f in _ECART_TEXT_FIELDS):
+                        match = True
+                        break
+            if not match:
                 for c in extra_ref:
                     if q_lower in str(ref_rows_map.get(key, {}).get(c, "")).lower():
                         match = True
                         break
-            if not match and extra_tgt:
+            if not match:
                 for c in extra_tgt:
                     if q_lower in str(tgt_rows_map.get(key, {}).get(c, "")).lower():
                         match = True
@@ -330,7 +340,10 @@ def get_flat_results(
             params.extend(active_rules)
 
     # ── Build text search WHERE clause ─────────────────────────
-    if q:
+    # When extra columns are present, skip SQL text filter: apply in Python
+    # so that ecart-field matches and extra-column matches use OR logic.
+    sql_text_filter = q and not (extra_ref or extra_tgt)
+    if sql_text_filter:
         search_pattern = f"%{q}%"
         where_clauses.append("""
             (
@@ -384,9 +397,11 @@ def get_flat_results(
                 filtered_results.extend(ecarts)
         results = filtered_results
 
-    # ── Apply text search to extra columns ──────────────────────
+    # ── Apply text search in Python (OR across ecart fields + extra cols) ──
     if q and (extra_ref or extra_tgt):
         q_lower = q.lower()
+        _ECART_TEXT_FIELDS = ("rule_name", "source_value", "target_value",
+                              "source_field", "target_field", "detail")
         from collections import defaultdict
         grouped = defaultdict(list)
         for r in results:
@@ -394,17 +409,20 @@ def get_flat_results(
 
         filtered_results = []
         for key, ecarts in grouped.items():
-            match = False
-            if extra_ref:
+            match = q_lower in key.lower()
+            if not match:
+                match = any(
+                    q_lower in str(e.get(f) or "").lower()
+                    for e in ecarts for f in _ECART_TEXT_FIELDS
+                )
+            if not match:
                 for c in extra_ref:
                     if q_lower in str(ref_rows_map.get(key, {}).get(c, "")).lower():
-                        match = True
-                        break
-            if not match and extra_tgt:
+                        match = True; break
+            if not match:
                 for c in extra_tgt:
                     if q_lower in str(tgt_rows_map.get(key, {}).get(c, "")).lower():
-                        match = True
-                        break
+                        match = True; break
             if match:
                 filtered_results.extend(ecarts)
         results = filtered_results
