@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 //  VERSION
 // ═══════════════════════════════════════════════════════════
-const UI_VERSION = '4.0.0';
+const UI_VERSION = '4.1.0';
 
 (async function checkVersion() {
   try {
@@ -246,8 +246,7 @@ function updateGlobalNav(n) {
   // audit-name-display : plus utilisé dans la nav
   const auditNameEl = document.getElementById('audit-name-display');
   if (auditNameEl)  auditNameEl.style.display = 'none';
-  // Titre de l'audit sur la page résultats (centré, gros)
-  const titleEl = document.getElementById('results-title');
+  const titleEl = document.getElementById('sum-title');
   if (titleEl) {
     const name = WS.meta.name || '';
     titleEl.textContent = name;

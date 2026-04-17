@@ -135,6 +135,7 @@ function listenSSE(token) {
                        step: `Terminé — ${ev.total_results.toLocaleString('fr-FR')} résultats` });
       document.getElementById('prog-bar').classList.remove('indeterminate');
       document.getElementById('prog-bar').style.width = '100%';
+      setTimeout(() => showProgress(false), 600);
 
       // Charger la première page depuis le serveur
       fetchPage(1);

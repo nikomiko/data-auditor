@@ -29,7 +29,7 @@ async function fetchPage(page) {
   const p = new URLSearchParams({ page, size: _pageSize });
 
   // activeRuleFilters contient des rule_ids (entiers, peuvent être négatifs)
-  if (activeRuleFilters !== null && activeRuleFilters.size > 0) {
+  if (activeRuleFilters !== null) {
     p.set('rules', [...activeRuleFilters].join(','));
     p.set('rule_logic', ruleFilterLogic);
   }
@@ -47,6 +47,7 @@ async function fetchPage(page) {
     _syncExtraHeaders();
     _renderPage(data.results);
     _renderPagination();
+    _updateShownCount(_pageTot);
   } catch(e) { showErr('Erreur pagination : ' + e.message); }
 }
 
@@ -367,12 +368,22 @@ function rebuildTable() {
       return va < vb ? -sortDir : va > vb ? sortDir : 0;
     });
   }
+  _updateShownCount(rows.length);
   if (!rows.length) { empty.style.display = 'block'; return; }
   empty.style.display = 'none';
   rows.forEach(r => appendRow(r));
   // Pas de pagination pour l'historique (données déjà limitées côté serveur)
   const bar = document.getElementById('pagination-bar');
   if (bar) bar.style.display = 'none';
+}
+
+function _updateShownCount(n) {
+  const el  = document.getElementById('sum-shown');
+  const sep = document.getElementById('sum-sep-shown');
+  if (!el) return;
+  el.textContent = `${n.toLocaleString('fr-FR')} ligne${n !== 1 ? 's' : ''} affichées`;
+  el.style.display  = '';
+  if (sep) sep.style.display = '';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -671,6 +682,8 @@ function exportReport(fmt) {
     if (activeRuleFilters !== null) p.set('rules', [...activeRuleFilters].join(','));
     if (ruleFilterLogic !== 'OR') p.set('rule_logic', ruleFilterLogic);
     if (filterText) p.set('q', filterText);
+    // Ordre mixte des colonnes supplémentaires
+    if (_extraColOrder.length) p.set('extra_col_order', _extraColOrder.map(e => `${e.side}:${e.col}`).join(','));
   }
   // CSV et XLSX : tous les résultats (pas de filtre), extra cols seulement
 

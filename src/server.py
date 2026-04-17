@@ -46,7 +46,7 @@ def _parse_version(version_str: str) -> tuple:
     except (ValueError, AttributeError):
         return (0, 0, 0)
 
-APP_VERSION = "4.0.1"
+APP_VERSION = "4.1.0"
 LATEST_GITHUB_VERSION = None  # Fetché au démarrage du serveur
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
@@ -711,6 +711,15 @@ def export():
         else:
             active_rules = None
 
+        col_order_raw = request.args.get("extra_col_order", "")
+        extra_col_order = []
+        for item in col_order_raw.split(","):
+            item = item.strip()
+            if ":" in item:
+                side, col = item.split(":", 1)
+                if side in ("ref", "tgt") and col:
+                    extra_col_order.append({"side": side, "col": col})
+
         results = get_flat_results(
             results_db,
             active_rules=active_rules,
@@ -723,7 +732,8 @@ def export():
         )
         content  = to_html(results, summary, config,
                            extra_ref, extra_tgt, ref_rows_map, tgt_rows_map,
-                           ref_label, tgt_label, ref_fmt, tgt_fmt)
+                           ref_label, tgt_label, ref_fmt, tgt_fmt,
+                           extra_col_order=extra_col_order or None)
         ts       = datetime.now().strftime("%Y%m%d%H%M")
         filename = f"audit_{audit_name}_{ts}.html"
         raw      = content.encode("utf-8")

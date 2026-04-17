@@ -353,31 +353,36 @@ def _build_pivot_sheet(ws, results, summary, config, audit_name):
 #  HTML — vue courante avec filtres dynamiques JS
 # ─────────────────────────────────────────────────────────────
 
-# JavaScript logic (plain string — not f-string, to avoid brace conflicts)
 _HTML_JS = r"""
 const ALL=__ALL__;
-const EXTRA_REF=__EXTRA_REF__;
-const EXTRA_TGT=__EXTRA_TGT__;
+const COL_ORDER=__COL_ORDER__;
 const KEY_FIELDS=__KEY_FIELDS__;
-let aR=new Set(ALL.map(r=>r.rule_name));
+let aR=new Set(ALL.flatMap(r=>r.ecarts.map(e=>e.rule_name)));
 let sC=null,sD=1;
+const BADGE_STYLE={
+  '_ko':'background:#fee2e2;color:#b91c1c;border:1px solid #fecaca',
+  'ko' :'background:#fef9c3;color:#a16207;border:1px solid #fef08a',
+  'ok' :'background:#dcfce7;color:#15803d;border:1px solid #bbf7d0',
+  '_ok':'background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe',
+};
 function initCounts(){
   const cr={};
-  for(const r of ALL){cr[r.rule_name]=(cr[r.rule_name]||0)+1;}
-  document.querySelectorAll('[data-k="rule"]').forEach(b=>{const sp=b.querySelector('span');if(sp)sp.textContent=cr[b.dataset.v]||0;});
+  for(const r of ALL)for(const e of r.ecarts)cr[e.rule_name]=(cr[e.rule_name]||0)+1;
+  document.querySelectorAll('[data-k="rule"]').forEach(b=>{
+    const sp=b.querySelector('.chip-c');
+    if(sp)sp.textContent=(cr[b.dataset.v]||0).toLocaleString('fr-FR');
+  });
 }
 function toggleChip(b){
   b.classList.toggle('on');
-  const on=b.classList.contains('on');
-  if(on)aR.add(b.dataset.v);else aR.delete(b.dataset.v);
+  if(b.classList.contains('on'))aR.add(b.dataset.v);else aR.delete(b.dataset.v);
   render();
 }
 function sortBy(col){
   if(sC===col)sD=-sD;else{sC=col;sD=1;}
   document.querySelectorAll('thead th').forEach(th=>th.classList.remove('sort-asc','sort-desc'));
   document.querySelectorAll('.sort-ic').forEach(ic=>ic.textContent='\u2195');
-  const m={join_key:'si-key',rule_name:'si-rule',rule_type:'si-type',source_field:'si-sf',target_field:'si-tf',source_value:'si-sv',target_value:'si-tv',detail:'si-det'};
-  const ic=document.getElementById(m[col]);
+  const ic=document.getElementById('si-'+col);
   if(ic){ic.textContent=sD>0?'\u2191':'\u2193';ic.closest('th').classList.add(sD>0?'sort-asc':'sort-desc');}
   render();
 }
@@ -385,31 +390,46 @@ const esc=v=>String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>
 function renderRow(r){
   let c='';
   const kp=(r.join_key||'').split('\u00a7');
-  KEY_FIELDS.forEach((f,i)=>{c+='<td class="tk">'+esc(kp[i]||'')+'</td>';});
-  for(const k of EXTRA_REF)c+='<td class="tv r">'+esc((r._ref||{})[k])+'</td>';
-  c+='<td><span class="badge badge-'+esc(r.rule_type)+'">'+esc(r.rule_name)+'</span></td>';
-  c+='<td class="tv">'+esc(r.source_field)+'</td>';
-  c+='<td class="tv">'+esc(r.target_field)+'</td>';
-  c+='<td class="tv r">'+esc(r.source_value)+'</td>';
-  c+='<td class="tv t">'+esc(r.target_value)+'</td>';
-  for(const k of EXTRA_TGT)c+='<td class="tv t">'+esc((r._tgt||{})[k])+'</td>';
-  c+='<td class="td-det" title="'+esc(r.detail)+'">'+esc(r.detail)+'</td>';
+  KEY_FIELDS.forEach((_,i)=>{c+='<td class="tk">'+esc(kp[i]||'')+'</td>';});
+  const badges=r.ecarts.map(e=>{
+    const st=BADGE_STYLE[e.rule_type]||BADGE_STYLE['ko'];
+    let tip='';
+    if(e.source_field||e.target_field)
+      tip=esc(e.source_field)+'\u00a0=\u00a0'+esc(e.source_value)+' / '+esc(e.target_field)+'\u00a0=\u00a0'+esc(e.target_value);
+    else if(e.detail)tip=esc(e.detail);
+    return '<span class="badge" style="'+st+'"'+(tip?' title="'+tip+'"':'')+'>'+esc(e.rule_name)+'</span>';
+  }).join(' ');
+  c+='<td><div class="td-ecarts">'+badges+'</div></td>';
+  COL_ORDER.forEach(({side,col})=>{
+    const v=((side==='ref'?r._ref:r._tgt)||{})[col]||'';
+    c+='<td class="tv xc-'+side+'" title="'+esc(v)+'">'+esc(v)+'</td>';
+  });
   return '<tr>'+c+'</tr>';
 }
 function render(){
-  const q=(document.querySelector('.srch')?.value||'').toLowerCase();
+  const q=(document.getElementById('srch')?.value||'').toLowerCase();
   let rows=ALL.filter(r=>{
-    if(!aR.has(r.rule_name))return false;
+    if(!r.ecarts.some(e=>aR.has(e.rule_name)))return false;
     if(q){
-      const vals=[r.join_key,r.rule_name,r.source_value,r.target_value,r.source_field,r.target_field];
-      const extra=[...EXTRA_REF.map(k=>(r._ref||{})[k]),...EXTRA_TGT.map(k=>(r._tgt||{})[k])];
-      if(![...vals,...extra].some(v=>String(v||'').toLowerCase().includes(q)))return false;
+      const kv=[r.join_key,...r.ecarts.flatMap(e=>[e.rule_name,e.source_value,e.target_value,e.detail])];
+      const xv=COL_ORDER.map(({side,col})=>((side==='ref'?r._ref:r._tgt)||{})[col]||'');
+      if(![...kv,...xv].some(v=>String(v||'').toLowerCase().includes(q)))return false;
     }
     return true;
   });
-  if(sC)rows=[...rows].sort((a,b)=>String(a[sC]||'').localeCompare(String(b[sC]||''),'fr',{numeric:true})*sD);
+  if(sC){
+    const ki=sC.startsWith('key_')?parseInt(sC.slice(4)):-1;
+    rows=[...rows].sort((a,b)=>{
+      let va,vb;
+      if(ki>=0){const pa=(a.join_key||'').split('\u00a7');const pb=(b.join_key||'').split('\u00a7');va=pa[ki]||'';vb=pb[ki]||'';}
+      else{const {side,col}=COL_ORDER.find(e=>e.side+':'+e.col===sC)||{};va=side?((side==='ref'?a._ref:a._tgt)||{})[col]||'':'';vb=side?((side==='ref'?b._ref:b._tgt)||{})[col]||'':'';}
+      return va.localeCompare(vb,'fr',{numeric:true})*sD;
+    });
+  }
   const tb=document.getElementById('tbody');
   const em=document.getElementById('empty');
+  const sh=document.getElementById('shown-count');
+  if(sh)sh.textContent=rows.length.toLocaleString('fr-FR')+' ligne'+(rows.length!==1?'s':'')+' affich\u00e9es';
   if(!rows.length){tb.innerHTML='';em.style.display='block';return;}
   em.style.display='none';
   tb.innerHTML=rows.map(renderRow).join('');
@@ -417,54 +437,64 @@ function render(){
 initCounts();render();
 """
 
-# CSS (plain string)
 _HTML_CSS = """
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',sans-serif;background:#f4f6f9;color:#2d3748}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;color:#1e293b;font-size:14px}
 .layout{display:flex;flex-direction:column;height:100vh;overflow:hidden}
-header{padding:.75rem 1.5rem;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;flex-shrink:0}
-h1{font-size:1.15rem;font-weight:700}.meta{font-size:.72rem;color:#718096}
-.cards{display:flex;gap:.6rem;flex-wrap:wrap;padding:.6rem 1.5rem;background:#fff;border-bottom:1px solid #e2e8f0;flex-shrink:0}
-.card{background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;padding:.4rem .85rem;text-align:center;min-width:80px}
-.card .v{font-size:1.25rem;font-weight:700}.card .l{font-size:.62rem;color:#718096;margin-top:.1rem}
-.ca .v{color:#e53e3e}.cb .v{color:#dd6b20}.cd .v{color:#d69e2e}.co .v{color:#276749}
-.filter-bar{padding:.45rem 1rem;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;flex-wrap:wrap;gap:.3rem .45rem;align-items:center;flex-shrink:0}
-.chip{background:none;border:1px solid #cbd5e0;color:#718096;font-size:.67rem;padding:.18rem .55rem;border-radius:99px;cursor:pointer;font-family:inherit;transition:all .15s}
-.chip:hover{color:#2d3748;border-color:#4a5568}
-.chip.on.ca{background:#fff5f5;border-color:#fc8181;color:#c53030}
-.chip.on.cb{background:#fffaf0;border-color:#fbd38d;color:#c05621}
-.chip.on.cd{background:#fffff0;border-color:#f6e05e;color:#b7791f}
-.chip.on.co{background:#f0fff4;border-color:#9ae6b4;color:#276749}
-.chip.on.cr-coh{background:#f0fff4;border-color:#9ae6b4;color:#276749}
-.chip.on.cr-inc{background:#fff5f5;border-color:#fc8181;color:#c53030}
-.chip-c{background:rgba(0,0,0,.08);border-radius:99px;padding:0 .35rem;font-size:.58rem}
-.fl{font-size:.63rem;color:#718096;margin-right:.1rem}
-.filter-sep{width:1px;height:16px;background:#e2e8f0;margin:0 .2rem;flex-shrink:0;align-self:center}
-.srch{border:1px solid #e2e8f0;border-radius:4px;padding:.22rem .55rem;font-size:.73rem;color:#2d3748;background:#f7fafc;outline:none;width:200px;margin-left:auto}
-.srch:focus{border-color:#3b82f6}
+header{padding:.6rem 1.25rem;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;flex-shrink:0}
+h1{font-size:1rem;font-weight:700;letter-spacing:-.01em;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta{font-size:.72rem;color:#64748b;white-space:nowrap}
+.desc{font-size:.75rem;color:#475569;flex-basis:100%;margin-top:.1rem}
+.summary-bar{padding:.5rem 1.25rem;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:.65rem;flex-wrap:wrap;font-size:.78rem;flex-shrink:0}
+.sum-ref{color:#16a34a;font-weight:500}
+.sum-tgt{color:#ea580c;font-weight:500}
+.sum-ko{color:#dc2626;font-weight:500}
+.sum-ok{color:#16a34a;font-weight:500}
+.sum-shown{color:#64748b;font-weight:500;margin-left:auto}
+.sum-sep{color:#e2e8f0}
+.cards{display:flex;gap:.5rem;flex-wrap:wrap;padding:.5rem 1.25rem;background:#fff;border-bottom:1px solid #e2e8f0;flex-shrink:0}
+.card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:.35rem .8rem;text-align:center;min-width:76px}
+.card .v{font-size:1.1rem;font-weight:700;font-variant-numeric:tabular-nums}
+.card .l{font-size:.6rem;color:#94a3b8;margin-top:.1rem;text-transform:uppercase;letter-spacing:.04em}
+.card.ca .v{color:#dc2626}.card.cb .v{color:#ea580c}.card.cd .v{color:#ca8a04}.card.co .v{color:#16a34a}
+.card.cr-ko .v{color:#b45309}.card.cr-ok .v{color:#0369a1}
+.filter-bar{padding:.4rem 1rem;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;flex-wrap:wrap;gap:.3rem .4rem;align-items:center;flex-shrink:0}
+.chip{background:none;border:1px solid #cbd5e0;color:#94a3b8;font-size:.66rem;padding:.16rem .5rem;border-radius:99px;cursor:pointer;font-family:inherit;transition:background .12s,color .12s,border-color .12s;display:inline-flex;align-items:center;gap:.3rem}
+.chip:hover{color:#475569;border-color:#94a3b8}
+.chip.on.ca{background:#fef2f2;border-color:#fca5a5;color:#dc2626}
+.chip.on.cb{background:#fff7ed;border-color:#fdba74;color:#ea580c}
+.chip.on.co{background:#f0fdf4;border-color:#86efac;color:#16a34a}
+.chip.on.cr-coh{background:#f0fdf4;border-color:#86efac;color:#16a34a}
+.chip.on.cr-inc{background:#fef2f2;border-color:#fca5a5;color:#dc2626}
+.chip-c{background:rgba(0,0,0,.07);border-radius:99px;padding:0 .32rem;font-size:.58rem;font-variant-numeric:tabular-nums}
+.fl{font-size:.62rem;color:#94a3b8;flex-shrink:0}
+.filter-sep{width:1px;height:14px;background:#e2e8f0;margin:0 .15rem;flex-shrink:0;align-self:center}
+#srch{border:1px solid #e2e8f0;border-radius:4px;padding:.2rem .5rem;font-size:.72rem;color:#1e293b;background:#f8fafc;outline:none;width:180px;margin-left:auto}
+#srch:focus{border-color:#6366f1;background:#fff}
 .tbl-wrap{flex:1;overflow:auto}
-table{width:100%;border-collapse:collapse;font-size:.77rem;background:#fff}
-thead th{background:#fff;padding:.48rem .8rem;text-align:left;font-size:.61rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:#718096;border-bottom:1px solid #e2e8f0;position:sticky;top:0;cursor:pointer;user-select:none;white-space:nowrap}
-thead th:hover{background:#f7fafc}
+table{width:100%;border-collapse:collapse;font-size:.75rem;background:#fff}
+thead th{background:#fff;padding:.42rem .75rem;text-align:left;font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;border-bottom:2px solid #e2e8f0;position:sticky;top:0;cursor:pointer;user-select:none;white-space:nowrap;z-index:1}
+thead th:hover{background:#f8fafc;color:#475569}
 .th-extra{white-space:normal;min-width:100px}
-.th-meta{font-weight:300;font-size:.57rem;opacity:.65;text-transform:none;letter-spacing:0}
-.th-field{font-weight:700;font-size:.65rem}
-.th-ref .th-field{color:#1d4ed8}.th-tgt .th-field{color:#6d28d9}
-tbody tr{border-bottom:1px solid #f0f4f8}tbody tr:hover{background:#f7fafc}
-td{padding:.42rem .8rem;vertical-align:middle}
-.tk{font-family:monospace;font-size:.71rem;color:#4a5568;white-space:nowrap}
-.tv{font-family:monospace;font-size:.71rem;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tv.r{color:#1d4ed8}.tv.t{color:#c05621}
-.td-rule{font-size:.71rem;color:#7c3aed;font-family:monospace;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.td-det{font-size:.67rem;color:#718096;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.badge{display:inline-block;padding:.13rem .45rem;border-radius:4px;font-size:.62rem;font-weight:700;font-family:monospace}
-.badge-_ko{background:#fee5e5;color:#c53030;border:1px solid #fed7d7}
-.badge-ko{background:#fffbea;color:#b7791f;border:1px solid #fefcbf}
-.badge-ok{background:#ecfdf5;color:#276749;border:1px solid #c6f6d5}
+.th-meta{font-weight:300;font-size:.56rem;opacity:.7;text-transform:none;letter-spacing:0}
+.th-field{font-weight:700;font-size:.63rem}
+.th-ref .th-field{color:#1d4ed8}.th-tgt .th-field{color:#7c3aed}
+tbody tr{border-bottom:1px solid #f1f5f9}
+tbody tr:hover{background:#f8fafc}
+td{padding:.38rem .75rem;vertical-align:middle}
+.tk{font-family:'Cascadia Code','Fira Code',monospace;font-size:.7rem;color:#334155;white-space:nowrap}
+.tv{font-family:'Cascadia Code','Fira Code',monospace;font-size:.7rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tv.r{color:#1d4ed8}.tv.t{color:#c2410c}
+.td-det{font-size:.66rem;color:#94a3b8;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.td-ecarts{display:flex;flex-wrap:wrap;gap:.25rem;align-items:center}
+.badge{display:inline-block;padding:.1rem .4rem;border-radius:4px;font-size:.61rem;font-weight:700;white-space:nowrap;cursor:default}
+.badge-_ko{background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}
+.badge-ko{background:#fef9c3;color:#a16207;border:1px solid #fef08a}
+.badge-ok{background:#dcfce7;color:#15803d;border:1px solid #bbf7d0}
 .badge-_ok{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
-.sort-ic{opacity:.22;margin-left:.2rem;font-size:.58rem}
-th.sort-asc .sort-ic,th.sort-desc .sort-ic{opacity:1;color:#3b82f6}
-.empty{text-align:center;padding:3rem;color:#a0aec0;font-style:italic;display:none}
+.sort-ic{opacity:.2;margin-left:.25rem;font-size:.55rem}
+th.sort-asc .sort-ic,th.sort-desc .sort-ic{opacity:1;color:#6366f1}
+.empty{text-align:center;padding:3rem;color:#cbd5e0;font-style:italic;display:none;font-size:.8rem}
 """
 
 
@@ -476,52 +506,53 @@ def to_html(results: list, summary: dict, config: dict,
             extra_ref: list = None, extra_tgt: list = None,
             ref_rows_map: dict = None, tgt_rows_map: dict = None,
             ref_label: str = "R\u00e9f\u00e9rence", tgt_label: str = "Cible",
-            ref_fmt: str = "", tgt_fmt: str = "") -> str:
-    """HTML auto-suffisant avec filtres types/règles dynamiques.
-
-    Colonnes supplémentaires figées telles que configurées dans l'UI.
-    Données pré-filtrées selon la vue courante, mais filtres JS restent actifs.
-    """
+            ref_fmt: str = "", tgt_fmt: str = "",
+            extra_col_order: list = None) -> str:
+    """HTML auto-suffisant — une ligne par clé, badges de règles, ordre de colonnes fidèle à la vue."""
     extra_ref    = extra_ref or []
     extra_tgt    = extra_tgt or []
     ref_rows_map = ref_rows_map or {}
     tgt_rows_map = tgt_rows_map or {}
 
+    # Ordre mixte des colonnes supplémentaires (respecte l'ordre UI si fourni)
+    if extra_col_order:
+        col_order = [e for e in extra_col_order
+                     if e.get("side") in ("ref", "tgt") and e.get("col")]
+    else:
+        col_order = (
+            [{"side": "ref", "col": c} for c in extra_ref] +
+            [{"side": "tgt", "col": c} for c in extra_tgt]
+        )
+
     meta_cfg    = config.get("meta", {})
     name        = meta_cfg.get("name", "Audit")
     description = meta_cfg.get("description", "")
-    now       = datetime.now().strftime("%d/%m/%Y \u00e0 %H:%M:%S")
-    rules     = config.get("rules", [])
-    cfg_keys  = config.get("join", {}).get("keys", [])
-    key_fields = [k.get("source_field", "Cl\u00e9") for k in cfg_keys] if cfg_keys else ["Cl\u00e9"]
+    now         = datetime.now().strftime("%d/%m/%Y \u00e0 %H:%M:%S")
+    rules       = config.get("rules", [])
+    cfg_keys    = config.get("join", {}).get("keys", [])
+    key_fields  = [k.get("source_field", "Cl\u00e9") for k in cfg_keys] if cfg_keys else ["Cl\u00e9"]
 
-    # Enrich results with extra column data
-    enriched = []
+    # Group flat results by join_key — one row per key with multiple ecarts
+    grouped: dict = {}
     for r in results:
-        row = {k: r.get(k, "") for k in _BASE_FIELDS}
         key = r.get("join_key", "")
-        if extra_ref:
-            row["_ref"] = {c: ref_rows_map.get(key, {}).get(c, "") for c in extra_ref}
-        if extra_tgt:
-            row["_tgt"] = {c: tgt_rows_map.get(key, {}).get(c, "") for c in extra_tgt}
-        enriched.append(row)
-
-    # Extra TH elements
-    ref_meta = _h(f"{ref_label} \u00b7 {ref_fmt}") if ref_fmt else _h(ref_label)
-    tgt_meta = _h(f"{tgt_label} \u00b7 {tgt_fmt}") if tgt_fmt else _h(tgt_label)
-
-    extra_ref_ths = "".join(
-        f'<th class="th-extra th-ref" onclick="sortBy(\'ref__{_h(c)}\')">'
-        f'<div class="th-meta">{ref_meta}</div>'
-        f'<div class="th-field">{_h(c)}</div></th>'
-        for c in extra_ref
-    )
-    extra_tgt_ths = "".join(
-        f'<th class="th-extra th-tgt" onclick="sortBy(\'tgt__{_h(c)}\')">'
-        f'<div class="th-meta">{tgt_meta}</div>'
-        f'<div class="th-field">{_h(c)}</div></th>'
-        for c in extra_tgt
-    )
+        if key not in grouped:
+            grouped[key] = {
+                "join_key": key,
+                "ecarts":   [],
+                "_ref": {c: ref_rows_map.get(key, {}).get(c, "") for c in extra_ref},
+                "_tgt": {c: tgt_rows_map.get(key, {}).get(c, "") for c in extra_tgt},
+            }
+        grouped[key]["ecarts"].append({
+            "rule_name":    r.get("rule_name",    ""),
+            "rule_type":    r.get("rule_type",    ""),
+            "source_field": r.get("source_field", ""),
+            "target_field": r.get("target_field", ""),
+            "source_value": r.get("source_value", ""),
+            "target_value": r.get("target_value", ""),
+            "detail":       r.get("detail",       ""),
+        })
+    grouped_list = list(grouped.values())
 
     # Rule chips
     rule_chips = ""
@@ -537,69 +568,109 @@ def to_html(results: list, summary: dict, config: dict,
                 f' <span class="chip-c">0</span></button>'
             )
 
-    # JSON data (safe for embedding in HTML)
-    all_js        = json.dumps(enriched, ensure_ascii=False, default=str)
-    extra_ref_js  = json.dumps(extra_ref)
-    extra_tgt_js  = json.dumps(extra_tgt)
+    # Per-rule KO cards from rule_stats
+    rule_stats = summary.get("rule_stats", {})
+    rule_cards = ""
+    for r_cfg in rules:
+        rname = r_cfg.get("name", "")
+        n_ko  = rule_stats.get(rname, 0)
+        rtype = r_cfg.get("rule_type", "incoherence")
+        cls   = "cr-ok" if rtype == "coherence" else "cr-ko"
+        lbl   = "OK" if rtype == "coherence" else "KO"
+        rule_cards += (
+            f'<div class="card {cls}">'
+            f'<div class="v">{n_ko}</div>'
+            f'<div class="l">{_h(rname)} \u2014 {lbl}</div>'
+            f'</div>'
+        )
+
+    # Extra column TH elements (in col_order)
+    ref_meta = _h(f"{ref_label} \u00b7 {ref_fmt}") if ref_fmt else _h(ref_label)
+    tgt_meta = _h(f"{tgt_label} \u00b7 {tgt_fmt}") if tgt_fmt else _h(tgt_label)
+
+    def _extra_th(side, col):
+        meta  = ref_meta if side == "ref" else tgt_meta
+        cls   = "th-ref" if side == "ref" else "th-tgt"
+        sort_id = f"{side}:{_h(col)}"
+        return (
+            f'<th class="th-extra {cls}" onclick="sortBy(\'{sort_id}\')">'
+            f'<div class="th-meta">{meta}</div>'
+            f'<div class="th-field">{_h(col)}<span class="sort-ic" id="si-{sort_id}">\u2195</span></div></th>'
+        )
+
+    extra_ths = "".join(_extra_th(e["side"], e["col"]) for e in col_order)
+
+    all_js        = json.dumps(grouped_list, ensure_ascii=False, default=str)
+    col_order_js  = json.dumps(col_order)
     key_fields_js = json.dumps(key_fields)
 
-    # Inject data into JS (use unique placeholders to avoid brace conflicts)
     js = (
         _HTML_JS
-        .replace("__ALL__", all_js)
-        .replace("__EXTRA_REF__", extra_ref_js)
-        .replace("__EXTRA_TGT__", extra_tgt_js)
+        .replace("__ALL__",       all_js)
+        .replace("__COL_ORDER__", col_order_js)
         .replace("__KEY_FIELDS__", key_fields_js)
     )
 
-    s = summary
+    s     = summary
+    oa    = s.get("orphelins_a", 0)
+    ob    = s.get("orphelins_b", 0)
+    n_ko  = s.get("divergents",  0)
+    n_ok  = s.get("ok",          0)
+    n_tot = len(grouped_list)
+
     parts = [
-        '<!DOCTYPE html>\n<html lang="fr"><head><meta charset="UTF-8">\n',
+        '<!DOCTYPE html>\n<html lang="fr"><head>'
+        '<meta charset="UTF-8"><meta name="viewport" content="width=device-width">\n',
         f'<title>Rapport \u2014 {_h(name)}</title>\n',
         '<style>', _HTML_CSS, '</style></head><body><div class="layout">\n',
+
         # Header
         '<header>',
-        f'<h1>\U0001f4c8 {_h(name)}</h1>',
-        *([ f'<p class="meta" style="margin:.2rem 0 0">{_h(description)}</p>' ] if description else []),
+        f'<h1>{_h(name)}</h1>',
         f'<span class="meta">G\u00e9n\u00e9r\u00e9 le {_h(now)}</span>',
+        *([ f'<span class="desc">{_h(description)}</span>' ] if description else []),
         '</header>\n',
-        # Summary cards
-        '<div class="cards">',
-        f'<div class="card"><div class="v">{s.get("total_reference",0)}</div><div class="l">{_h(ref_label)}</div></div>',
-        f'<div class="card"><div class="v">{s.get("total_cible",0)}</div><div class="l">{_h(tgt_label)}</div></div>',
-        f'<div class="card ca"><div class="v">{s.get("orphelins_a",0)}</div><div class="l">Absent de {_h(tgt_label)}</div></div>',
-        f'<div class="card cb"><div class="v">{s.get("orphelins_b",0)}</div><div class="l">Absent de {_h(ref_label)}</div></div>',
-        f'<div class="card cd"><div class="v">{s.get("divergents",0)}</div><div class="l">KO</div></div>',
-        f'<div class="card co"><div class="v">{s.get("ok",0)}</div><div class="l">OK</div></div>',
+
+        # Summary bar
+        '<div class="summary-bar">',
+        f'<span class="sum-ref">{_h(ref_label)}\u00a0: {s.get("total_reference",0):,} enr. dont {oa:,} absents de la cible</span>',
+        '<span class="sum-sep">|</span>',
+        f'<span class="sum-tgt">{_h(tgt_label)}\u00a0: {s.get("total_cible",0):,} enr. dont {ob:,} absents de la source</span>',
+        '<span class="sum-sep">|</span>',
+        f'<span class="sum-ko">{n_ko:,} KO</span>',
+        '<span class="sum-sep">|</span>',
+        f'<span class="sum-ok">{n_ok:,} OK</span>',
+        f'<span class="sum-shown" id="shown-count">{n_tot:,} ligne{"s" if n_tot != 1 else ""} affich\u00e9es</span>',
         '</div>\n',
+
+        # Per-rule cards
+        *([ f'<div class="cards">{rule_cards}</div>\n' ] if rule_cards else []),
+
         # Filter bar
         '<div class="filter-bar">',
-        '<span class="fl">R\u00e8gles pr\u00e9d\u00e9finies</span>',
-        f'<button class="chip ca on" data-k="rule" data-v="Source uniq." onclick="toggleChip(this)">Source uniq. <span class="chip-c">0</span></button>',
-        f'<button class="chip cb on" data-k="rule" data-v="Cible uniq." onclick="toggleChip(this)">Cible uniq. <span class="chip-c">0</span></button>',
-        '<button class="chip co on" data-k="rule" data-v="Pr\u00e9sence OK" onclick="toggleChip(this)">Pr\u00e9sence OK <span class="chip-c">0</span></button>',
+        '<span class="fl">Pr\u00e9sence</span>',
+        f'<button class="chip ca on" data-k="rule" data-v="Source uniq." onclick="toggleChip(this)">'
+        f'{_h(ref_label)} uniq. <span class="chip-c">0</span></button>',
+        f'<button class="chip cb on" data-k="rule" data-v="Cible uniq." onclick="toggleChip(this)">'
+        f'{_h(tgt_label)} uniq. <span class="chip-c">0</span></button>',
+        '<button class="chip co on" data-k="rule" data-v="Cl\u00e9 OK" onclick="toggleChip(this)">'
+        'Cl\u00e9 OK <span class="chip-c">0</span></button>',
         rule_chips,
-        '<input class="srch" type="search" placeholder="Recherche\u2026" oninput="render()">',
+        '<input id="srch" type="search" placeholder="Recherche\u2026" oninput="render()">',
         '</div>\n',
-        # Table
+
+        # Table — column order: [keys] | [Règles badges] | [extra cols in col_order]
         '<div class="tbl-wrap"><table>\n<thead><tr>',
         "".join(
-            f'<th onclick="sortBy(\'join_key\')">{_h(kf)}'
-            f'<span class="sort-ic"{" id=\"si-key\"" if i == 0 else ""}>\u2195</span></th>'
+            f'<th onclick="sortBy(\'key_{i}\')">{_h(kf)}'
+            f'<span class="sort-ic" id="si-key_{i}">\u2195</span></th>'
             for i, kf in enumerate(key_fields)
         ),
-        extra_ref_ths,
-        '<th onclick="sortBy(\'rule_name\')">R\u00e8gle<span class="sort-ic" id="si-rule">\u2195</span></th>',
-        '<th onclick="sortBy(\'rule_type\')">Type<span class="sort-ic" id="si-type">\u2195</span></th>',
-        '<th onclick="sortBy(\'source_field\')">Champ src.<span class="sort-ic" id="si-sf">\u2195</span></th>',
-        '<th onclick="sortBy(\'target_field\')">Champ cible<span class="sort-ic" id="si-tf">\u2195</span></th>',
-        '<th onclick="sortBy(\'source_value\')">Valeur src.<span class="sort-ic" id="si-sv">\u2195</span></th>',
-        '<th onclick="sortBy(\'target_value\')">Valeur cible<span class="sort-ic" id="si-tv">\u2195</span></th>',
-        extra_tgt_ths,
-        '<th onclick="sortBy(\'detail\')">D\u00e9tail<span class="sort-ic" id="si-det">\u2195</span></th>',
+        '<th>R\u00e8gles</th>',
+        extra_ths,
         '</tr></thead>\n',
         '<tbody id="tbody"></tbody>\n',
-        '</table><div class="empty" id="empty">Aucun r\u00e9sultat.</div></div>',
+        '</table><div class="empty" id="empty">Aucun r\u00e9sultat pour les filtres s\u00e9lectionn\u00e9s.</div></div>',
         '</div>\n',
         '<script>', js, '</script>',
         '</body></html>',

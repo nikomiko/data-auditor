@@ -215,6 +215,7 @@ textarea#yaml::placeholder{color:var(--muted)}
 .sum-src{color:var(--ok);font-weight:500}
 .sum-tgt{color:var(--ob);font-weight:500}
 .sum-sep{color:var(--border);font-size:.9rem}
+.sum-shown{color:var(--dim);font-weight:500}
 .export-row{display:flex;gap:.5rem}
 .btn-exp{background:var(--s2);border:1px solid var(--border);color:var(--dim);font-size:.75rem;height:var(--btn-h);padding:0 .9rem;border-radius:var(--r);cursor:pointer;font-family:var(--sans);transition:all .15s;display:inline-flex;align-items:center;gap:.35rem;text-decoration:none;white-space:nowrap}
 .btn-exp:hover{border-color:var(--acc);color:var(--acc)}
