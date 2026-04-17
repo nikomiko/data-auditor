@@ -1,3 +1,8 @@
+---
+title: Manuel utilisateur
+nav_order: 2
+---
+
 # DataAuditor — Manuel utilisateur
 
 **v4.1.0**

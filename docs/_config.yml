@@ -1,0 +1,19 @@
+title: DataAuditor
+description: Outil d'audit de cohérence de données entre deux sources hétérogènes.
+remote_theme: just-the-docs/just-the-docs
+
+url: https://nikomiko.github.io
+baseurl: /data-auditor
+
+color_scheme: light
+
+aux_links:
+  "GitHub":
+    - "https://github.com/nikomiko/data-auditor"
+
+aux_links_new_tab: true
+
+footer_content: "DataAuditor v4.1.0 — <a href=\"https://github.com/nikomiko/data-auditor/issues\">Signaler un problème</a>"
+
+plugins:
+  - jekyll-seo-tag

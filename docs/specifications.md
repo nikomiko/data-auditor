@@ -1,4 +1,6 @@
 ---
+title: Spécification fonctionnelle
+nav_order: 3
 tags: [spec, dataauditor]
 updated: 2026-03-28
 ---
