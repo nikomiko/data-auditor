@@ -1,0 +1,105 @@
+meta:
+  name: "Audit Catalogue produits — CSV → JSON"
+  version: "1.0"
+
+sources:
+  reference:
+    label: "Catalogue produits (référence CSV)"
+    format: csv
+    encoding: utf-8
+    delimiter: ";"
+    has_header: true
+    fields:
+      - {name: sku, type: string}
+      - {name: designation, type: string}
+      - {name: categorie, type: string}
+      - {name: sous_categorie, type: string}
+      - {name: prix_ht, type: decimal}
+      - {name: taux_tva, type: decimal}
+      - {name: poids_kg, type: decimal}
+      - {name: stock_initial, type: integer}
+      - {name: seuil_reappro, type: integer}
+      - {name: date_creation, type: date, date_format: "%Y-%m-%d"}
+      - {name: date_maj, type: date, date_format: "%Y-%m-%d"}
+      - {name: statut, type: string}
+
+  target:
+    label: "Catalogue produits (cible JSON)"
+    format: json
+    encoding: utf-8
+    json_path: records
+    fields:
+      - {name: sku, type: string}
+      - {name: designation, type: string}
+      - {name: categorie, type: string}
+      - {name: sous_categorie, type: string}
+      - {name: prix_ht, type: decimal}
+      - {name: taux_tva, type: decimal}
+      - {name: poids_kg, type: decimal}
+      - {name: stock_initial, type: integer}
+      - {name: seuil_reappro, type: integer}
+      - {name: date_creation, type: date, date_format: "%Y-%m-%d"}
+      - {name: date_maj, type: date, date_format: "%Y-%m-%d"}
+      - {name: statut, type: string}
+
+join:
+  keys:
+    - source_field: sku
+      target_field: sku
+
+rules:
+  - name: "Designation"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: designation
+        target_field: designation
+        operator: differs
+  - name: "Prix ht"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: prix_ht
+        target_field: prix_ht
+        operator: differs
+        tolerance: 0
+  - name: "Poids kg"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: poids_kg
+        target_field: poids_kg
+        operator: differs
+        tolerance: 0
+  - name: "Stock initial"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: stock_initial
+        target_field: stock_initial
+        operator: differs
+  - name: "Seuil reappro"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: seuil_reappro
+        target_field: seuil_reappro
+        operator: differs
+  - name: "Date maj"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: date_maj
+        target_field: date_maj
+        operator: differs
+  - name: "Statut"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: statut
+        target_field: statut
+        operator: differs
+
+report:
+  show_matching: false
+  max_diff_preview: 2000

@@ -9,9 +9,60 @@ function wizSrcDefault() {
     fields:[], column_positions:[],
     unpivot_enabled:false,
     unpivot:{ location_field:'location_key', value_field:'pivot_value', pivot_fields:[] },
-    calculated_fields:[]
+    calculated_fields:[],
+    color: null
   };
 }
+
+const _COLOR_PALETTE = [
+  { id:'green',  base:'#15803d', bg:'#f0fdf4', bd:'#86efac', label:'Vert' },
+  { id:'purple', base:'#7c3aed', bg:'#f5f3ff', bd:'#c4b5fd', label:'Violet' },
+  { id:'blue',   base:'#2563eb', bg:'#eff6ff', bd:'#93c5fd', label:'Bleu' },
+  { id:'orange', base:'#c2410c', bg:'#fff7ed', bd:'#fdba74', label:'Orange' },
+  { id:'rose',   base:'#be185d', bg:'#fff1f2', bd:'#fda4af', label:'Rose' },
+  { id:'teal',   base:'#0f766e', bg:'#f0fdfa', bd:'#5eead4', label:'Sarcelle' },
+  { id:'amber',  base:'#b45309', bg:'#fffbeb', bd:'#fcd34d', label:'Ambre' },
+  { id:'slate',  base:'#475569', bg:'#f8fafc', bd:'#cbd5e1', label:'Ardoise' },
+];
+
+const _COLOR_PALETTE_FULL = [
+  // Rouges & roses
+  { id:'red-500',     base:'#ef4444', bg:'#fef2f2', bd:'#fecaca', label:'Rouge' },
+  { id:'rose-500',    base:'#f43f5e', bg:'#fff1f2', bd:'#fecdd3', label:'Rosé' },
+  { id:'pink-500',    base:'#ec4899', bg:'#fdf2f8', bd:'#fbcfe8', label:'Rose vif' },
+  { id:'fuchsia-500', base:'#d946ef', bg:'#fdf4ff', bd:'#f5d0fe', label:'Fuchsia' },
+  { id:'red-700',     base:'#b91c1c', bg:'#fef2f2', bd:'#fca5a5', label:'Bordeaux' },
+  { id:'rose-700',    base:'#be123c', bg:'#fff1f2', bd:'#fda4af', label:'Carmin' },
+  { id:'pink-700',    base:'#be185d', bg:'#fdf2f8', bd:'#f9a8d4', label:'Framboise' },
+  { id:'fuchsia-700', base:'#a21caf', bg:'#fdf4ff', bd:'#f0abfc', label:'Magenta' },
+  // Violets & bleus
+  { id:'purple-500',  base:'#a855f7', bg:'#faf5ff', bd:'#e9d5ff', label:'Violet clair' },
+  { id:'violet-500',  base:'#8b5cf6', bg:'#f5f3ff', bd:'#ddd6fe', label:'Améthyste' },
+  { id:'indigo-500',  base:'#6366f1', bg:'#eef2ff', bd:'#c7d2fe', label:'Indigo' },
+  { id:'blue-500',    base:'#3b82f6', bg:'#eff6ff', bd:'#bfdbfe', label:'Bleu' },
+  { id:'purple-700',  base:'#7e22ce', bg:'#faf5ff', bd:'#d8b4fe', label:'Prune' },
+  { id:'violet-700',  base:'#6d28d9', bg:'#f5f3ff', bd:'#c4b5fd', label:'Iris' },
+  { id:'indigo-700',  base:'#4338ca', bg:'#eef2ff', bd:'#a5b4fc', label:'Marine' },
+  { id:'blue-700',    base:'#1d4ed8', bg:'#eff6ff', bd:'#93c5fd', label:'Cobalt' },
+  // Cyans & verts
+  { id:'sky-500',     base:'#0ea5e9', bg:'#f0f9ff', bd:'#bae6fd', label:'Ciel' },
+  { id:'cyan-500',    base:'#06b6d4', bg:'#ecfeff', bd:'#a5f3fc', label:'Cyan' },
+  { id:'teal-500',    base:'#14b8a6', bg:'#f0fdfa', bd:'#99f6e4', label:'Sarcelle' },
+  { id:'emerald-500', base:'#10b981', bg:'#ecfdf5', bd:'#a7f3d0', label:'Émeraude' },
+  { id:'green-500',   base:'#22c55e', bg:'#f0fdf4', bd:'#bbf7d0', label:'Vert' },
+  { id:'teal-700',    base:'#0f766e', bg:'#f0fdfa', bd:'#5eead4', label:'Pétrole' },
+  { id:'emerald-700', base:'#047857', bg:'#ecfdf5', bd:'#6ee7b7', label:'Sapin' },
+  { id:'green-700',   base:'#15803d', bg:'#f0fdf4', bd:'#86efac', label:'Forêt' },
+  // Jaunes, oranges & neutres
+  { id:'lime-500',    base:'#84cc16', bg:'#f7fee7', bd:'#d9f99d', label:'Citron vert' },
+  { id:'yellow-500',  base:'#eab308', bg:'#fefce8', bd:'#fef08a', label:'Jaune' },
+  { id:'amber-500',   base:'#f59e0b', bg:'#fffbeb', bd:'#fde68a', label:'Ambre' },
+  { id:'orange-500',  base:'#f97316', bg:'#fff7ed', bd:'#fed7aa', label:'Orange' },
+  { id:'slate-500',   base:'#64748b', bg:'#f8fafc', bd:'#e2e8f0', label:'Ardoise' },
+  { id:'gray-500',    base:'#6b7280', bg:'#f9fafb', bd:'#e5e7eb', label:'Gris' },
+  { id:'zinc-500',    base:'#71717a', bg:'#fafafa', bd:'#e4e4e7', label:'Zinc' },
+  { id:'stone-500',   base:'#78716c', bg:'#fafaf9', bd:'#e7e5e0', label:'Pierre' },
+];
 const WS = {
   meta:{ name:'', version:'', run_label:'', description:'' },
   sources:{ reference: wizSrcDefault(), target: wizSrcDefault() },
@@ -74,6 +125,7 @@ function wizLoadFromYaml(parsed) {
     if (!src) return;
     const s = WS.sources[k];
     s.label  = src.label    || '';
+    s.color  = src.color    || null;
     s.file   = src.file     || '';
     // Normaliser les anciens formats (txt/dat → csv)
     const rawFmt = src.format || 'csv';
@@ -185,6 +237,13 @@ function wizLoadFromYaml(parsed) {
         value: (f.values||[]).join(', ')
       };
     }
+    if (f.value_type === 'list' && Array.isArray(f.values)) {
+      return {
+        field: f.field||'', source: f.source||'reference',
+        operator: f.operator||'equals', value_type: 'list',
+        value: f.values.map(String).join('\n')
+      };
+    }
     return {
       field: f.field||'', source: f.source||'reference',
       operator: f.operator||'equals',
@@ -220,6 +279,7 @@ function wizBuildYaml() {
     const yamlFmt = s.format === 'positionnel' ? 'csv' : s.format;
     const sr = { format: yamlFmt };
     if (s.label)    sr.label    = s.label;
+    if (s.color)    sr.color    = s.color;
     if (s.file)     sr.file     = s.file;
     if (s.encoding) sr.encoding = s.encoding;
     const noDelim = ['json','jsonl','positionnel'].includes(s.format);
@@ -291,6 +351,9 @@ function wizBuildYaml() {
       const vt = f.value_type || 'value';
       if (vt === 'empty' || vt === 'not_empty') {
         o.value_type = vt;
+      } else if (vt === 'list') {
+        o.value_type = 'list';
+        o.values = (f.value||'').split('\n').map(v => v.trim()).filter(Boolean).slice(0, 100);
       } else if (f.value) {
         o.value = f.value;
       }
@@ -387,6 +450,7 @@ function closeYamlModal(e) {
       const parsed = jsyaml.load(content);
       if (parsed && typeof parsed === 'object') {
         wizLoadFromYaml(parsed);
+        applySourceColors();
         // Re-render l'étape courante
         if (wfCurrentStep === 1) onEnterDatasets();
         else if (wfCurrentStep === 2) wizRenderJoin();
@@ -585,9 +649,15 @@ function wizRenderSource(stepEl, srcKey, label) {
     </table>
     <button class="btn-wiz-add" onclick="wizAddPivot('${srcKey}')">+ Ajouter une clé</button>` : '';
 
+  const colorPickerHtml = _COLOR_PALETTE.map(c =>
+    `<button type="button" class="clr-swatch${s.color === c.id ? ' active' : ''}" data-color="${c.id}" style="background:${c.base}" title="${c.label}" onclick="wizPickColor('${srcKey}','${c.id}')"></button>`
+  ).join('') + `<button type="button" class="clr-swatch clr-swatch-more" title="Plus de couleurs…" onclick="openColorModal('${srcKey}')">+</button>`;
+
   stepEl.innerHTML = `
     <div class="wiz-section">
-      <div class="wiz-section-title">${label}</div>
+      <div class="wiz-section-title" style="display:flex;align-items:center;gap:.75rem">${label}
+        <span class="clr-palette" id="clr-pal-${srcKey}">${colorPickerHtml}</span>
+      </div>
       <div class="wiz-grid">
         ${wizField('Format', wizSelect('w-fmt-'+srcKey, [['csv','CSV'],['positionnel','Positionnel'],['json','JSON'],['jsonl','JSONL']], s.format))}
         ${wizField('Chemin du fichier', wizInput('w-file-'+srcKey, s.file, 'ex: /data/export.csv'))}
@@ -975,6 +1045,77 @@ function wizReadSourceForm(srcKey) {
     if (roundingVal !== null && roundingVal !== '') cf.rounding = Number(roundingVal);
     else if (roundingVal !== null) delete cf.rounding;
   });
+}
+
+function wizPickColor(srcKey, colorId) {
+  WS.sources[srcKey].color = colorId;
+  applySourceColors();
+  const pal = document.getElementById('clr-pal-'+srcKey);
+  if (pal) pal.querySelectorAll('[data-color]').forEach(b => b.classList.toggle('active', b.dataset.color === colorId));
+  const modal = document.getElementById('clr-modal');
+  if (modal) modal.querySelectorAll('[data-color]').forEach(b => b.classList.toggle('active', b.dataset.color === colorId));
+}
+
+function openColorModal(srcKey) {
+  const existing = document.getElementById('clr-modal');
+  if (existing) existing.remove();
+  const groups = [
+    { label:'Rouges & roses',          colors: _COLOR_PALETTE_FULL.slice(0, 8) },
+    { label:'Violets & bleus',          colors: _COLOR_PALETTE_FULL.slice(8, 16) },
+    { label:'Cyans & verts',            colors: _COLOR_PALETTE_FULL.slice(16, 24) },
+    { label:'Jaunes, oranges & neutres',colors: _COLOR_PALETTE_FULL.slice(24, 32) },
+  ];
+  const curColor = WS.sources[srcKey].color;
+  const groupsHtml = groups.map(g => `
+    <div class="clr-modal-group">
+      <div class="clr-modal-group-label">${g.label}</div>
+      <div class="clr-modal-row">${g.colors.map(c => `
+        <button type="button" class="clr-modal-swatch${curColor === c.id ? ' active' : ''}"
+          data-color="${c.id}" style="background:${c.base}" title="${c.label}"
+          onclick="wizPickColor('${srcKey}','${c.id}');closeColorModal()"></button>`
+      ).join('')}</div>
+    </div>`).join('');
+  const overlay = document.createElement('div');
+  overlay.id = 'clr-modal';
+  overlay.className = 'clr-modal-overlay';
+  overlay.innerHTML = `<div class="clr-modal-panel" onclick="event.stopPropagation()">
+    <div class="clr-modal-header">
+      <span>Couleur de la source</span>
+      <button class="btn-icon" onclick="closeColorModal()">✕</button>
+    </div>
+    ${groupsHtml}
+  </div>`;
+  overlay.addEventListener('click', closeColorModal);
+  document.body.appendChild(overlay);
+  const onKey = e => { if (e.key === 'Escape') { closeColorModal(); document.removeEventListener('keydown', onKey); } };
+  document.addEventListener('keydown', onKey);
+}
+
+function closeColorModal() {
+  const m = document.getElementById('clr-modal');
+  if (m) m.remove();
+}
+
+function applySourceColors() {
+  const root = document.documentElement.style;
+  const _allColors = [..._COLOR_PALETTE, ..._COLOR_PALETTE_FULL];
+  const refC = _allColors.find(c => c.id === WS.sources.reference.color);
+  const tgtC = _allColors.find(c => c.id === WS.sources.target.color);
+  const defRef = _COLOR_PALETTE[0]; // green
+  const defTgt = _COLOR_PALETTE[1]; // purple
+  const r = refC || defRef;
+  const t = tgtC || defTgt;
+  root.setProperty('--ref', r.base);
+  root.setProperty('--ref-bg', r.bg);
+  root.setProperty('--ref-bd', r.bd);
+  root.setProperty('--tgt', t.base);
+  root.setProperty('--tgt-bg', t.bg);
+  root.setProperty('--tgt-bd', t.bd);
+  // Update icon colors
+  const iconRef = document.querySelector('.ds-half-icon');
+  const iconTgt = document.querySelector('.ds-half-icon--b');
+  if (iconRef) iconRef.style.background = r.base;
+  if (iconTgt) iconTgt.style.background = t.base;
 }
 
 function wizRenderSource0() { onEnterDatasets(); }
@@ -1397,7 +1538,7 @@ function wizRenderFilters() {
 
 // ── Filtres (dans l'étape Jointure) ─────────────────────────
 const _FILTER_OPS      = [['equals','='],['differs','≠'],['greater','>'],['less','<'],['contains','∋'],['not_contains','∌']];
-const _FILTER_VAL_TYPES = [['value','Valeur'],['empty','Vide'],['not_empty','Non vide']];
+const _FILTER_VAL_TYPES = [['value','Valeur'],['list','Liste'],['empty','Vide'],['not_empty','Non vide']];
 
 function wizFilterRows(source, fieldNames) {
   return WS.filters
@@ -1413,12 +1554,24 @@ function wizFilterRows(source, fieldNames) {
         : wizInput('w-ff-'+i, f.field, 'champ');
       const opOpts  = _FILTER_OPS.map(([v,l])      => `<option value="${v}"${v===op?' selected':''}>${l}</option>`).join('');
       const vtOpts  = _FILTER_VAL_TYPES.map(([v,l]) => `<option value="${v}"${v===vt?' selected':''}>${l}</option>`).join('');
+      const valVisible = vt === 'value' || vt === 'list';
+      const listLines = vt === 'list' ? (f.value||'').split('\n').filter(v=>v.trim()) : [];
+      const valCell = vt === 'list'
+        ? `<div class="filter-list-wrap">
+            <textarea class="wiz-input filter-list-ta" id="w-fv-${i}" rows="4" placeholder="Une valeur par ligne…"
+              ondragover="event.preventDefault();this.classList.add('hover')"
+              ondragleave="this.classList.remove('hover')"
+              ondrop="wizFilterListDrop(event,${i})"
+              oninput="wizFilterListCount(${i})">${esc(f.value||'')}</textarea>
+            <span class="filter-list-count" id="w-flc-${i}">${listLines.length} / 100</span>
+          </div>`
+        : wizInput('w-fv-'+i, f.value||'', 'valeur');
       return `<tr>
         <td>${fieldSel}</td>
         <td><select class="wiz-select" id="w-fo-${i}">${opOpts}</select></td>
         <td><select class="wiz-select" id="w-fvt-${i}" onchange="wizToggleFilterVal(${i},this.value)">${vtOpts}</select></td>
-        <td id="w-fv-wrap-${i}" style="${vt==='value'?'':'display:none'}">
-          ${wizInput('w-fv-'+i, f.value||'', 'valeur')}
+        <td id="w-fv-wrap-${i}" style="${valVisible?'':'display:none'}">
+          ${valCell}
         </td>
         <td><button class="btn-icon" onclick="wizRemoveFilter(${i})">✕</button></td>
       </tr>`;
@@ -1427,7 +1580,40 @@ function wizFilterRows(source, fieldNames) {
 
 function wizToggleFilterVal(i, vt) {
   const wrap = document.getElementById('w-fv-wrap-'+i);
-  if (wrap) wrap.style.display = vt === 'value' ? '' : 'none';
+  if (wrap) wrap.style.display = (vt === 'value' || vt === 'list') ? '' : 'none';
+  wizReadFiltersForJoin();
+  wizRenderJoin();
+}
+
+function wizFilterListDrop(ev, i) {
+  ev.preventDefault();
+  const ta = document.getElementById('w-fv-'+i);
+  if (!ta) return;
+  ta.classList.remove('hover');
+  const file = ev.dataTransfer.files[0];
+  if (!file || !file.name.endsWith('.txt')) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const lines = reader.result.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 100);
+    ta.value = lines.join('\n');
+    wizFilterListCount(i);
+  };
+  reader.readAsText(file);
+}
+
+function wizFilterListCount(i) {
+  const ta = document.getElementById('w-fv-'+i);
+  const badge = document.getElementById('w-flc-'+i);
+  if (!ta || !badge) return;
+  const lines = ta.value.split('\n').filter(l => l.trim());
+  if (lines.length > 100) {
+    ta.value = lines.slice(0, 100).join('\n');
+    badge.textContent = '100 / 100';
+    badge.classList.add('limit');
+  } else {
+    badge.textContent = `${lines.length} / 100`;
+    badge.classList.toggle('limit', lines.length >= 100);
+  }
 }
 
 function wizAddFilterFor(source) {

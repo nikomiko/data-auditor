@@ -53,6 +53,16 @@ def apply_filters(df_ref, df_tgt, filters, config, debug: bool = False):
                     _debug_log(_f, r, s, raw_series=df[_f])
                     return r
                 return _m
+            if vt == "list":
+                raw_list = lv if lv is not None else (str(val).split("\n") if val else [])
+                vs = set(str(v).strip() for v in raw_list if str(v).strip())
+                vs = set(list(vs)[:100])
+                def _m(df, _f=fld, _vs=vs):
+                    s = _as_str(df[_f])
+                    r = s.isin(_vs)
+                    _debug_log(_f, r, s, cmp_val=sorted(_vs))
+                    return r
+                return _m
             # value_type == "value" (ou valeur brute)
             if lv is not None and not val:
                 vs = set(str(v) for v in lv)

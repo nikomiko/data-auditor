@@ -143,8 +143,8 @@ function listenSSE(token) {
 
       // Activer exports + badge "export complet"
       document.getElementById('btn-csv').disabled  = false;
-      document.getElementById('btn-html').disabled = false;
       document.getElementById('btn-xlsx').disabled = false;
+      _updateHtmlExportBtn(ev.total_results);
       _updateExportBadge(ev.total_results, config?.report?.max_diff_preview || 500);
 
       // Débloquer l'étape résultats
@@ -384,8 +384,8 @@ async function loadHistoryEntry(filename) {
     const pb = document.getElementById('pagination-bar');
     if (pb) pb.style.display = 'none';
     document.getElementById('btn-csv').disabled  = true;
-    document.getElementById('btn-html').disabled = false;
     document.getElementById('btn-xlsx').disabled = true;
+    _updateHtmlExportBtn(allResults.length);
 
     if (data.truncated) {
       const t = document.getElementById('trunc');
