@@ -416,8 +416,8 @@ function updateOrphelinLabels(config) {
   if (lblOB) lblOB.textContent = tgtLabel;
 
   // Mettre à jour les classes 'on' des chips orphelins pour refléter activeRuleFilters
-  const btnOA = document.querySelector('.chip.ca');
-  const btnOB = document.querySelector('.chip.cb');
+  const btnOA = document.querySelector('.chip.orphelin-source');
+  const btnOB = document.querySelector('.chip.orphelin-cible');
   if (btnOA && activeRuleFilters) {
     btnOA.classList.toggle('on', activeRuleFilters.has(-1));
   }
@@ -521,7 +521,7 @@ function buildRuleFilterBar(summary, config) {
 
   // Chip pour Clé OK (rule_id: -3)
   const presenceBtn = document.createElement('button');
-  presenceBtn.className = 'chip co on';
+  presenceBtn.className = 'chip key-matched on';
   presenceBtn.dataset.ruleId = -3;
   presenceBtn.addEventListener('click', function() { toggleChip(this); });
   presenceBtn.innerHTML = `Clé OK <span class="chip-c">…</span>`;
@@ -651,6 +651,25 @@ function _rowMatchesText(r) {
 // ═══════════════════════════════════════════════════════════
 //  EXPORT
 // ═══════════════════════════════════════════════════════════
+const _HTML_EXPORT_MAX = 5000;
+
+function _updateHtmlExportBtn(totalResults) {
+  const btn = document.getElementById('btn-html');
+  if (!btn) return;
+  const tooBig = totalResults > _HTML_EXPORT_MAX;
+  // Ne pas mettre disabled (sinon le title/tooltip ne s'affiche pas) — bloquer via data-attr
+  btn.dataset.tooBig = tooBig ? '1' : '';
+  if (tooBig) {
+    btn.title = `Export HTML indisponible — ${totalResults.toLocaleString('fr-FR')} résultats (limite : ${_HTML_EXPORT_MAX.toLocaleString('fr-FR')}). Utilisez XLSX pour les grands jeux de données.`;
+    btn.classList.add('btn-exp-disabled');
+  } else {
+    btn.dataset.tooBig = '';
+    btn.title = '';
+    btn.classList.remove('btn-exp-disabled');
+    btn.disabled = false;
+  }
+}
+
 function _updateExportBadge(total, maxPreview) {
   const badge = document.getElementById('export-complete-badge');
   if (!badge) return;
@@ -669,6 +688,11 @@ function _updateExportBadge(total, maxPreview) {
 }
 
 function exportReport(fmt) {
+  if (fmt === 'html') {
+    const btn = document.getElementById('btn-html');
+    if (btn && btn.dataset.tooBig === '1') return; // silently blocked — tooltip explains
+    if (!currentToken) { exportHTMLDynamic(); return; }
+  }
   if (!currentToken) { exportHTMLDynamic(); return; }
 
   const p = new URLSearchParams({ token: currentToken, format: fmt });
@@ -785,10 +809,10 @@ th.sort-asc .sort-ic,th.sort-desc .sort-ic{opacity:1;color:#3b82f6}
 </div>
 <div class="filter-bar">
   <span class="fl">Types</span>
-  <button class="chip ca on" data-k="type" data-v="ORPHELIN_A" onclick="toggleChip(this)">Pas dans la cible <span class="chip-c" id="cc-a">0</span></button>
-  <button class="chip cb on" data-k="type" data-v="ORPHELIN_B" onclick="toggleChip(this)">Pas dans la réf. <span class="chip-c" id="cc-b">0</span></button>
+  <button class="chip orphelin-source on" data-k="type" data-v="ORPHELIN_A" onclick="toggleChip(this)">Pas dans la cible <span class="chip-c" id="cc-a">0</span></button>
+  <button class="chip orphelin-cible on" data-k="type" data-v="ORPHELIN_B" onclick="toggleChip(this)">Pas dans la réf. <span class="chip-c" id="cc-b">0</span></button>
   <button class="chip cd on" data-k="type" data-v="KO" onclick="toggleChip(this)">KO <span class="chip-c" id="cc-ko">0</span></button>
-  <button class="chip co on" data-k="type" data-v="OK" onclick="toggleChip(this)">OK <span class="chip-c" id="cc-ok">0</span></button>
+  <button class="chip key-matched on" data-k="type" data-v="OK" onclick="toggleChip(this)">OK <span class="chip-c" id="cc-ok">0</span></button>
   ${ruleChips}
   <input class="srch" id="srch" type="search" placeholder="Cl\xe9, valeur r\xe9f., valeur cible\u2026" oninput="render()">
 </div>

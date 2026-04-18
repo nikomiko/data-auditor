@@ -461,9 +461,9 @@ h1{font-size:1rem;font-weight:700;letter-spacing:-.01em;flex:1;min-width:0;overf
 .filter-bar{padding:.4rem 1rem;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;flex-wrap:wrap;gap:.3rem .4rem;align-items:center;flex-shrink:0}
 .chip{background:none;border:1px solid #cbd5e0;color:#94a3b8;font-size:.66rem;padding:.16rem .5rem;border-radius:99px;cursor:pointer;font-family:inherit;transition:background .12s,color .12s,border-color .12s;display:inline-flex;align-items:center;gap:.3rem}
 .chip:hover{color:#475569;border-color:#94a3b8}
-.chip.on.ca{background:#fef2f2;border-color:#fca5a5;color:#dc2626}
-.chip.on.cb{background:#fff7ed;border-color:#fdba74;color:#ea580c}
-.chip.on.co{background:#f0fdf4;border-color:#86efac;color:#16a34a}
+.chip.on.orphelin-source{background:#fef2f2;border-color:#fca5a5;color:#dc2626}
+.chip.on.orphelin-cible{background:#fff7ed;border-color:#fdba74;color:#ea580c}
+.chip.on.key-matched{background:#f0fdf4;border-color:#86efac;color:#16a34a}
 .chip.on.cr-coh{background:#f0fdf4;border-color:#86efac;color:#16a34a}
 .chip.on.cr-inc{background:#fef2f2;border-color:#fca5a5;color:#dc2626}
 .chip-c{background:rgba(0,0,0,.07);border-radius:99px;padding:0 .32rem;font-size:.58rem;font-variant-numeric:tabular-nums}
@@ -649,11 +649,11 @@ def to_html(results: list, summary: dict, config: dict,
         # Filter bar
         '<div class="filter-bar">',
         '<span class="fl">Pr\u00e9sence</span>',
-        f'<button class="chip ca on" data-k="rule" data-v="Source uniq." onclick="toggleChip(this)">'
+        f'<button class="chip orphelin-source on" data-k="rule" data-v="Source uniq." onclick="toggleChip(this)">'
         f'{_h(ref_label)} uniq. <span class="chip-c">0</span></button>',
-        f'<button class="chip cb on" data-k="rule" data-v="Cible uniq." onclick="toggleChip(this)">'
+        f'<button class="chip orphelin-cible on" data-k="rule" data-v="Cible uniq." onclick="toggleChip(this)">'
         f'{_h(tgt_label)} uniq. <span class="chip-c">0</span></button>',
-        '<button class="chip co on" data-k="rule" data-v="Cl\u00e9 OK" onclick="toggleChip(this)">'
+        '<button class="chip key-matched on" data-k="rule" data-v="Cl\u00e9 OK" onclick="toggleChip(this)">'
         'Cl\u00e9 OK <span class="chip-c">0</span></button>',
         rule_chips,
         '<input id="srch" type="search" placeholder="Recherche\u2026" oninput="render()">',

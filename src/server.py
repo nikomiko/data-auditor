@@ -46,7 +46,7 @@ def _parse_version(version_str: str) -> tuple:
     except (ValueError, AttributeError):
         return (0, 0, 0)
 
-APP_VERSION = "4.1.1"
+APP_VERSION = "4.3.0"
 LATEST_GITHUB_VERSION = None  # Fetché au démarrage du serveur
 
 # ── Résolution des chemins (dev vs frozen PyInstaller) ────────
@@ -693,6 +693,15 @@ def export():
         )
 
     elif fmt == "html":
+        # Refus si trop volumineux (protection côté serveur)
+        _HTML_EXPORT_MAX = 5000
+        if results_db:
+            _n = results_db.execute("SELECT COUNT(*) FROM results").fetchone()[0]
+            if _n > _HTML_EXPORT_MAX:
+                return jsonify({
+                    "error": f"Export HTML indisponible — {_n:,} résultats dépassent la limite de {_HTML_EXPORT_MAX:,}. Utilisez l'export XLSX."
+                }), 413
+
         # Vue courante filtrée — filtres dynamiques conservés dans le HTML
         rules_str  = request.args.get("rules", "")
         rule_logic = request.args.get("rule_logic", "OR").upper()

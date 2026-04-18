@@ -1,0 +1,130 @@
+meta:
+  name: "Audit Mouvements de stocks entrepôt — CSV → DAT positionnel"
+  version: "1.0"
+
+sources:
+  reference:
+    label: "Mouvements de stocks entrepôt (référence CSV)"
+    format: csv
+    encoding: utf-8
+    delimiter: ";"
+    has_header: true
+    fields:
+      - {name: mvt_id, type: string}
+      - {name: sku, type: string}
+      - {name: entrepot, type: string}
+      - {name: type_mvt, type: string}
+      - {name: quantite, type: integer}
+      - {name: stock_avant, type: integer}
+      - {name: stock_apres, type: integer}
+      - {name: prix_unit, type: decimal}
+      - {name: valeur_mvt, type: decimal}
+      - {name: date_mvt, type: date, date_format: "%Y-%m-%d"}
+      - {name: date_saisie, type: date, date_format: "%Y-%m-%d"}
+      - {name: operateur, type: string}
+
+  target:
+    label: "Mouvements de stocks entrepôt (cible DAT positionnel)"
+    format: dat
+    encoding: utf-8
+    fixed_width: true
+    column_positions:
+      - name: mvt_id
+        position: 1
+        width: 12
+      - name: sku
+        position: 13
+        width: 12
+      - name: entrepot
+        position: 25
+        width: 10
+      - name: type_mvt
+        position: 35
+        width: 12
+      - name: quantite
+        position: 47
+        width: 5
+        type: integer
+      - name: stock_avant
+        position: 52
+        width: 6
+        type: integer
+      - name: stock_apres
+        position: 58
+        width: 6
+        type: integer
+      - name: prix_unit
+        position: 64
+        width: 10
+        type: decimal
+      - name: valeur_mvt
+        position: 74
+        width: 12
+        type: decimal
+      - name: date_mvt
+        position: 86
+        width: 10
+        type: date
+        date_format: "%Y-%m-%d"
+      - name: date_saisie
+        position: 96
+        width: 10
+        type: date
+        date_format: "%Y-%m-%d"
+      - name: operateur
+        position: 106
+        width: 6
+
+join:
+  keys:
+    - source_field: mvt_id
+      target_field: mvt_id
+
+rules:
+  - name: "Type mvt"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: type_mvt
+        target_field: type_mvt
+        operator: differs
+  - name: "Quantite"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: quantite
+        target_field: quantite
+        operator: differs
+  - name: "Stock avant"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: stock_avant
+        target_field: stock_avant
+        operator: differs
+  - name: "Prix unit"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: prix_unit
+        target_field: prix_unit
+        operator: differs
+        tolerance: 0
+  - name: "Date saisie"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: date_saisie
+        target_field: date_saisie
+        operator: differs
+  - name: "Operateur"
+    logic: AND
+    rule_type: incoherence
+    fields:
+      - source_field: operateur
+        target_field: operateur
+        operator: differs
+
+report:
+  show_matching: false
+  max_diff_preview: 2000

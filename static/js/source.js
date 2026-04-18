@@ -42,6 +42,7 @@ function applyYamlContent(content, filename) {
   try {
     const parsed = jsyaml.load(content);
     wizLoadFromYaml(parsed);
+    applySourceColors();
     _updateFileHint('reference');
     _updateFileHint('target');
     if (fileRef) _quickConformityCheck('reference', fileRef);
