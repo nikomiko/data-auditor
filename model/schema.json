@@ -1,0 +1,862 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DataAuditor Configuration Schema",
+  "description": "JSON Schema for validating DataAuditor audit configuration files (v1.0.0)",
+  "type": "object",
+  "version": "1.0.0",
+  "required": ["meta", "sources", "join", "report"],
+  "additionalProperties": false,
+  "properties": {
+    "meta": {
+      "type": "object",
+      "description": "Metadata about the audit configuration",
+      "required": ["name", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable name of the audit"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version of the audit configuration",
+          "pattern": "^[0-9]+(\\.[0-9]+)*$"
+        }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "description": "Data sources for the audit (left=reference source, right=target source)",
+      "minProperties": 2,
+      "maxProperties": 3,
+      "required": ["left", "right"],
+      "additionalProperties": false,
+      "properties": {
+        "left": {
+          "$ref": "#/definitions/source",
+          "description": "Reference/source data (typically the authoritative source)"
+        },
+        "right": {
+          "$ref": "#/definitions/source",
+          "description": "Target/comparison data (typically the data to validate)"
+        },
+        "unpivot": {
+          "$ref": "#/definitions/unpivot",
+          "description": "Optional configuration for unpivoting (wide to long format transformation)"
+        }
+      }
+    },
+    "join": {
+      "type": "object",
+      "description": "Join configuration for matching records between left and right sources",
+      "required": ["keys"],
+      "additionalProperties": false,
+      "properties": {
+        "keys": {
+          "type": "array",
+          "description": "List of key field pairs to join on. Records are matched when all key pairs are equal.",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["source_field", "target_field"],
+            "additionalProperties": false,
+            "properties": {
+              "source_field": {
+                "type": "string",
+                "description": "Field name from left (reference) source"
+              },
+              "target_field": {
+                "type": "string",
+                "description": "Field name from right (target) source"
+              }
+            }
+          }
+        }
+      }
+    },
+    "filters": {
+      "type": "array",
+      "description": "Optional filters to apply to sources before processing. Each filter removes records that do not match the filter criteria.",
+      "items": {
+        "type": "object",
+        "required": ["field", "source"],
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "Field name to filter on"
+          },
+          "source": {
+            "type": "string",
+            "enum": ["left", "right"],
+            "description": "Source to apply the filter to"
+          },
+          "operator": {
+            "type": "string",
+            "enum": ["equals", "differs", "greater", "less", "contains", "not_contains"],
+            "description": "Comparison operator"
+          },
+          "value": {
+            "description": "Single value to compare against (used with operator)"
+          },
+          "values": {
+            "type": "array",
+            "description": "List of values for multi-value filter (record passes if field is in this list)"
+          }
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "description": "Audit rules to validate data consistency between sources. Rules are evaluated only on matched record pairs (not orphans).",
+      "items": {
+        "type": "object",
+        "required": ["name", "logic", "rule_type", "conditions"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Unique name of the rule"
+          },
+          "logic": {
+            "type": "string",
+            "enum": ["AND", "OR"],
+            "description": "Logical operator for combining conditions. AND: rule fails if ANY condition fails. OR: rule fails if ALL conditions pass."
+          },
+          "rule_type": {
+            "type": "string",
+            "enum": ["OK", "KO"],
+            "description": "Type of rule. OK: rule validates coherence (passes when conditions are met). KO: rule validates incoherence (fails when conditions are met)."
+          },
+          "conditions": {
+            "type": "array",
+            "description": "List of conditions to evaluate. Each condition compares two sides (fields or values).",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["operator"],
+              "additionalProperties": false,
+              "properties": {
+                "operator": {
+                  "type": "string",
+                  "enum": ["equals", "differs", "greater", "less", "contains", "not_contains"],
+                  "description": "Comparison operator. equals: A=B, differs: A≠B, greater: A>B, less: A<B, contains: B∈A, not_contains: B∉A"
+                },
+                "source_field": {
+                  "type": "string",
+                  "description": "Field name from left (source) source"
+                },
+                "target_field": {
+                  "type": "string",
+                  "description": "Field name from right (target) source"
+                },
+                "target_value": {
+                  "description": "Fixed value to compare against (alternative to target_field). If both specified, target_value takes precedence."
+                },
+                "tolerance": {
+                  "type": "number",
+                  "description": "Tolerance for numeric comparisons. Condition passes if |A - B| <= tolerance."
+                },
+                "normalize": {
+                  "type": "string",
+                  "enum": ["upper", "lower", "trim", "upper_trim", "lower_trim"],
+                  "description": "Normalization function to apply before comparison"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "report": {
+      "type": "object",
+      "description": "Report generation settings",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "show_matching": {
+          "type": "boolean",
+          "description": "Whether to include matching records (OK results) in report output",
+          "default": false
+        },
+        "max_diff_preview": {
+          "type": "integer",
+          "description": "Maximum length of field value preview in report (in characters). Longer values are truncated.",
+          "minimum": 0,
+          "default": 500
+        }
+      }
+    }
+  },
+  "definitions": {
+    "source": {
+      "type": "object",
+      "description": "Data source configuration. Defines how to read and parse data from a file.",
+      "required": ["format"],
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": ["csv", "txt", "dat", "fixed_width", "xlsx", "json", "jsonl"],
+          "description": "File format. csv/txt/dat: delimited text. fixed_width: positional fields. xlsx: Excel. json/jsonl: JSON (full file or line-delimited)."
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable label for the source (used in UI and reports)"
+        },
+        "color": {
+          "type": "string",
+          "description": "UI color identifier for visual distinction (e.g., 'rose', 'blue', 'green')"
+        },
+        "encoding": {
+          "type": "string",
+          "enum": ["utf-8", "utf-8-sig", "latin-1", "iso-8859-1", "cp1252"],
+          "description": "Character encoding of the source file (utf-8-sig handles Excel BOM)",
+          "default": "utf-8"
+        },
+        "delimiter": {
+          "type": "string",
+          "description": "Field delimiter for delimited formats (csv, txt, dat). Examples: ';', ',', '\t'"
+        },
+        "has_header": {
+          "type": "boolean",
+          "description": "Whether the file has a header row with field names",
+          "default": true
+        },
+        "skip_rows": {
+          "type": "integer",
+          "description": "Number of rows to skip at the beginning of the file",
+          "minimum": 0,
+          "default": 0
+        },
+        "sheet_name": {
+          "type": "string",
+          "description": "Sheet name for XLSX format (required for xlsx, optional otherwise)"
+        },
+        "fixed_width": {
+          "type": "boolean",
+          "description": "Whether to use fixed-width column parsing instead of delimiter-based"
+        },
+        "column_positions": {
+          "type": "array",
+          "description": "Column positions for fixed-width format. Each column must specify position (1-based), width, and optionally type and date_format.",
+          "items": {
+            "type": "object",
+            "required": ["name", "position", "width"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Field name"
+              },
+              "position": {
+                "type": "integer",
+                "description": "1-based starting position of the field",
+                "minimum": 1
+              },
+              "width": {
+                "type": "integer",
+                "description": "Width (number of characters) of the field",
+                "minimum": 1
+              },
+              "type": {
+                "type": "string",
+                "enum": ["string", "integer", "decimal", "date", "boolean", "skip"],
+                "description": "Data type of the field (defaults to string if not specified)",
+                "default": "string"
+              },
+              "date_format": {
+                "type": "string",
+                "description": "Date format string for date fields (e.g., '%Y-%m-%d', '%d/%m/%Y', '%Y%m%d')"
+              }
+            }
+          }
+        },
+        "json_path": {
+          "type": "string",
+          "description": "Path to records array within JSON structure (for json/jsonl formats). Example: 'export.records' extracts records from {export: {records: [...]}}"
+        },
+        "record_filter": {
+          "type": "object",
+          "description": "Filter for selecting specific records before parsing (e.g., only records starting with a marker)",
+          "additionalProperties": false,
+          "properties": {
+            "marker": {
+              "type": "string",
+              "description": "Regex pattern to match record lines. Only lines matching this pattern are processed."
+            }
+          }
+        },
+        "max_columns": {
+          "type": "integer",
+          "description": "Maximum number of field splits for delimited formats. Useful when field values contain the delimiter.",
+          "minimum": 1
+        },
+        "fields": {
+          "type": "array",
+          "description": "Field definitions for the source. Each field defines a column in the parsed data.",
+          "items": {
+            "$ref": "#/definitions/field"
+          }
+        },
+        "calculated_fields": {
+          "type": "array",
+          "description": "Calculated fields derived from other fields using expressions",
+          "items": {
+            "$ref": "#/definitions/calculated_field"
+          }
+        },
+        "unpivot": {
+          "$ref": "#/definitions/unpivot",
+          "description": "Optional unpivoting configuration for this source specifically"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "format": {
+                "const": "xlsx"
+              }
+            }
+          },
+          "then": {
+            "required": ["sheet_name"],
+            "errorMessage": "sheet_name is required when format is 'xlsx'"
+          }
+        }
+      ]
+    },
+    "field": {
+      "type": "object",
+      "description": "Field definition specifying how to parse and type a column",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Field name (becomes column name in parsed data)"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["string", "integer", "decimal", "date", "boolean", "skip"],
+          "description": "Data type: string (text), integer (whole numbers), decimal (floating point), date (parsed using date_format), boolean (true/false), skip (read but ignore in comparisons)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Nested path within JSON object for field extraction (json/jsonl formats only). Example: 'localisation.site' extracts record.localisation.site"
+        },
+        "date_format": {
+          "type": "string",
+          "description": "Date format string using strftime syntax (e.g., '%Y-%m-%d', '%d/%m/%Y'). Required for date type fields."
+        },
+        "decimal_precision": {
+          "type": "integer",
+          "description": "Number of decimal places for decimal fields (used for normalization and comparison)",
+          "minimum": 0
+        }
+      }
+    },
+    "calculated_field": {
+      "type": "object",
+      "description": "Calculated field derived from other fields using pandas/NumPy expressions",
+      "required": ["name", "formula", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the calculated field"
+        },
+        "formula": {
+          "type": "string",
+          "description": "Pandas/NumPy expression to calculate the field. Use field names directly. Example: 'prix_ht * 1.206'"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["string", "integer", "decimal", "date", "boolean"],
+          "description": "Data type of the calculated result"
+        },
+        "rounding": {
+          "type": "integer",
+          "description": "Number of decimal places to round result to (for numeric results)",
+          "minimum": 0
+        }
+      }
+    },
+    "unpivot": {
+      "type": "object",
+      "description": "Configuration for unpivoting (transforming from wide to long format). Converts N pivot columns into N rows with location and value columns.",
+      "required": ["anchor_fields", "location_field", "value_field", "pivot_fields"],
+      "additionalProperties": false,
+      "properties": {
+        "anchor_fields": {
+          "type": "array",
+          "description": "Fields to keep as anchors (dimensions that remain unchanged during unpivot). These identify the record.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "location_field": {
+          "type": "string",
+          "description": "Name of the new column that will contain the original field names (the unpivoted column headers)"
+        },
+        "value_field": {
+          "type": "string",
+          "description": "Name of the new column that will contain the field values (the data from pivoted columns)"
+        },
+        "pivot_fields": {
+          "type": "array",
+          "description": "Fields to pivot and their corresponding location labels",
+          "items": {
+            "type": "object",
+            "required": ["source", "location"],
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "type": "string",
+                "description": "Source field name to pivot"
+              },
+              "location": {
+                "type": "string",
+                "description": "Value to use in location_field for this pivot (e.g., 'PARIS', 'qty_PARIS', etc.)"
+              }
+            }
+          },
+          "minItems": 1
+        }
+      }
+    }
+  }
+}
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DataAuditor Configuration Schema",
+  "description": "JSON Schema for validating DataAuditor audit configuration files (v1.0.0)",
+  "type": "object",
+  "version": "1.0.0",
+  "required": ["meta", "sources", "join", "report"],
+  "additionalProperties": false,
+  "properties": {
+    "meta": {
+      "type": "object",
+      "description": "Metadata about the audit configuration",
+      "required": ["name", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable name of the audit"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version of the audit configuration",
+          "pattern": "^[0-9]+(\\.[0-9]+)*$"
+        }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "description": "Data sources for the audit (left=reference source, right=target source)",
+      "minProperties": 2,
+      "maxProperties": 3,
+      "required": ["left", "right"],
+      "additionalProperties": false,
+      "properties": {
+        "left": {
+          "$ref": "#/definitions/source",
+          "description": "Reference/source data (typically the authoritative source)"
+        },
+        "right": {
+          "$ref": "#/definitions/source",
+          "description": "Target/comparison data (typically the data to validate)"
+        },
+        "unpivot": {
+          "$ref": "#/definitions/unpivot",
+          "description": "Optional configuration for unpivoting (wide to long format transformation)"
+        }
+      }
+    },
+    "join": {
+      "type": "object",
+      "description": "Join configuration for matching records between left and right sources",
+      "required": ["keys"],
+      "additionalProperties": false,
+      "properties": {
+        "keys": {
+          "type": "array",
+          "description": "List of key field pairs to join on. Records are matched when all key pairs are equal.",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["source_field", "target_field"],
+            "additionalProperties": false,
+            "properties": {
+              "source_field": {
+                "type": "string",
+                "description": "Field name from left (reference) source"
+              },
+              "target_field": {
+                "type": "string",
+                "description": "Field name from right (target) source"
+              }
+            }
+          }
+        }
+      }
+    },
+    "filters": {
+      "type": "array",
+      "description": "Optional filters to apply to sources before processing. Each filter removes records that do not match the filter criteria.",
+      "items": {
+        "type": "object",
+        "required": ["field", "source"],
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "Field name to filter on"
+          },
+          "source": {
+            "type": "string",
+            "enum": ["left", "right"],
+            "description": "Source to apply the filter to"
+          },
+          "operator": {
+            "type": "string",
+            "enum": ["equals", "differs", "greater", "less", "contains", "not_contains"],
+            "description": "Comparison operator"
+          },
+          "value": {
+            "description": "Single value to compare against (used with operator)"
+          },
+          "values": {
+            "type": "array",
+            "description": "List of values for multi-value filter (record passes if field is in this list)"
+          }
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "description": "Audit rules to validate data consistency between sources. Rules are evaluated only on matched record pairs (not orphans).",
+      "items": {
+        "type": "object",
+        "required": ["name", "logic", "rule_type", "conditions"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Unique name of the rule"
+          },
+          "logic": {
+            "type": "string",
+            "enum": ["AND", "OR"],
+            "description": "Logical operator for combining conditions. AND: rule fails if ANY condition fails. OR: rule fails if ALL conditions pass."
+          },
+          "rule_type": {
+            "type": "string",
+            "enum": ["OK", "KO"],
+            "description": "Type of rule. OK: rule validates coherence (passes when conditions are met). KO: rule validates incoherence (fails when conditions are met)."
+          },
+          "conditions": {
+            "type": "array",
+            "description": "List of conditions to evaluate. Each condition compares two sides (fields or values).",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["operator"],
+              "additionalProperties": false,
+              "properties": {
+                "operator": {
+                  "type": "string",
+                  "enum": ["equals", "differs", "greater", "less", "contains", "not_contains"],
+                  "description": "Comparison operator. equals: A=B, differs: A≠B, greater: A>B, less: A<B, contains: B∈A, not_contains: B∉A"
+                },
+                "source_field": {
+                  "type": "string",
+                  "description": "Field name from left (source) source"
+                },
+                "target_field": {
+                  "type": "string",
+                  "description": "Field name from right (target) source"
+                },
+                "target_value": {
+                  "description": "Fixed value to compare against (alternative to target_field). If both specified, target_value takes precedence."
+                },
+                "tolerance": {
+                  "type": "number",
+                  "description": "Tolerance for numeric comparisons. Condition passes if |A - B| <= tolerance."
+                },
+                "normalize": {
+                  "type": "string",
+                  "enum": ["upper", "lower", "trim", "upper_trim", "lower_trim"],
+                  "description": "Normalization function to apply before comparison"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "report": {
+      "type": "object",
+      "description": "Report generation settings",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "show_matching": {
+          "type": "boolean",
+          "description": "Whether to include matching records (OK results) in report output",
+          "default": false
+        },
+        "max_diff_preview": {
+          "type": "integer",
+          "description": "Maximum length of field value preview in report (in characters). Longer values are truncated.",
+          "minimum": 0,
+          "default": 500
+        }
+      }
+    }
+  },
+  "definitions": {
+    "source": {
+      "type": "object",
+      "description": "Data source configuration. Defines how to read and parse data from a file.",
+      "required": ["format"],
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": ["csv", "txt", "dat", "fixed_width", "xlsx", "json", "jsonl"],
+          "description": "File format. csv/txt/dat: delimited text. fixed_width: positional fields. xlsx: Excel. json/jsonl: JSON (full file or line-delimited)."
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable label for the source (used in UI and reports)"
+        },
+        "color": {
+          "type": "string",
+          "description": "UI color identifier for visual distinction (e.g., 'rose', 'blue', 'green')"
+        },
+        "encoding": {
+          "type": "string",
+          "enum": ["utf-8", "utf-8-sig", "latin-1", "iso-8859-1", "cp1252"],
+          "description": "Character encoding of the source file (utf-8-sig handles Excel BOM)",
+          "default": "utf-8"
+        },
+        "delimiter": {
+          "type": "string",
+          "description": "Field delimiter for delimited formats (csv, txt, dat). Examples: ';', ',', '\t'"
+        },
+        "has_header": {
+          "type": "boolean",
+          "description": "Whether the file has a header row with field names",
+          "default": true
+        },
+        "skip_rows": {
+          "type": "integer",
+          "description": "Number of rows to skip at the beginning of the file",
+          "minimum": 0,
+          "default": 0
+        },
+        "sheet_name": {
+          "type": "string",
+          "description": "Sheet name for XLSX format (required for xlsx, optional otherwise)"
+        },
+        "fixed_width": {
+          "type": "boolean",
+          "description": "Whether to use fixed-width column parsing instead of delimiter-based"
+        },
+        "column_positions": {
+          "type": "array",
+          "description": "Column positions for fixed-width format. Each column must specify position (1-based), width, and optionally type and date_format.",
+          "items": {
+            "type": "object",
+            "required": ["name", "position", "width"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Field name"
+              },
+              "position": {
+                "type": "integer",
+                "description": "1-based starting position of the field",
+                "minimum": 1
+              },
+              "width": {
+                "type": "integer",
+                "description": "Width (number of characters) of the field",
+                "minimum": 1
+              },
+              "type": {
+                "type": "string",
+                "enum": ["string", "integer", "decimal", "date", "boolean", "skip"],
+                "description": "Data type of the field (defaults to string if not specified)",
+                "default": "string"
+              },
+              "date_format": {
+                "type": "string",
+                "description": "Date format string for date fields (e.g., '%Y-%m-%d', '%d/%m/%Y', '%Y%m%d')"
+              }
+            }
+          }
+        },
+        "json_path": {
+          "type": "string",
+          "description": "Path to records array within JSON structure (for json/jsonl formats). Example: 'export.records' extracts records from {export: {records: [...]}}"
+        },
+        "record_filter": {
+          "type": "object",
+          "description": "Filter for selecting specific records before parsing (e.g., only records starting with a marker)",
+          "additionalProperties": false,
+          "properties": {
+            "marker": {
+              "type": "string",
+              "description": "Regex pattern to match record lines. Only lines matching this pattern are processed."
+            }
+          }
+        },
+        "max_columns": {
+          "type": "integer",
+          "description": "Maximum number of field splits for delimited formats. Useful when field values contain the delimiter.",
+          "minimum": 1
+        },
+        "fields": {
+          "type": "array",
+          "description": "Field definitions for the source. Each field defines a column in the parsed data.",
+          "items": {
+            "$ref": "#/definitions/field"
+          }
+        },
+        "calculated_fields": {
+          "type": "array",
+          "description": "Calculated fields derived from other fields using expressions",
+          "items": {
+            "$ref": "#/definitions/calculated_field"
+          }
+        },
+        "unpivot": {
+          "$ref": "#/definitions/unpivot",
+          "description": "Optional unpivoting configuration for this source specifically"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "format": {
+                "const": "xlsx"
+              }
+            }
+          },
+          "then": {
+            "required": ["sheet_name"],
+            "errorMessage": "sheet_name is required when format is 'xlsx'"
+          }
+        }
+      ]
+    },
+    "field": {
+      "type": "object",
+      "description": "Field definition specifying how to parse and type a column",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Field name (becomes column name in parsed data)"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["string", "integer", "decimal", "date", "boolean", "skip"],
+          "description": "Data type: string (text), integer (whole numbers), decimal (floating point), date (parsed using date_format), boolean (true/false), skip (read but ignore in comparisons)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Nested path within JSON object for field extraction (json/jsonl formats only). Example: 'localisation.site' extracts record.localisation.site"
+        },
+        "date_format": {
+          "type": "string",
+          "description": "Date format string using strftime syntax (e.g., '%Y-%m-%d', '%d/%m/%Y'). Required for date type fields."
+        },
+        "decimal_precision": {
+          "type": "integer",
+          "description": "Number of decimal places for decimal fields (used for normalization and comparison)",
+          "minimum": 0
+        }
+      }
+    },
+    "calculated_field": {
+      "type": "object",
+      "description": "Calculated field derived from other fields using pandas/NumPy expressions",
+      "required": ["name", "formula", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the calculated field"
+        },
+        "formula": {
+          "type": "string",
+          "description": "Pandas/NumPy expression to calculate the field. Use field names directly. Example: 'prix_ht * 1.206'"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["string", "integer", "decimal", "date", "boolean"],
+          "description": "Data type of the calculated result"
+        },
+        "rounding": {
+          "type": "integer",
+          "description": "Number of decimal places to round result to (for numeric results)",
+          "minimum": 0
+        }
+      }
+    },
+    "unpivot": {
+      "type": "object",
+      "description": "Configuration for unpivoting (transforming from wide to long format). Converts N pivot columns into N rows with location and value columns.",
+      "required": ["anchor_fields", "location_field", "value_field", "pivot_fields"],
+      "additionalProperties": false,
+      "properties": {
+        "anchor_fields": {
+          "type": "array",
+          "description": "Fields to keep as anchors (dimensions that remain unchanged during unpivot). These identify the record.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "location_field": {
+          "type": "string",
+          "description": "Name of the new column that will contain the original field names (the unpivoted column headers)"
+        },
+        "value_field": {
+          "type": "string",
+          "description": "Name of the new column that will contain the field values (the data from pivoted columns)"
+        },
+        "pivot_fields": {
+          "type": "array",
+          "description": "Fields to pivot and their corresponding location labels",
+          "items": {
+            "type": "object",
+            "required": ["source", "location"],
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "type": "string",
+                "description": "Source field name to pivot"
+              },
+              "location": {
+                "type": "string",
+                "description": "Value to use in location_field for this pivot (e.g., 'PARIS', 'qty_PARIS', etc.)"
+              }
+            }
+          },
+          "minItems": 1
+        }
+      }
+    }
+  }
+}
