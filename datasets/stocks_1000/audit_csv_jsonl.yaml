@@ -1,5 +1,5 @@
 meta:
-  name: "Audit Mouvements de stocks entrepôt — CSV → JSONL"
+  name: "Audit Mouvements de stocks entrepôt XXXS — CSV → JSONL"
   version: "1.0"
 
 sources:
